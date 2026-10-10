@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "PixelPlayer PC",
+  "identifier": "com.norbertque.pixelplayerpc",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../ui/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "PixelPlayer PC",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 420,
+        "minHeight": 560,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "img-src": "'self' data: blob: cover: http://cover.localhost",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Norbertque",
+    "category": "Music",
+    "shortDescription": "Material 3 Expressive music player with bit-perfect WASAPI exclusive output",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

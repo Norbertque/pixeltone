@@ -1,0 +1,32 @@
+{
+  "name": "pixelplayer-pc-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:remote": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "test": "vitest run",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/google-sans-flex": "^5.3.1",
+    "@material/material-color-utilities": "^0.4.0",
+    "@tauri-apps/api": "^2.12.2",
+    "@tauri-apps/plugin-dialog": "^2.8.1",
+    "material-symbols": "^0.48.0",
+    "motion": "^14.1.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tsconfig/svelte": "^5.0.8",
+    "playwright-core": "^1.64.0",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

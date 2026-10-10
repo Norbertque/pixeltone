@@ -1,0 +1,21 @@
+[package]
+name = "pp-output-wasapi"
+description = "WASAPI shared and exclusive output for PixelPlayer PC (Windows only; empty elsewhere)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+parking_lot.workspace = true
+pp-core.workspace = true
+rtrb.workspace = true
+tracing.workspace = true
+wasapi.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_Com",
+    "Win32_System_Threading",
+] }

@@ -1,0 +1,35 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / UI
+node_modules/
+/ui/dist/
+/ui/test-results/
+/ui/playwright-report/
+
+# Fetched third-party binaries (scripts/fetch-ffmpeg.sh)
+/third_party/
+
+# Generated test audio (scripts/gen-fixtures.sh)
+/tests/fixtures/generated/
+
+# Tauri generated schemas
+/src-tauri/gen/schemas/
+
+# Local build outputs and screenshots
+/artifacts/
+
+# Secrets — never commit
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

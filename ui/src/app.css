@@ -1,0 +1,161 @@
+/* PixelPlayer PC — global tokens and base styles.
+   Colour roles (--md-sys-color-*) are generated at runtime from the seed colour
+   (src/lib/theme), motion easings (--motion-*) from M3 Expressive springs. */
+
+:root {
+  color-scheme: light dark;
+
+  /* Shape scale (M3 Expressive) */
+  --shape-none: 0;
+  --shape-xs: 4px;
+  --shape-sm: 8px;
+  --shape-md: 12px;
+  --shape-lg: 16px;
+  --shape-lg-plus: 20px;
+  --shape-xl: 28px;
+  --shape-xl-plus: 32px;
+  --shape-2xl: 48px;
+  --shape-full: 9999px;
+
+  /* Typography */
+  --font-brand: 'Google Sans Flex Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-plain: var(--font-brand);
+
+  /* Motion fallbacks until the spring easings are installed */
+  --motion-spatial-fast: cubic-bezier(0.2, 0, 0, 1);
+  --motion-spatial-fast-duration: 200ms;
+  --motion-spatial-default: cubic-bezier(0.2, 0, 0, 1);
+  --motion-spatial-default-duration: 300ms;
+  --motion-spatial-slow: cubic-bezier(0.2, 0, 0, 1);
+  --motion-spatial-slow-duration: 450ms;
+  --motion-effects-fast: cubic-bezier(0.3, 0, 0, 1);
+  --motion-effects-fast-duration: 150ms;
+  --motion-effects-default: cubic-bezier(0.3, 0, 0, 1);
+  --motion-effects-default-duration: 200ms;
+  --motion-effects-slow: cubic-bezier(0.3, 0, 0, 1);
+  --motion-effects-slow-duration: 300ms;
+
+  /* Theme colours glide when the artwork changes. The property list is set by JS. */
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+
+  --scrollbar-thumb: color-mix(in srgb, var(--md-sys-color-on-surface) 28%, transparent);
+  --scrollbar-track: transparent;
+
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--font-plain);
+  font-size: 14px;
+  font-size-adjust: from-font;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  accent-color: var(--md-sys-color-primary);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.scroller {
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+/* ── Type scale (M3; "rounded" variants use the Flex roundness axis) ── */
+.display-large { font: 400 57px/64px var(--font-brand); letter-spacing: -0.25px; }
+.display-medium { font: 400 45px/52px var(--font-brand); }
+.display-small { font: 400 36px/44px var(--font-brand); }
+.headline-large { font: 400 32px/40px var(--font-brand); }
+.headline-medium { font: 400 28px/36px var(--font-brand); }
+.headline-small { font: 400 24px/32px var(--font-brand); }
+.title-large { font: 400 22px/28px var(--font-brand); }
+.title-medium { font: 500 16px/24px var(--font-plain); letter-spacing: 0.15px; }
+.title-small { font: 500 14px/20px var(--font-plain); letter-spacing: 0.1px; }
+.body-large { font: 400 16px/24px var(--font-plain); letter-spacing: 0.5px; }
+.body-medium { font: 400 14px/20px var(--font-plain); letter-spacing: 0.25px; }
+.body-small { font: 400 12px/16px var(--font-plain); letter-spacing: 0.4px; }
+.label-large { font: 500 14px/20px var(--font-plain); letter-spacing: 0.1px; }
+.label-medium { font: 500 12px/16px var(--font-plain); letter-spacing: 0.5px; }
+.label-small { font: 500 11px/16px var(--font-plain); letter-spacing: 0.5px; }
+
+.rounded {
+  font-variation-settings: 'ROND' 100;
+}
+.emphasized {
+  font-weight: 650;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── View transitions ── */
+::view-transition-group(*) {
+  animation-duration: var(--motion-spatial-default-duration);
+  animation-timing-function: var(--motion-spatial-default);
+}
+
+::view-transition-old(np-art),
+::view-transition-new(np-art) {
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition-duration: 0s;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

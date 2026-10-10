@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test:
+    name: Test (Linux)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev libclang-dev
+
+      - name: Fetch FFmpeg
+        run: scripts/fetch-ffmpeg.sh linux64
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+      - name: TypeScript bindings are up to date
+        run: |
+          changes="$(git status --porcelain -- ui/src/lib/api/bindings)"
+          if [[ -n "$changes" ]]; then
+            echo "Run cargo test and commit the regenerated bindings:"
+            echo "$changes"
+            exit 1
+          fi
+
+  windows:
+    name: Build (Windows)
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Fetch FFmpeg
+        shell: bash
+        run: scripts/fetch-ffmpeg.sh win64
+
+      - name: Configure build
+        shell: pwsh
+        run: |
+          $ff = Join-Path $env:GITHUB_WORKSPACE 'third_party\ffmpeg\win64'
+          "FFMPEG_DLL_PATH=$ff\lib" >> $env:GITHUB_ENV
+          "FFMPEG_INCLUDE_DIR=$ff\include" >> $env:GITHUB_ENV
+          "$ff\bin" >> $env:GITHUB_PATH
+          $sha = '${{ github.sha }}'.Substring(0, 7)
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            "PP_BUILD_ID=" >> $env:GITHUB_ENV
+            "PP_CHANNEL=${{ github.ref_name }}" >> $env:GITHUB_ENV
+          } else {
+            "PP_BUILD_ID=dev $sha" >> $env:GITHUB_ENV
+            "PP_CHANNEL=dev" >> $env:GITHUB_ENV
+          }
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: cargo test -p pp-core -p pp-output-wasapi
+
+      - name: Build installer
+        run: npx tauri build --bundles nsis
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = New-Item -ItemType Directory -Force artifacts
+          $name = "PixelPlayerPC-$env:PP_CHANNEL"
+          $setup = Get-ChildItem target\release\bundle\nsis\*-setup.exe | Select-Object -First 1
+          Copy-Item $setup.FullName "$out\$name-setup.exe"
+          $portable = New-Item -ItemType Directory -Force "$out\portable\PixelPlayerPC"
+          Copy-Item target\release\pixelplayer-pc.exe $portable
+          Copy-Item third_party\ffmpeg\win64\bin\*.dll $portable
+          Compress-Archive -Path $portable -DestinationPath "$out\$name-portable.zip" -Force
+          Get-ChildItem $out -File | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PixelPlayerPC-${{ env.PP_CHANNEL }}
+          path: artifacts/*.*
+          retention-days: 14
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=(artifacts/*.exe artifacts/*.zip)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            gh release create "${{ github.ref_name }}" "${files[@]}" \
+              --title "PixelPlayer PC ${{ github.ref_name }}" --generate-notes
+          else
+            gh release delete dev --yes --cleanup-tag || true
+            gh release create dev "${files[@]}" --prerelease --target "${{ github.sha }}" \
+              --title "Development build" \
+              --notes "Built from ${{ github.sha }} on $(date -u +%Y-%m-%d). Unsigned: Windows SmartScreen will ask for confirmation (More info → Run anyway)."
+          fi
