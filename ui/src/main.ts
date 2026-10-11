@@ -6,6 +6,7 @@ import { mount } from 'svelte';
 
 import App from './App.svelte';
 import { api } from './lib/api';
+import { initLibrary } from './lib/library.svelte';
 import { initPlayer } from './lib/player.svelte';
 import { installMotionTokens } from './lib/theme/motion';
 import { initTheme } from './lib/theme/theme.svelte';
@@ -22,6 +23,7 @@ initTheme((surface, dark) => {
 });
 
 void initPlayer();
+void initLibrary();
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app missing');

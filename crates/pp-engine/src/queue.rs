@@ -15,14 +15,31 @@ pub enum RepeatMode {
     One,
 }
 
+/// One entry of the play queue.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueItem {
+    pub path: PathBuf,
+    /// Cover to show instead of the file's embedded picture (a library thumbnail key).
+    pub cover_key: Option<String>,
+}
+
+impl From<PathBuf> for QueueItem {
+    fn from(path: PathBuf) -> Self {
+        Self {
+            path,
+            cover_key: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Queue {
-    items: Vec<PathBuf>,
+    items: Vec<QueueItem>,
     pub repeat: RepeatMode,
 }
 
 impl Queue {
-    pub fn set(&mut self, items: Vec<PathBuf>) {
+    pub fn set(&mut self, items: Vec<QueueItem>) {
         self.items = items;
     }
 
@@ -34,7 +51,7 @@ impl Queue {
         self.items.is_empty()
     }
 
-    pub fn get(&self, pos: usize) -> Option<&PathBuf> {
+    pub fn get(&self, pos: usize) -> Option<&QueueItem> {
         self.items.get(pos)
     }
 
@@ -85,7 +102,9 @@ mod tests {
 
     fn q(n: usize, repeat: RepeatMode) -> Queue {
         Queue {
-            items: (0..n).map(|i| PathBuf::from(format!("{i}.flac"))).collect(),
+            items: (0..n)
+                .map(|i| QueueItem::from(PathBuf::from(format!("{i}.flac"))))
+                .collect(),
             repeat,
         }
     }

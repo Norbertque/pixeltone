@@ -18,5 +18,5 @@ pub use engine::{
     CoverStore, Engine, EngineConfig, EngineEvent, OutputSettings, OutputState, PlaybackStatus,
     PlayerSnapshot,
 };
-pub use queue::RepeatMode;
+pub use queue::{QueueItem, RepeatMode};
 pub use track::TrackMeta;

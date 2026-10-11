@@ -12,6 +12,7 @@ publish = false
 pp-core = { path = "crates/pp-core" }
 pp-decode = { path = "crates/pp-decode" }
 pp-engine = { path = "crates/pp-engine" }
+pp-library = { path = "crates/pp-library" }
 pp-output-wasapi = { path = "crates/pp-output-wasapi" }
 
 anyhow = "1"

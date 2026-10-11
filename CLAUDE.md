@@ -11,6 +11,26 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all`.
 - `npm run check`, `npm test`, `npm run build` (UI), `npm run dev` (UI with mock backend).
 - Windows-only crate: `cargo check --target x86_64-pc-windows-msvc -p pp-output-wasapi`.
+- `cargo test -p pp-library --release -- --ignored` — 10k-track scan/query timing.
+
+## This container (no sudo, apt packages missing)
+
+- Run `. ~/.local/opt/pp-toolchain/env.sh` before any cargo command: Zig as `cc`/`c++`/`ar`,
+  libclang for bindgen, FFmpeg on `LD_LIBRARY_PATH`.
+- WebKitGTK is missing, so the app crate (`pixelplayer-pc`) can't link here. Check it with
+  `PKG_CONFIG=~/.local/opt/pp-toolchain/bin/pkg-config-stub cargo clippy -p pixelplayer-pc
+  --all-targets -- -D warnings`; its tests run on CI. Test everything else with
+  `cargo test --workspace --exclude pixelplayer-pc`.
+- No browser, so no screenshots; UI changes are verified with check/test/build only.
+
+## Library
+
+- `crates/pp-library` has no Tauri dependency; `src-tauri/src/library.rs` is thin glue.
+- Album identity: (title, album artist), else (title, folder). Artist splitting: tag
+  delimiters in `artists.rs` (changeable in Settings → Library; `AC/DC` is protected).
+- Library covers are `cover://localhost/lib/<hash>-<300|1000>`; queue items carry the cover
+  key (`QueueItem`) so Now Playing uses the same art, including folder images.
+- Bump `PRAGMA user_version` in `db.rs` with a migration for any schema change.
 
 ## Rules
 

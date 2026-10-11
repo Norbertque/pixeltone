@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { NAV_ITEMS, router, type Screen } from '../router.svelte';
+  import { NAV_ITEMS, router, type Section } from '../router.svelte';
   import Icon from './Icon.svelte';
 
   const ITEMS = [...NAV_ITEMS, { id: 'settings', icon: 'settings', label: 'Settings' }] as const satisfies readonly {
-    id: Screen;
+    id: Section;
     icon: string;
     label: string;
   }[];
@@ -11,7 +11,7 @@
 
 <nav class="bar" aria-label="Main">
   {#each ITEMS as entry (entry.id)}
-    {@const active = router.screen === entry.id && !router.nowPlayingOpen}
+    {@const active = router.section === entry.id && !router.nowPlayingOpen}
     <button
       class={['item', { active }]}
       aria-current={active ? 'page' : undefined}

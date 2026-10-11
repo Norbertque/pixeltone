@@ -3,6 +3,7 @@
  * so the UI can be developed (and screenshotted) without Windows.
  */
 import { scallopPath } from '../shapes';
+import { mockArt, mockLibrary } from './mockLibrary';
 import type {
   AppSettings,
   Backend,
@@ -14,7 +15,9 @@ import type {
   PlayerError,
   PlayerSnapshot,
   SampleFormat,
+  ScanProgress,
   TrackMeta,
+  TrackRow,
 } from './types';
 
 const S16: SampleFormat = { kind: 'int', containerBits: 16, validBits: 16 };
@@ -100,6 +103,57 @@ let snapshot: PlayerSnapshot = {
   },
 };
 
+const scanListeners = new Set<(p: ScanProgress) => void>();
+const changedListeners = new Set<() => void>();
+let scanning = false;
+let delimiters = [';', '/', ' feat. ', ' ft. ', ' featuring ', ' feat ', ' ft '];
+
+function metaFromRow(t: TrackRow): TrackMeta {
+  return {
+    path: t.path,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    durationMs: t.durationMs,
+    codec: t.codec,
+    source: {
+      sampleRate: t.dsd ? t.sampleRate / 8 : t.sampleRate,
+      channels: 2,
+      bits: t.bits || 32,
+      kind: t.lossless && !t.dsd ? 'int' : 'float',
+    },
+    lossless: t.lossless,
+    dsd: t.dsd,
+    coverKey: t.cover ? `lib/${t.cover}` : null,
+  };
+}
+
+function simulateScan(): void {
+  if (scanning) return;
+  scanning = true;
+  const total = 240;
+  let done = 0;
+  const tick = setInterval(() => {
+    done = Math.min(total, done + 24);
+    const finished = done >= total;
+    const progress: ScanProgress = {
+      phase: finished ? 'done' : 'reading',
+      done,
+      total,
+      added: Math.floor(done / 10),
+      updated: 0,
+      removed: 0,
+      errors: 0,
+    };
+    for (const l of scanListeners) l(progress);
+    if (finished) {
+      clearInterval(tick);
+      scanning = false;
+      for (const l of changedListeners) l();
+    }
+  }, 200);
+}
+
 const stateListeners = new Set<(s: PlayerSnapshot) => void>();
 const positionListeners = new Set<(ms: number) => void>();
 const errorListeners = new Set<(e: PlayerError) => void>();
@@ -157,7 +211,7 @@ export const mockBackend: Backend = {
   seek: async (ms) => publish({ positionMs: ms }),
   setRepeat: async (repeat) => publish({ repeat }),
   pickAudioFiles: async () => [DEMO_TRACK.path],
-  coverUrl: (key) => (key === 'demo' ? demoArtwork() : ''),
+  coverUrl: (key) => (key === 'demo' ? demoArtwork() : key.startsWith('lib/') ? mockArt(key.slice(4)) : ''),
 
   outputDevices: async () => DEVICES,
   async outputCapabilities(deviceId) {
@@ -178,4 +232,48 @@ export const mockBackend: Backend = {
   onPlayerState: (cb) => subscribe(stateListeners, cb),
   onPosition: (cb) => subscribe(positionListeners, cb),
   onPlayerError: (cb) => subscribe(errorListeners, cb),
+
+  libraryOverview: async () => mockLibrary.overview(scanning),
+  libraryFolders: async () => mockLibrary.folders(),
+  libraryAddFolder: async () => simulateScan(),
+  libraryRemoveFolder: async () => {},
+  libraryRescan: async () => simulateScan(),
+  libraryTracks: async (sort, offset, limit) => mockLibrary.tracks(sort, offset, limit),
+  libraryAlbums: async (sort, offset, limit) => mockLibrary.albums(sort, offset, limit),
+  libraryAlbum: async (id) => mockLibrary.album(id),
+  libraryArtists: async (offset, limit) => mockLibrary.artists(offset, limit),
+  libraryArtist: async (id) => mockLibrary.artist(id),
+  libraryGenres: async () => mockLibrary.genres(),
+  libraryGenre: async (id) => mockLibrary.genre(id),
+  libraryFolder: async (path) => mockLibrary.folder(path),
+  librarySearch: async (query, limit) => mockLibrary.search(query, limit),
+  libraryDelimiters: async () => [...delimiters],
+  librarySetDelimiters: async (d) => {
+    delimiters = [...d];
+    simulateScan();
+  },
+  async playTracks(ids, start) {
+    const row = mockLibrary.track(ids[start] ?? ids[0] ?? -1);
+    if (!row) return;
+    publish({
+      status: 'playing',
+      track: metaFromRow(row),
+      positionMs: 0,
+      queueIndex: start,
+      queueLength: ids.length,
+    });
+  },
+  async playLibrary(sort, start, shuffled) {
+    const rows = mockLibrary.tracks(sort, 0, 100_000);
+    const index = shuffled ? Math.floor(Math.random() * rows.length) : start;
+    const row = rows[index];
+    if (row) {
+      publish({ status: 'playing', track: metaFromRow(row), positionMs: 0, queueIndex: index, queueLength: rows.length });
+    }
+  },
+  confirm: async (message) => window.confirm(message),
+  pickFolder: async () => 'C:\\Users\\You\\Music',
+  artUrl: (hash) => mockArt(hash),
+  onLibraryScan: (cb) => subscribe(scanListeners, cb),
+  onLibraryChanged: (cb) => subscribe(changedListeners, cb),
 };

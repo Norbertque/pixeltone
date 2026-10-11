@@ -20,12 +20,42 @@ export type { ShareMode } from './bindings/ShareMode';
 export type { SourceFormat } from './bindings/SourceFormat';
 export type { StreamStats } from './bindings/StreamStats';
 export type { TrackMeta } from './bindings/TrackMeta';
+export type { AlbumDetail } from './bindings/AlbumDetail';
+export type { AlbumRow } from './bindings/AlbumRow';
+export type { AlbumSort } from './bindings/AlbumSort';
+export type { ArtistDetail } from './bindings/ArtistDetail';
+export type { ArtistRow } from './bindings/ArtistRow';
+export type { FolderEntry } from './bindings/FolderEntry';
+export type { FolderListing } from './bindings/FolderListing';
+export type { GenreDetail } from './bindings/GenreDetail';
+export type { GenreRow } from './bindings/GenreRow';
+export type { LibraryFolder } from './bindings/LibraryFolder';
+export type { LibraryOverview } from './bindings/LibraryOverview';
+export type { ScanPhase } from './bindings/ScanPhase';
+export type { ScanProgress } from './bindings/ScanProgress';
+export type { SearchResults } from './bindings/SearchResults';
+export type { TrackRow } from './bindings/TrackRow';
+export type { TrackSort } from './bindings/TrackSort';
 
 import type { DeviceCapabilities } from './bindings/DeviceCapabilities';
 import type { DeviceInfo } from './bindings/DeviceInfo';
 import type { OutputSettings } from './bindings/OutputSettings';
 import type { PlayerSnapshot } from './bindings/PlayerSnapshot';
 import type { RepeatMode } from './bindings/RepeatMode';
+import type { AlbumDetail } from './bindings/AlbumDetail';
+import type { AlbumRow } from './bindings/AlbumRow';
+import type { AlbumSort } from './bindings/AlbumSort';
+import type { ArtistDetail } from './bindings/ArtistDetail';
+import type { ArtistRow } from './bindings/ArtistRow';
+import type { FolderListing } from './bindings/FolderListing';
+import type { GenreDetail } from './bindings/GenreDetail';
+import type { GenreRow } from './bindings/GenreRow';
+import type { LibraryFolder } from './bindings/LibraryFolder';
+import type { LibraryOverview } from './bindings/LibraryOverview';
+import type { ScanProgress } from './bindings/ScanProgress';
+import type { SearchResults } from './bindings/SearchResults';
+import type { TrackRow } from './bindings/TrackRow';
+import type { TrackSort } from './bindings/TrackSort';
 
 // ── App layer (src-tauri/src/commands.rs, settings.rs) ──────────────────────────────
 
@@ -87,6 +117,36 @@ export interface Backend {
   onPlayerState(cb: (s: PlayerSnapshot) => void): Promise<Unlisten>;
   onPosition(cb: (positionMs: number) => void): Promise<Unlisten>;
   onPlayerError(cb: (e: PlayerError) => void): Promise<Unlisten>;
+
+  // Library
+  libraryOverview(): Promise<LibraryOverview>;
+  libraryFolders(): Promise<LibraryFolder[]>;
+  libraryAddFolder(path: string): Promise<void>;
+  libraryRemoveFolder(id: number): Promise<void>;
+  libraryRescan(): Promise<void>;
+  libraryTracks(sort: TrackSort, offset: number, limit: number): Promise<TrackRow[]>;
+  libraryAlbums(sort: AlbumSort, offset: number, limit: number): Promise<AlbumRow[]>;
+  libraryAlbum(id: number): Promise<AlbumDetail | null>;
+  libraryArtists(offset: number, limit: number): Promise<ArtistRow[]>;
+  libraryArtist(id: number): Promise<ArtistDetail | null>;
+  libraryGenres(): Promise<GenreRow[]>;
+  libraryGenre(id: number): Promise<GenreDetail | null>;
+  libraryFolder(path: string | null): Promise<FolderListing>;
+  librarySearch(query: string, limit: number): Promise<SearchResults>;
+  libraryDelimiters(): Promise<string[]>;
+  librarySetDelimiters(delimiters: string[]): Promise<void>;
+  /** Plays library tracks, starting at index `start` of `ids`. */
+  playTracks(ids: number[], start: number): Promise<void>;
+  /** Queues the whole library in `sort` order (or shuffled) and plays from `start`. */
+  playLibrary(sort: TrackSort, start: number, shuffled: boolean): Promise<void>;
+  /** Native yes/no dialog. */
+  confirm(message: string, title: string): Promise<boolean>;
+  /** Native folder picker (starts in the Music folder); null when cancelled. */
+  pickFolder(): Promise<string | null>;
+  /** URL of a library cover thumbnail (300 or 1000 px). */
+  artUrl(hash: string, size: 300 | 1000): string;
+  onLibraryScan(cb: (p: ScanProgress) => void): Promise<Unlisten>;
+  onLibraryChanged(cb: () => void): Promise<Unlisten>;
 }
 
 /** File extensions offered in the open dialog (anything FFmpeg decodes also works). */

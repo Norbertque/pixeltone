@@ -14,7 +14,7 @@ class Player {
   readonly status = $derived(this.snapshot?.status ?? 'stopped');
   readonly playing = $derived(this.status === 'playing');
   readonly track = $derived<TrackMeta | null>(this.snapshot?.track ?? null);
-  readonly artwork = $derived(this.track?.coverKey ? api.coverUrl(this.track.coverKey) : null);
+  readonly artwork = $derived(artworkUrl(this.track?.coverKey ?? null, 1000));
   readonly durationMs = $derived(this.track?.durationMs ?? 0);
   readonly progress = $derived(this.durationMs > 0 ? Math.min(1, this.positionMs / this.durationMs) : 0);
   readonly badge = $derived<OutputBadge | null>(this.snapshot?.output?.badge ?? null);
@@ -85,6 +85,17 @@ export async function initPlayer(): Promise<void> {
   player.apply(await api.playerState());
 }
 
+/** URL for a track's cover key: library thumbnails (`lib/<hash>`) or embedded covers. */
+export function artworkUrl(key: string | null, size: 300 | 1000): string | null {
+  if (!key) return null;
+  return key.startsWith('lib/') ? api.artUrl(key.slice(4), size) : api.coverUrl(key);
+}
+
+/** URL for a library cover hash. */
+export function coverOf(hash: string | null, size: 300 | 1000 = 300): string | null {
+  return hash ? api.artUrl(hash, size) : null;
+}
+
 /** "3:58", "1:02:03". */
 export function formatTime(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -129,6 +140,23 @@ export function describeSource(track: TrackMeta): string {
   if (track.dsd) return `DSD${Math.round((s.sampleRate * 8) / 44_100)}`;
   const depth = s.kind === 'int' ? `${s.bits}-bit/` : '';
   return `${codecName(track.codec)} · ${depth}${rate(s.sampleRate)}`;
+}
+
+/** Compact quality label for lists: "FLAC 24/96", "DSD64", "MP3". */
+export function formatShort(f: { codec: string; sampleRate: number; bits: number; lossless: boolean; dsd: boolean }): string {
+  if (f.dsd) return `DSD${Math.round(f.sampleRate / 44_100)}`;
+  const name = codecName(f.codec);
+  if (!f.lossless || f.bits === 0) return name;
+  return `${name} ${f.bits}/${Number((f.sampleRate / 1000).toFixed(1))}`;
+}
+
+/** "1 h 12 min", "38 min". */
+export function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 /** Seed colour of an image (downscaled first, the way Android picks wallpaper colours). */

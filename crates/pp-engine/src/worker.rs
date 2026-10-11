@@ -193,12 +193,12 @@ fn next_playable(
 ) -> Option<LoadedTrack> {
     let attempts = queue.lock().len();
     for _ in 0..attempts {
-        let (next, path) = {
+        let (next, item) = {
             let q = queue.lock();
             let next = q.after(pos)?;
             (next, q.get(next)?.clone())
         };
-        match load(next, &path, 0, plan) {
+        match load(next, &item, 0, plan) {
             Ok(track) => return Some(track),
             Err(error) => {
                 send(WorkerEvent::TrackFailed { pos: next, error });

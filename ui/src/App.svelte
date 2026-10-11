@@ -9,6 +9,10 @@
   import { player } from './lib/player.svelte';
   import { router } from './lib/router.svelte';
   import About from './lib/screens/About.svelte';
+  import AlbumScreen from './lib/screens/AlbumScreen.svelte';
+  import ArtistScreen from './lib/screens/ArtistScreen.svelte';
+  import FolderScreen from './lib/screens/FolderScreen.svelte';
+  import GenreScreen from './lib/screens/GenreScreen.svelte';
   import Home from './lib/screens/Home.svelte';
   import Library from './lib/screens/Library.svelte';
   import Search from './lib/screens/Search.svelte';
@@ -16,7 +20,8 @@
   import { theme } from './lib/theme/theme.svelte';
 
   const SCREENS = { home: Home, search: Search, library: Library, settings: Settings, about: About };
-  const Screen = $derived(SCREENS[router.screen]);
+  const route = $derived(router.route);
+  const routeKey = $derived(JSON.stringify(router.route));
 
   // The playing album's colour drives the whole theme.
   $effect(() => {
@@ -48,9 +53,20 @@
 
   <div class="main-col">
     <main class="content scroller" inert={router.nowPlayingOpen}>
-      {#key router.screen}
+      {#key routeKey}
         <div class="screen" in:fly={{ y: 16, duration: 260, opacity: 0 }}>
-          <Screen />
+          {#if route.screen === 'album'}
+            <AlbumScreen id={route.id} />
+          {:else if route.screen === 'artist'}
+            <ArtistScreen id={route.id} />
+          {:else if route.screen === 'genre'}
+            <GenreScreen id={route.id} />
+          {:else if route.screen === 'folder'}
+            <FolderScreen path={route.path} />
+          {:else}
+            {@const Screen = SCREENS[route.screen]}
+            <Screen />
+          {/if}
         </div>
       {/key}
     </main>

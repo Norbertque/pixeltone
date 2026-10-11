@@ -8,6 +8,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::pipeline::OutputPlan;
+use crate::queue::QueueItem;
 
 /// What the Now Playing screen shows.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -60,13 +61,14 @@ impl LoadedTrack {
     }
 }
 
-/// Opens `path` at `start_ms` and negotiates its output format under `plan`.
+/// Opens a queue item at `start_ms` and negotiates its output format under `plan`.
 pub fn load(
     pos: usize,
-    path: &Path,
+    item: &QueueItem,
     start_ms: u64,
     plan: &OutputPlan,
 ) -> Result<LoadedTrack, String> {
+    let path = item.path.as_path();
     let mut decoder = Decoder::open(path).map_err(|e| e.to_string())?;
     let info = decoder.info().clone();
     let negotiated = plan
@@ -77,7 +79,12 @@ pub fn load(
         decoder.seek(frame).map_err(|e| e.to_string())?;
     }
     let tags = decoder.tags();
-    let cover = decoder.cover_art();
+    // A library cover wins; otherwise the embedded picture is served from the engine.
+    let cover = if item.cover_key.is_some() {
+        None
+    } else {
+        decoder.cover_art()
+    };
     let meta = TrackMeta {
         path: path.display().to_string(),
         title: tags.title.unwrap_or_else(|| file_stem(path)),
@@ -88,7 +95,10 @@ pub fn load(
         source: info.source,
         lossless: info.lossless,
         dsd: info.dsd,
-        cover_key: cover.as_ref().map(|c| cover_key(&c.data)),
+        cover_key: item
+            .cover_key
+            .clone()
+            .or_else(|| cover.as_ref().map(|c| cover_key(&c.data))),
     };
     Ok(LoadedTrack {
         pos,

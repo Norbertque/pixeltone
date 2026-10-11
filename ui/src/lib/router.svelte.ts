@@ -1,12 +1,27 @@
 import { tick } from 'svelte';
 
-export type Screen = 'home' | 'search' | 'library' | 'settings' | 'about';
+export type Route =
+  | { screen: 'home' }
+  | { screen: 'search' }
+  | { screen: 'library' }
+  | { screen: 'settings' }
+  | { screen: 'about' }
+  | { screen: 'album'; id: number }
+  | { screen: 'artist'; id: number }
+  | { screen: 'genre'; id: number }
+  | { screen: 'folder'; path: string | null };
+
+export type Screen = Route['screen'];
+/** Destinations in the navigation rail/bar. */
+export type Section = 'home' | 'search' | 'library' | 'settings';
 
 export const NAV_ITEMS = [
   { id: 'home', icon: 'home', label: 'Home' },
   { id: 'search', icon: 'search', label: 'Search' },
   { id: 'library', icon: 'library_music', label: 'Library' },
-] as const satisfies readonly { id: Screen; icon: string; label: string }[];
+] as const satisfies readonly { id: Section; icon: string; label: string }[];
+
+export type LibraryTab = 'songs' | 'albums' | 'artists' | 'genres' | 'folders' | 'playlists';
 
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -32,18 +47,42 @@ function focusScreenHeading(): void {
   document.querySelector<HTMLElement>('[data-screen-heading]')?.focus({ preventScroll: true });
 }
 
-class Router {
-  screen = $state<Screen>('home');
-  nowPlayingOpen = $state(false);
-  #history: Screen[] = [];
+function sectionOf(route: Route): Section {
+  switch (route.screen) {
+    case 'album':
+    case 'artist':
+    case 'genre':
+    case 'folder':
+      return 'library';
+    case 'about':
+      return 'settings';
+    default:
+      return route.screen;
+  }
+}
 
-  async go(screen: Screen): Promise<void> {
+function sameRoute(a: Route, b: Route): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+class Router {
+  route = $state<Route>({ screen: 'home' });
+  nowPlayingOpen = $state(false);
+  /** Remembered while browsing away and back. */
+  libraryTab = $state<LibraryTab>('songs');
+  readonly screen = $derived<Screen>(this.route.screen);
+  readonly section = $derived<Section>(sectionOf(this.route));
+  #history: Route[] = [];
+
+  async go(target: Screen | Route): Promise<void> {
+    const route = (typeof target === 'string' ? { screen: target } : target) as Route;
     if (this.nowPlayingOpen) await this.setNowPlaying(false);
-    if (screen === this.screen) return;
-    this.#history.push(this.screen);
+    if (sameRoute(route, this.route)) return;
+    this.#history.push(this.route);
     if (this.#history.length > 50) this.#history.shift();
-    this.screen = screen;
+    this.route = route;
     await tick();
+    document.querySelector('main.content')?.scrollTo({ top: 0 });
     focusScreenHeading();
   }
 
@@ -51,7 +90,7 @@ class Router {
     if (this.nowPlayingOpen) return this.setNowPlaying(false);
     const previous = this.#history.pop();
     if (previous) {
-      this.screen = previous;
+      this.route = previous;
       await tick();
       focusScreenHeading();
     }

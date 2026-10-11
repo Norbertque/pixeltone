@@ -1,100 +1,136 @@
 <script lang="ts">
+  import { api } from '../api';
+  import AlbumCard from '../components/AlbumCard.svelte';
   import Button from '../components/Button.svelte';
-  import { player } from '../player.svelte';
   import Icon from '../components/Icon.svelte';
   import ScreenHeader from '../components/ScreenHeader.svelte';
+  import { addMusicFolder, library } from '../library.svelte';
+  import { formatDuration, player } from '../player.svelte';
   import { router } from '../router.svelte';
 
   const hour = new Date().getHours();
   const greeting = hour < 5 ? 'Good night' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
-  const cards = [
-    {
-      icon: 'library_add',
-      tone: 'primary',
-      title: 'Add your music',
-      body: 'Point PixelPlayer at your music folders. Library scanning arrives in an upcoming update.',
-      action: 'Library settings',
-    },
-    {
-      icon: 'graphic_eq',
-      tone: 'tertiary',
-      title: 'Bit-perfect output',
-      body: 'WASAPI exclusive mode sends your files to the DAC untouched, at their own sample rate and bit depth.',
-      action: 'Audio output',
-    },
-    {
-      icon: 'palette',
-      tone: 'secondary',
-      title: 'Make it yours',
-      body: 'Colours follow the album art, or pick your own seed colour and palette style.',
-      action: 'Appearance',
-    },
-  ] as const;
+  const o = $derived(library.overview);
+  const hasMusic = $derived((o?.trackCount ?? 0) > 0);
+  const needsFolder = $derived(o !== null && o.folders.length === 0);
 </script>
 
-<ScreenHeader title={greeting} subtitle="Welcome to PixelPlayer PC">
+<ScreenHeader
+  title={greeting}
+  subtitle={hasMusic && o
+    ? `${o.trackCount.toLocaleString()} songs · ${o.albumCount.toLocaleString()} albums · ${o.artistCount.toLocaleString()} artists · ${formatDuration(o.durationMs)}`
+    : 'Welcome to PixelPlayer PC'}
+>
   {#snippet actions()}
-    <Button variant="filled" size="md" icon="play_arrow" onclick={() => player.openFiles()}>Play files…</Button>
+    {#if hasMusic}
+      <Button variant="filled" size="md" icon="shuffle" onclick={() => api.playLibrary('title', 0, true)}>Shuffle all</Button>
+    {/if}
+    <Button variant="tonal" size="md" icon="file_open" onclick={() => player.openFiles()}>Play files…</Button>
   {/snippet}
 </ScreenHeader>
 
-<div class="cards">
-  {#each cards as card (card.title)}
-    <article class={['card', card.tone]}>
-      <div class="icon"><Icon name={card.icon} size={28} /></div>
-      <h2 class="title-large rounded emphasized">{card.title}</h2>
-      <p class="body-medium">{card.body}</p>
-      <div class="action">
-        <Button variant="text" icon="arrow_forward" onclick={() => router.go('settings')}>{card.action}</Button>
+{#if needsFolder}
+  <section class="onboarding">
+    <div class="art" aria-hidden="true"><Icon name="library_music" size={56} /></div>
+    <div class="text">
+      <h2 class="headline-small rounded emphasized">Add your music</h2>
+      <p class="body-large">
+        Pick the folder where your music lives (usually your Music folder). PixelPlayer reads it once, keeps up
+        with changes, and plays every file bit-perfect when exclusive mode is on.
+      </p>
+      <div class="buttons">
+        <Button variant="filled" size="md" icon="create_new_folder" onclick={addMusicFolder}>Choose music folder</Button>
+        <Button variant="text" icon="tune" onclick={() => router.go('settings')}>Audio output settings</Button>
       </div>
-    </article>
-  {/each}
-</div>
+    </div>
+  </section>
+{:else if !hasMusic && library.scanning}
+  <section class="onboarding">
+    <div class="art" aria-hidden="true"><Icon name="hourglass_top" size={56} /></div>
+    <div class="text">
+      <h2 class="headline-small rounded emphasized">Reading your music…</h2>
+      <p class="body-large">Your albums will appear here in a moment.</p>
+    </div>
+  </section>
+{/if}
+
+{#if o && o.recentlyAdded.length > 0}
+  <section class="shelf">
+    <div class="shelf-head">
+      <h2 class="title-large rounded emphasized">Recently added</h2>
+      <Button variant="text" icon="arrow_forward" onclick={() => {
+        router.libraryTab = 'albums';
+        router.go('library');
+      }}>All albums</Button>
+    </div>
+    <div class="carousel scroller">
+      {#each o.recentlyAdded as album (album.id)}
+        <div class="slot"><AlbumCard {album} /></div>
+      {/each}
+    </div>
+  </section>
+{/if}
 
 <style>
-  .cards {
-    container: cards / inline-size;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 16px;
-  }
-  .card {
-    display: grid;
-    grid-template-rows: auto auto 1fr auto;
-    gap: 8px;
-    padding: 24px 24px 12px;
-    border-radius: var(--shape-xl);
-    background: var(--md-sys-color-surface-container-low);
-  }
-  .icon {
-    display: grid;
-    place-items: center;
-    width: 56px;
-    height: 56px;
-    margin-bottom: 8px;
-    border-radius: var(--shape-lg);
-  }
-  .primary .icon {
+  .onboarding {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 32px;
+    margin: 8px 0 24px;
+    padding: 32px;
+    border-radius: var(--shape-2xl);
     background: var(--md-sys-color-primary-container);
     color: var(--md-sys-color-on-primary-container);
   }
-  .secondary .icon {
-    background: var(--md-sys-color-secondary-container);
-    color: var(--md-sys-color-on-secondary-container);
+  .art {
+    display: grid;
+    place-items: center;
+    width: 120px;
+    height: 120px;
+    border-radius: var(--shape-2xl);
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
   }
-  .tertiary .icon {
-    background: var(--md-sys-color-tertiary-container);
-    color: var(--md-sys-color-on-tertiary-container);
+  .text {
+    display: grid;
+    flex: 1;
+    gap: 8px;
+    min-width: 260px;
   }
   h2 {
     margin: 0;
   }
-  p {
+  .text p {
+    max-width: 640px;
     margin: 0;
-    color: var(--md-sys-color-on-surface-variant);
   }
-  .action {
-    margin-left: -12px;
+  .buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .shelf {
+    margin: 8px 0 32px;
+  }
+  .shelf-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .carousel {
+    display: grid;
+    grid-auto-columns: 180px;
+    grid-auto-flow: column;
+    gap: 20px;
+    padding-bottom: 12px;
+    scroll-snap-type: x proximity;
+    scrollbar-gutter: auto;
+  }
+  .slot {
+    scroll-snap-align: start;
   }
 </style>

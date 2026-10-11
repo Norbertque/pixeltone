@@ -1,12 +1,25 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { open } from '@tauri-apps/plugin-dialog';
+import { audioDir } from '@tauri-apps/api/path';
+import { ask, open } from '@tauri-apps/plugin-dialog';
 
 import {
   AUDIO_EXTENSIONS,
   type AppInfo,
+  type AlbumDetail,
+  type AlbumRow,
   type AppSettings,
+  type ArtistDetail,
+  type ArtistRow,
   type Backend,
+  type FolderListing,
+  type GenreDetail,
+  type GenreRow,
+  type LibraryFolder,
+  type LibraryOverview,
+  type ScanProgress,
+  type SearchResults,
+  type TrackRow,
   type DeviceCapabilities,
   type DeviceInfo,
   type HardwareVolumeInfo,
@@ -45,4 +58,32 @@ export const tauriBackend: Backend = {
   onPlayerState: (cb) => listen<PlayerSnapshot>('player://state', (e) => cb(e.payload)),
   onPosition: (cb) => listen<{ positionMs: number }>('player://position', (e) => cb(e.payload.positionMs)),
   onPlayerError: (cb) => listen<PlayerError>('player://error', (e) => cb(e.payload)),
+
+  libraryOverview: () => invoke<LibraryOverview>('library_overview'),
+  libraryFolders: () => invoke<LibraryFolder[]>('library_folders'),
+  libraryAddFolder: (path) => invoke('library_add_folder', { path }),
+  libraryRemoveFolder: (id) => invoke('library_remove_folder', { id }),
+  libraryRescan: () => invoke('library_rescan'),
+  libraryTracks: (sort, offset, limit) => invoke<TrackRow[]>('library_tracks', { sort, offset, limit }),
+  libraryAlbums: (sort, offset, limit) => invoke<AlbumRow[]>('library_albums', { sort, offset, limit }),
+  libraryAlbum: (id) => invoke<AlbumDetail | null>('library_album', { id }),
+  libraryArtists: (offset, limit) => invoke<ArtistRow[]>('library_artists', { offset, limit }),
+  libraryArtist: (id) => invoke<ArtistDetail | null>('library_artist', { id }),
+  libraryGenres: () => invoke<GenreRow[]>('library_genres'),
+  libraryGenre: (id) => invoke<GenreDetail | null>('library_genre', { id }),
+  libraryFolder: (path) => invoke<FolderListing>('library_folder', { path }),
+  librarySearch: (query, limit) => invoke<SearchResults>('library_search', { query, limit }),
+  libraryDelimiters: () => invoke<string[]>('library_delimiters'),
+  librarySetDelimiters: (delimiters) => invoke('library_set_delimiters', { delimiters }),
+  playTracks: (ids, start) => invoke('play_tracks', { ids, start }),
+  playLibrary: (sort, start, shuffled) => invoke('play_library', { sort, start, shuffled }),
+  confirm: (message, title) => ask(message, { title, kind: 'warning' }),
+  async pickFolder() {
+    const defaultPath = await audioDir().catch(() => undefined);
+    const picked = await open({ directory: true, multiple: false, title: 'Add a music folder', defaultPath });
+    return typeof picked === 'string' ? picked : null;
+  },
+  artUrl: (hash, size) => convertFileSrc(`lib/${hash}-${size}`, 'cover'),
+  onLibraryScan: (cb) => listen<ScanProgress>('library://scan', (e) => cb(e.payload)),
+  onLibraryChanged: (cb) => listen('library://changed', () => cb()),
 };

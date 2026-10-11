@@ -8,6 +8,7 @@
   import { buildScheme, PALETTE_STYLE_LABELS, PALETTE_STYLES, type PaletteStyle } from '../theme/scheme';
   import { SEED_PRESETS, theme, type ColorSource, type ThemeMode } from '../theme/theme.svelte';
   import AudioOutput from './settings/AudioOutput.svelte';
+  import LibrarySettings from './settings/LibrarySettings.svelte';
 
   const MODES = [
     { value: 'system', label: 'System', icon: 'brightness_auto' },
@@ -122,7 +123,7 @@
 
   <section class="section" aria-labelledby="library">
     <h2 id="library" class="title-large rounded emphasized"><Icon name="library_music" /> Library</h2>
-    <p class="body-medium muted">Music folders and scanning options will appear here.</p>
+    <LibrarySettings />
   </section>
 
   <button class="section link" onclick={() => router.go('about')}>
@@ -150,10 +151,6 @@
     align-items: center;
     gap: 12px;
     margin: 0 0 8px;
-  }
-  .muted {
-    margin: 0;
-    color: var(--md-sys-color-on-surface-variant);
   }
   .row {
     display: flex;

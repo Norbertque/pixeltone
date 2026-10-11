@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { NAV_ITEMS, router, type Screen } from '../router.svelte';
+  import { NAV_ITEMS, router, type Section } from '../router.svelte';
   import Icon from './Icon.svelte';
   import Logo from './Logo.svelte';
 
   const BOTTOM_ITEMS = [{ id: 'settings', icon: 'settings', label: 'Settings' }] as const satisfies readonly {
-    id: Screen;
+    id: Section;
     icon: string;
     label: string;
   }[];
 </script>
 
-{#snippet item(entry: { id: Screen; icon: string; label: string })}
-  {@const active = router.screen === entry.id && !router.nowPlayingOpen}
+{#snippet item(entry: { id: Section; icon: string; label: string })}
+  {@const active = router.section === entry.id && !router.nowPlayingOpen}
   <li>
     <button
       class={['item', { active }]}

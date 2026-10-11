@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::pipeline::OutputPlan;
-use crate::queue::{Queue, RepeatMode};
+use crate::queue::{Queue, QueueItem, RepeatMode};
 use crate::track::{LoadedTrack, StartedTrack, TrackMeta, load};
 use crate::worker::{TaggedEvent, WorkerArgs, WorkerEvent, WorkerHandle};
 
@@ -148,8 +148,8 @@ impl CoverStore {
 }
 
 enum Command {
-    PlayFiles {
-        paths: Vec<PathBuf>,
+    PlayItems {
+        items: Vec<QueueItem>,
         start: usize,
     },
     Play,
@@ -238,7 +238,11 @@ impl Engine {
     }
 
     pub fn play_files(&self, paths: Vec<PathBuf>, start: usize) {
-        self.send(Command::PlayFiles { paths, start });
+        self.play_items(paths.into_iter().map(QueueItem::from).collect(), start);
+    }
+
+    pub fn play_items(&self, items: Vec<QueueItem>, start: usize) {
+        self.send(Command::PlayItems { items, start });
     }
     pub fn play(&self) {
         self.send(Command::Play);
@@ -372,8 +376,8 @@ impl Control {
 
     fn handle(&mut self, command: Command) {
         match command {
-            Command::PlayFiles { paths, start } => {
-                self.queue.lock().set(paths);
+            Command::PlayItems { items, start } => {
+                self.queue.lock().set(items);
                 self.parked = None;
                 self.start_at(start, 0.0, true, 0);
             }
@@ -535,7 +539,7 @@ impl Control {
 
     /// Starts queue position `pos` at `ms`, reusing the open stream when its format fits.
     fn start_at(&mut self, pos: usize, ms: f64, play: bool, attempt: usize) {
-        let Some(path) = self.queue.lock().get(pos).cloned() else {
+        let Some(item) = self.queue.lock().get(pos).cloned() else {
             self.finish_queue();
             return;
         };
@@ -548,12 +552,12 @@ impl Control {
                 return;
             }
         };
-        let track = match load(pos, &path, ms as u64, &choice.plan) {
+        let track = match load(pos, &item, ms as u64, &choice.plan) {
             Ok(t) => t,
             Err(error) => {
                 self.report(
                     "trackFailed",
-                    format!("Can't play {}: {error}", path.display()),
+                    format!("Can't play {}: {error}", item.path.display()),
                 );
                 let next = self.queue.lock().after(pos);
                 let len = self.queue.lock().len();
@@ -805,7 +809,7 @@ impl Control {
                         .queue
                         .lock()
                         .get(pos)
-                        .map(|p| p.display().to_string())
+                        .map(|item| item.path.display().to_string())
                         .unwrap_or_default();
                     self.report("trackFailed", format!("Skipped {name}: {error}"));
                 }
