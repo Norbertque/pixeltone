@@ -3,7 +3,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pp_engine::QueueItem;
 use pp_library::{
     AlbumDetail, AlbumRow, AlbumSort, ArtistDetail, ArtistRow, FolderListing, GenreDetail,
     GenreRow, Library, LibraryFolder, LibraryOverview, ProgressFn, ScanPhase, SearchResults,
@@ -13,13 +12,14 @@ use pp_library::{
 use tauri::{AppHandle, Emitter, State};
 
 use crate::AppState;
+use crate::queue::item_from_row;
 
 /// Cover keys of library thumbnails, as the engine and the UI see them.
 pub fn cover_key(hash: &str) -> String {
     format!("lib/{hash}")
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     library: Arc<Library>,
     f: impl FnOnce(&Library) -> pp_library::Result<T> + Send + 'static,
 ) -> Result<T, String> {
@@ -198,72 +198,35 @@ pub async fn library_set_delimiters(
     Ok(())
 }
 
-/// Fisher–Yates with a time-seeded xorshift (no RNG dependency needed for a shuffle).
-fn shuffle(ids: &mut [u32]) {
-    let mut x = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0x9e37_79b9_7f4a_7c15)
-        | 1;
-    for i in (1..ids.len()).rev() {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        ids.swap(i, (x % (i as u64 + 1)) as usize);
-    }
-}
-
-/// Queues the whole library in `sort` order (or shuffled) and plays from `start`.
+/// Queues the whole library in `sort` order and plays from `start` (`None`: the top, or a
+/// random track when shuffling). `shuffle` as in [`play_tracks`].
 #[tauri::command]
 pub async fn play_library(
     state: State<'_, AppState>,
     sort: TrackSort,
-    start: usize,
-    shuffled: bool,
+    start: Option<usize>,
+    shuffle: Option<bool>,
 ) -> Result<(), String> {
-    let mut ids = blocking(state.library.clone(), move |l| l.track_ids(sort)).await?;
-    let start = if shuffled {
-        shuffle(&mut ids);
-        0
-    } else {
-        start
-    };
-    play_tracks(state, ids, start).await
+    let rows = blocking(state.library.clone(), move |l| l.tracks(sort, 0, u32::MAX)).await?;
+    let items = rows.into_iter().map(item_from_row).collect();
+    state.engine.play_items(items, start, shuffle);
+    Ok(())
 }
 
-/// Plays library tracks, starting at `start` within `ids`.
+/// Plays library tracks from `start` within `ids` (`None`: from the top, or from a random
+/// track when shuffling). `shuffle` sets shuffle on or off; `None` keeps the current mode.
 #[tauri::command]
 pub async fn play_tracks(
     state: State<'_, AppState>,
     ids: Vec<u32>,
-    start: usize,
+    start: Option<usize>,
+    shuffle: Option<bool>,
 ) -> Result<(), String> {
-    let requested = ids.get(start).copied();
-    let rows = blocking(state.library.clone(), move |l| l.track_paths(&ids)).await?;
+    let requested = start.and_then(|i| ids.get(i).copied());
+    let rows = blocking(state.library.clone(), move |l| l.tracks_by_id(&ids)).await?;
     // Unknown ids are skipped, so find the start track again in what came back.
-    let start = requested
-        .and_then(|id| rows.iter().position(|(row_id, _, _)| *row_id == id))
-        .unwrap_or(0);
-    let items = rows
-        .into_iter()
-        .map(|(_, path, cover)| QueueItem {
-            path: PathBuf::from(path),
-            cover_key: cover.as_deref().map(cover_key),
-        })
-        .collect();
-    state.engine.play_items(items, start);
+    let start = requested.and_then(|id| rows.iter().position(|r| r.id == id));
+    let items = rows.into_iter().map(item_from_row).collect();
+    state.engine.play_items(items, start, shuffle);
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn shuffle_keeps_every_id() {
-        let mut ids: Vec<u32> = (0..100).collect();
-        super::shuffle(&mut ids);
-        let mut sorted = ids.clone();
-        sorted.sort_unstable();
-        assert_eq!(sorted, (0..100).collect::<Vec<_>>());
-        assert_ne!(ids, sorted, "100 items virtually never stay in order");
-    }
 }

@@ -3,8 +3,8 @@
 use pp_core::format::PROBE_RATES;
 use pp_core::output::HardwareVolume;
 use pp_core::{
-    DeviceCapabilities, DeviceInfo, FormatCandidate, OpenRequest, OutputBackend, OutputError,
-    OutputFormat, OutputStream, SampleFormat,
+    DeviceCapabilities, DeviceChange, DeviceInfo, DeviceWatch, FormatCandidate, OpenRequest,
+    OutputBackend, OutputError, OutputFormat, OutputStream, SampleFormat,
 };
 use wasapi::{Device, DeviceEnumerator, Direction, ShareMode as WShareMode, WasapiError};
 use windows::Win32::Media::Audio::{AUDCLNT_E_DEVICE_IN_USE, AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED};
@@ -120,6 +120,13 @@ impl OutputBackend for WasapiBackend {
         } else {
             Ok(None)
         }
+    }
+
+    fn watch_devices(
+        &self,
+        on_change: Box<dyn Fn(DeviceChange) + Send + Sync>,
+    ) -> Result<Option<DeviceWatch>, OutputError> {
+        crate::watch::watch(on_change).map(Some)
     }
 }
 

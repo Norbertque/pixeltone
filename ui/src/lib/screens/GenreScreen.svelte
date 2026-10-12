@@ -3,9 +3,12 @@
   import AlbumCard from '../components/AlbumCard.svelte';
   import Button from '../components/Button.svelte';
   import EmptyState from '../components/EmptyState.svelte';
+  import IconButton from '../components/IconButton.svelte';
   import TrackItem from '../components/TrackItem.svelte';
   import VirtualList from '../components/VirtualList.svelte';
-  import { library, playRows, shuffleRows } from '../library.svelte';
+  import { library, playAll, playRows, shuffleRows } from '../library.svelte';
+  import { menu } from '../menu.svelte';
+  import { rowsMenu } from '../menus';
 
   interface Props {
     id: number;
@@ -34,8 +37,15 @@
       {detail.albums.length} album{detail.albums.length === 1 ? '' : 's'} · {detail.genre.trackCount} songs
     </p>
     <div class="actions">
-      <Button variant="filled" size="md" icon="play_arrow" onclick={() => playRows(detail!.tracks, 0)}>Play</Button>
+      <Button variant="filled" size="md" icon="play_arrow" onclick={() => playAll(detail!.tracks)}>Play</Button>
       <Button variant="tonal" size="md" icon="shuffle" onclick={() => shuffleRows(detail!.tracks)}>Shuffle</Button>
+          <IconButton
+            icon="more_vert"
+            label="More options"
+            variant="tonal"
+            size="md"
+            onclick={(e) => menu.show(e.currentTarget, rowsMenu(() => detail!.tracks, detail!.genre.name), 'More options')}
+          />
     </div>
   </header>
 

@@ -24,7 +24,7 @@
 >
   {#snippet actions()}
     {#if hasMusic}
-      <Button variant="filled" size="md" icon="shuffle" onclick={() => api.playLibrary('title', 0, true)}>Shuffle all</Button>
+      <Button variant="filled" size="md" icon="shuffle" onclick={() => api.playLibrary('title', null, true)}>Shuffle all</Button>
     {/if}
     <Button variant="tonal" size="md" icon="file_open" onclick={() => player.openFiles()}>Play files…</Button>
   {/snippet}

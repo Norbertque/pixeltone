@@ -30,5 +30,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+crossbeam-channel.workspace = true
+pp-media-controls.workspace = true
 pp-output-wasapi.workspace = true
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_System_Power"] }

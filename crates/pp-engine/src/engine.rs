@@ -4,14 +4,15 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use parking_lot::{Mutex, RwLock};
 use pp_core::{
-    DeviceCapabilities, OpenRequest, OutputBackend, OutputBadge, OutputError, OutputFormat,
-    OutputStream, ShareMode, SoftwareGain, StreamControls, StreamStats,
+    DeviceCapabilities, DeviceChange, Fade, OpenRequest, OutputBackend, OutputBadge, OutputError,
+    OutputFormat, OutputStream, ShareMode, SoftwareGain, StreamControls, StreamStats,
 };
 use pp_decode::CoverArt;
 use rtrb::{Producer, RingBuffer};
@@ -19,9 +20,14 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::pipeline::OutputPlan;
-use crate::queue::{Queue, QueueItem, RepeatMode};
-use crate::track::{LoadedTrack, StartedTrack, TrackMeta, load};
+use crate::queue::{Queue, QueueEntry, QueueItem, QueueSnapshot, RepeatMode};
+use crate::track::{LoadedTrack, StartedTrack, TrackMeta, load, read_meta};
 use crate::worker::{TaggedEvent, WorkerArgs, WorkerEvent, WorkerHandle};
+
+/// Fade length for pause, resume and stop.
+const PAUSE_FADE_MS: u32 = 80;
+/// Fade length for seeking and skipping.
+const SEEK_FADE_MS: u32 = 25;
 
 /// How the user wants audio to leave the app.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -40,6 +46,8 @@ pub struct OutputSettings {
     pub software_gain_db: f32,
     /// Full-scale output, bypassing the software gain stage (for an external amplifier).
     pub line_level: bool,
+    /// Short fades on pause, resume, seek and skip, so they don't click.
+    pub fades: bool,
 }
 
 impl Default for OutputSettings {
@@ -51,6 +59,7 @@ impl Default for OutputSettings {
             buffer_ms: 50,
             software_gain_db: pp_core::gain::DEFAULT_DB,
             line_level: false,
+            fades: true,
         }
     }
 }
@@ -105,10 +114,15 @@ pub struct OutputState {
 pub struct PlayerSnapshot {
     pub status: PlaybackStatus,
     pub track: Option<TrackMeta>,
+    /// Queue item id of the current track.
+    pub current_id: Option<u32>,
     pub queue_index: Option<u32>,
     pub queue_length: u32,
+    /// Changes whenever the queue's items or their order change.
+    pub queue_version: u32,
     pub position_ms: f64,
     pub repeat: RepeatMode,
+    pub shuffle: bool,
     pub output: Option<OutputState>,
 }
 
@@ -150,8 +164,22 @@ impl CoverStore {
 enum Command {
     PlayItems {
         items: Vec<QueueItem>,
-        start: usize,
+        start: Option<usize>,
+        shuffle: Option<bool>,
     },
+    Enqueue {
+        items: Vec<QueueItem>,
+        next: bool,
+    },
+    Remove(Vec<u32>),
+    Move {
+        id: u32,
+        to: usize,
+    },
+    ClearQueue,
+    JumpTo(u32),
+    SetShuffle(bool),
+    Restore(Box<QueueSnapshot>),
     Play,
     Pause,
     Toggle,
@@ -163,6 +191,7 @@ enum Command {
     },
     SetRepeat(RepeatMode),
     SetOutput(OutputSettings),
+    DeviceChanged(DeviceChange),
     /// Forget probed device capabilities (devices changed).
     RefreshDevices,
     Shutdown,
@@ -171,6 +200,7 @@ enum Command {
 pub struct Engine {
     tx: Sender<Command>,
     snapshot: Arc<RwLock<PlayerSnapshot>>,
+    queue: Arc<Mutex<Queue>>,
     covers: Arc<CoverStore>,
     thread: Option<JoinHandle<()>>,
 }
@@ -192,13 +222,14 @@ impl Engine {
     ) -> Self {
         let (tx, rx) = unbounded();
         let snapshot = Arc::new(RwLock::new(PlayerSnapshot::default()));
+        let queue = Arc::new(Mutex::new(Queue::default()));
         let covers = Arc::new(CoverStore::default());
         let (worker_tx, worker_rx) = unbounded();
         let mut control = Control {
             backend,
             settings,
             config,
-            queue: Arc::new(Mutex::new(Queue::default())),
+            queue: queue.clone(),
             current: None,
             status: PlaybackStatus::Stopped,
             parked: None,
@@ -220,6 +251,7 @@ impl Engine {
         Self {
             tx,
             snapshot,
+            queue,
             covers,
             thread: Some(thread),
         }
@@ -233,17 +265,73 @@ impl Engine {
         self.covers.clone()
     }
 
+    /// Queue rows `offset..offset + limit`, in play order.
+    pub fn queue_entries(&self, offset: usize, limit: usize) -> Vec<QueueEntry> {
+        self.queue.lock().entries(offset, limit)
+    }
+
+    /// The queue, current track and position, for saving across restarts.
+    pub fn queue_snapshot(&self) -> QueueSnapshot {
+        let (current, position) = {
+            let s = self.snapshot.read();
+            (s.current_id, s.position_ms)
+        };
+        self.queue.lock().snapshot(current, position)
+    }
+
     fn send(&self, command: Command) {
         let _ = self.tx.send(command);
     }
 
     pub fn play_files(&self, paths: Vec<PathBuf>, start: usize) {
-        self.play_items(paths.into_iter().map(QueueItem::from).collect(), start);
+        self.play_items(
+            paths.into_iter().map(QueueItem::from).collect(),
+            Some(start),
+            None,
+        );
     }
 
-    pub fn play_items(&self, items: Vec<QueueItem>, start: usize) {
-        self.send(Command::PlayItems { items, start });
+    /// Replaces the queue and plays it from item `start`. `shuffle` turns shuffle on or off
+    /// (`None` keeps the current mode); shuffled without a `start`, a random track leads.
+    pub fn play_items(&self, items: Vec<QueueItem>, start: Option<usize>, shuffle: Option<bool>) {
+        self.send(Command::PlayItems {
+            items,
+            start,
+            shuffle,
+        });
     }
+
+    /// "Play next" (`next`) or "Add to queue".
+    pub fn enqueue(&self, items: Vec<QueueItem>, next: bool) {
+        self.send(Command::Enqueue { items, next });
+    }
+
+    pub fn remove_from_queue(&self, ids: Vec<u32>) {
+        self.send(Command::Remove(ids));
+    }
+
+    pub fn move_in_queue(&self, id: u32, to: usize) {
+        self.send(Command::Move { id, to });
+    }
+
+    /// Removes everything but the current track.
+    pub fn clear_queue(&self) {
+        self.send(Command::ClearQueue);
+    }
+
+    pub fn jump_to(&self, id: u32) {
+        self.send(Command::JumpTo(id));
+    }
+
+    pub fn set_shuffle(&self, on: bool) {
+        self.send(Command::SetShuffle(on));
+    }
+
+    /// Rebuilds a saved queue, paused at its saved position.
+    pub fn restore(&self, snapshot: QueueSnapshot) {
+        self.send(Command::Restore(Box::new(snapshot)));
+    }
+
     pub fn play(&self) {
         self.send(Command::Play);
     }
@@ -271,6 +359,10 @@ impl Engine {
     pub fn set_output(&self, settings: OutputSettings) {
         self.send(Command::SetOutput(settings));
     }
+    /// A device was added, removed or became the default (from the backend's watcher).
+    pub fn device_changed(&self, change: DeviceChange) {
+        self.send(Command::DeviceChanged(change));
+    }
     pub fn refresh_devices(&self) {
         self.send(Command::RefreshDevices);
     }
@@ -291,6 +383,8 @@ struct Session {
     format: OutputFormat,
     plan: OutputPlan,
     controls: Arc<StreamControls>,
+    /// The endpoint actually opened (also when following the default device).
+    device_id: String,
     device_name: String,
     fallback_reason: Option<String>,
     /// Applied software attenuation, if the gain stage is active.
@@ -298,8 +392,9 @@ struct Session {
     worker: Option<WorkerHandle>,
     /// Tracks queued in this stream; the first is the audible one.
     boundaries: Vec<Boundary>,
-    /// Where the stream ends, and the track that needs a reopen afterwards.
-    ended: Option<(u64, Option<Box<LoadedTrack>>)>,
+    /// Where the stream ends, the track that needs a reopen afterwards, and the queue
+    /// version that was decided on.
+    ended: Option<(u64, Option<Box<LoadedTrack>>, u32)>,
 }
 
 struct Boundary {
@@ -328,11 +423,13 @@ impl Session {
 
 struct PlanChoice {
     plan: OutputPlan,
+    device_id: String,
     device_name: String,
     fallback_reason: Option<String>,
     software_gain_db: Option<f32>,
 }
 
+/// Track and position shown while no stream plays them.
 struct Parked {
     track: TrackMeta,
     position_ms: f64,
@@ -343,10 +440,11 @@ struct Control {
     settings: OutputSettings,
     config: EngineConfig,
     queue: Arc<Mutex<Queue>>,
-    /// Queue position of the audible (or last) track.
-    current: Option<usize>,
+    /// Queue id of the audible (or last) track.
+    current: Option<u32>,
     status: PlaybackStatus,
-    /// Track and position kept while no stream is open (stopped, paused after an error).
+    /// Track and position kept while no stream plays them (stopped, restored, paused after
+    /// an error, or about to start).
     parked: Option<Parked>,
     session: Option<Session>,
     caps: HashMap<String, DeviceCapabilities>,
@@ -360,6 +458,27 @@ struct Control {
     last_state: Option<PlayerSnapshot>,
 }
 
+/// Seed for shuffling.
+fn seed() -> u64 {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    nanos
+        ^ COUNTER
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+fn fade_frames(format: OutputFormat, ms: u32, enabled: bool) -> u32 {
+    if enabled {
+        (u64::from(format.sample_rate) * u64::from(ms) / 1000) as u32
+    } else {
+        0
+    }
+}
+
 impl Control {
     fn run(&mut self, rx: &Receiver<Command>) {
         loop {
@@ -371,16 +490,72 @@ impl Control {
             self.tick();
             self.publish();
         }
-        self.close_session();
+        self.close_session(PAUSE_FADE_MS);
     }
 
     fn handle(&mut self, command: Command) {
         match command {
-            Command::PlayItems { items, start } => {
-                self.queue.lock().set(items);
+            Command::PlayItems {
+                items,
+                start,
+                shuffle,
+            } => {
+                let first = {
+                    let mut q = self.queue.lock();
+                    let shuffle = shuffle.unwrap_or_else(|| q.is_shuffled());
+                    let ids = q.set(items);
+                    let first = start.and_then(|i| ids.get(i).copied());
+                    if shuffle {
+                        q.shuffle(first, seed());
+                        q.id_at(0)
+                    } else {
+                        first.or_else(|| ids.first().copied())
+                    }
+                };
                 self.parked = None;
-                self.start_at(start, 0.0, true, 0);
+                match first {
+                    Some(id) => self.start_at(id, 0.0, true, 0),
+                    None => self.finish_queue(SEEK_FADE_MS),
+                }
             }
+            Command::Enqueue { items, next } => {
+                let ids = {
+                    let mut q = self.queue.lock();
+                    if next {
+                        q.insert_after(self.current, items)
+                    } else {
+                        q.append(items)
+                    }
+                };
+                // Nothing loaded yet: show the first new track, ready to play.
+                if self.current.is_none()
+                    && let Some(&first) = ids.first()
+                {
+                    self.current = Some(first);
+                    self.park_item(first, 0.0);
+                }
+            }
+            Command::Remove(ids) => {
+                self.queue.lock().remove(&ids, self.current);
+            }
+            Command::Move { id, to } => {
+                self.queue.lock().move_to(id, to);
+            }
+            Command::ClearQueue => self.queue.lock().clear_except(self.current),
+            Command::JumpTo(id) => {
+                if self.queue.lock().index_of(id).is_some() {
+                    self.start_at(id, 0.0, true, 0);
+                }
+            }
+            Command::SetShuffle(on) => {
+                let mut q = self.queue.lock();
+                if !on {
+                    q.unshuffle();
+                } else if !q.is_shuffled() {
+                    q.shuffle(self.current, seed());
+                }
+            }
+            Command::Restore(snapshot) => self.restore(*snapshot),
             Command::Play => self.play(),
             Command::Pause => self.pause(),
             Command::Toggle => {
@@ -392,7 +567,7 @@ impl Control {
             }
             Command::Stop => {
                 self.park();
-                self.close_session();
+                self.close_session(PAUSE_FADE_MS);
                 self.status = PlaybackStatus::Stopped;
                 if let Some(p) = &mut self.parked {
                     p.position_ms = 0.0;
@@ -401,34 +576,46 @@ impl Control {
             Command::Next => {
                 let next = self.current.and_then(|c| self.queue.lock().next(c));
                 match next {
-                    Some(n) => self.start_at(n, 0.0, self.status == PlaybackStatus::Playing, 0),
-                    None => self.finish_queue(),
+                    Some(n) => self.skip_to(n),
+                    None => self.finish_queue(SEEK_FADE_MS),
                 }
             }
             Command::Previous => {
                 let Some(cur) = self.current else { return };
                 let previous = self.queue.lock().previous(cur);
                 if self.position_ms() > 3000.0 {
-                    self.start_at(cur, 0.0, self.status == PlaybackStatus::Playing, 0);
+                    self.skip_to(cur);
                 } else if let Some(p) = previous {
-                    self.start_at(p, 0.0, self.status == PlaybackStatus::Playing, 0);
+                    self.skip_to(p);
                 }
             }
             Command::Seek { ms } => {
+                let ms = ms.max(0.0);
                 if let Some(cur) = self.current {
-                    let play = self.status == PlaybackStatus::Playing;
-                    self.start_at(cur, ms.max(0.0), play, 0);
+                    if self.session.is_some() {
+                        let play = self.status == PlaybackStatus::Playing;
+                        self.start_at(cur, ms, play, 0);
+                    } else if let Some(p) = &mut self.parked {
+                        // Nothing open: just move where play will start.
+                        p.position_ms = ms;
+                    }
                 }
             }
             Command::SetRepeat(mode) => self.queue.lock().repeat = mode,
             Command::SetOutput(settings) => self.set_output(settings),
+            Command::DeviceChanged(change) => self.device_changed(change),
             Command::RefreshDevices => self.caps.clear(),
             Command::Shutdown => {}
         }
     }
 
     fn play(&mut self) {
+        let fades = self.settings.fades;
         if let Some(s) = &mut self.session {
+            s.controls
+                .set_fade_frames(fade_frames(s.format, PAUSE_FADE_MS, fades));
+            s.controls
+                .set_fade(if fades { Fade::In } else { Fade::Audible });
             match s.stream.start() {
                 Ok(()) => self.status = PlaybackStatus::Playing,
                 Err(e) => self.on_device_error(e),
@@ -436,21 +623,53 @@ impl Control {
             return;
         }
         let resume = self.parked.as_ref().map(|p| p.position_ms).unwrap_or(0.0);
-        let pos = self.current.unwrap_or(0);
-        if !self.queue.lock().is_empty() {
-            self.start_at(pos, resume, true, 0);
+        let id = self.current.or_else(|| self.queue.lock().id_at(0));
+        if let Some(id) = id {
+            self.start_at(id, resume, true, 0);
+        }
+    }
+
+    /// Next/previous: plays from the top of `id` if a stream is open; otherwise only moves
+    /// there, so the device isn't opened (or taken in exclusive mode) before Play.
+    fn skip_to(&mut self, id: u32) {
+        if self.session.is_some() {
+            let play = self.status == PlaybackStatus::Playing;
+            self.start_at(id, 0.0, play, 0);
+        } else {
+            self.current = Some(id);
+            self.park_item(id, 0.0);
         }
     }
 
     fn pause(&mut self) {
-        if let Some(s) = &mut self.session
-            && self.status == PlaybackStatus::Playing
-        {
-            if let Err(e) = s.stream.pause() {
-                self.on_device_error(e);
-                return;
+        if self.session.is_none() || self.status != PlaybackStatus::Playing {
+            return;
+        }
+        self.fade_out(PAUSE_FADE_MS);
+        let s = self.session.as_mut().expect("checked");
+        if let Err(e) = s.stream.pause() {
+            self.on_device_error(e);
+            return;
+        }
+        self.status = PlaybackStatus::Paused;
+    }
+
+    /// Fades the playing stream out and waits until the device has played the silence.
+    fn fade_out(&self, ms: u32) {
+        let Some(s) = &self.session else { return };
+        if self.status != PlaybackStatus::Playing || !self.settings.fades || ms == 0 {
+            return;
+        }
+        s.controls.set_fade_frames(fade_frames(s.format, ms, true));
+        s.controls.set_fade(Fade::Out);
+        let deadline =
+            Instant::now() + Duration::from_millis(u64::from(ms + self.settings.buffer_ms) + 250);
+        while !s.controls.faded_out() {
+            if Instant::now() > deadline {
+                tracing::debug!("fade-out not confirmed by the device; continuing");
+                break;
             }
-            self.status = PlaybackStatus::Paused;
+            thread::sleep(Duration::from_millis(1));
         }
     }
 
@@ -459,12 +678,14 @@ impl Control {
         if previous.device_id != self.settings.device_id {
             self.caps.clear();
         }
-        let only_gain = OutputSettings {
+        // Gain and fades apply to the open stream as they are.
+        let live = OutputSettings {
             software_gain_db: self.settings.software_gain_db,
+            fades: self.settings.fades,
             ..previous.clone()
         } == self.settings;
         if let Some(s) = &mut self.session {
-            if only_gain {
+            if live {
                 if s.software_gain_db.is_some() {
                     s.software_gain_db = Some(self.settings.software_gain_db);
                     s.controls
@@ -483,11 +704,45 @@ impl Control {
                 return;
             }
             // Device, mode or timing changed: reopen at the same spot.
-            if let Some(cur) = self.current {
-                let ms = self.position_ms();
-                let play = self.status == PlaybackStatus::Playing;
-                self.close_session();
-                self.start_at(cur, ms, play, 0);
+            self.reopen();
+        }
+    }
+
+    /// Closes the stream and opens it again (new device or settings) where it was.
+    fn reopen(&mut self) {
+        if let Some(cur) = self.current {
+            let ms = self.position_ms();
+            let play = self.status == PlaybackStatus::Playing;
+            self.park();
+            self.close_session(SEEK_FADE_MS);
+            self.start_at(cur, ms, play, 0);
+        }
+    }
+
+    fn device_changed(&mut self, change: DeviceChange) {
+        // Formats and volume controls may differ now; probe again when needed.
+        self.caps.clear();
+        let Some(s) = &self.session else { return };
+        let device = s.device_id.clone();
+        if change.lost() == Some(device.as_str()) {
+            self.on_device_error(OutputError::DeviceInvalidated);
+            return;
+        }
+        if let DeviceChange::DefaultChanged { id } = &change
+            && self.settings.device_id.is_none()
+            && id.as_deref() != Some(device.as_str())
+        {
+            // Following the system default. If the old device is still there the user
+            // switched devices, so playback moves along; if it went away (headphones
+            // unplugged), pause like any disconnect instead of blasting the speakers.
+            let still_there = self
+                .backend
+                .list_devices()
+                .is_ok_and(|list| list.iter().any(|d| d.id == device));
+            if still_there {
+                self.reopen();
+            } else {
+                self.on_device_error(OutputError::DeviceInvalidated);
             }
         }
     }
@@ -531,52 +786,67 @@ impl Control {
                 mix_format: caps.mix_format,
                 prefer_deepest: gain_stage,
             },
+            device_id: caps.device.id.clone(),
             device_name: caps.device.name.clone(),
             fallback_reason,
             software_gain_db: gain_stage.then_some(self.settings.software_gain_db),
         })
     }
 
-    /// Starts queue position `pos` at `ms`, reusing the open stream when its format fits.
-    fn start_at(&mut self, pos: usize, ms: f64, play: bool, attempt: usize) {
-        let Some(item) = self.queue.lock().get(pos).cloned() else {
-            self.finish_queue();
+    /// Starts queue item `id` at `ms`, reusing the open stream when its format fits.
+    fn start_at(&mut self, id: u32, ms: f64, play: bool, attempt: usize) {
+        let Some(item) = self.queue.lock().get(id).cloned() else {
+            self.finish_queue(SEEK_FADE_MS);
             return;
         };
         let choice = match self.plan() {
             Ok(c) => c,
             Err(e) => {
                 self.report(e.code(), e.to_string());
-                self.close_session();
-                self.status = PlaybackStatus::Stopped;
+                self.park();
+                self.close_session(0);
+                self.status = if self.parked.is_some() {
+                    PlaybackStatus::Paused
+                } else {
+                    PlaybackStatus::Stopped
+                };
                 return;
             }
         };
-        let track = match load(pos, &item, ms as u64, &choice.plan) {
+        let mut track = match load(id, &item, ms as u64, &choice.plan) {
             Ok(t) => t,
             Err(error) => {
                 self.report(
                     "trackFailed",
                     format!("Can't play {}: {error}", item.path.display()),
                 );
-                let next = self.queue.lock().after(pos);
-                let len = self.queue.lock().len();
+                let (next, len) = {
+                    let q = self.queue.lock();
+                    (q.after(id), q.len())
+                };
                 match next {
-                    Some(n) if n != pos && attempt + 1 < len => {
+                    Some(n) if n != id && attempt + 1 < len => {
                         self.start_at(n, 0.0, play, attempt + 1)
                     }
-                    _ => self.finish_queue(),
+                    _ => self.finish_queue(SEEK_FADE_MS),
                 }
                 return;
             }
         };
-        self.current = Some(pos);
+        self.current = Some(id);
+        // Shown until the device reaches the track; its cover must be servable by then.
+        if let (Some(key), Some(cover)) = (track.meta.cover_key.clone(), track.cover.take()) {
+            self.covers.insert(key, cover);
+        }
+        self.park_track(&track.meta, ms);
 
         let reusable = self
             .session
             .as_ref()
             .is_some_and(|s| s.plan == choice.plan && s.format == track.negotiated.format);
         if reusable {
+            self.fade_out(SEEK_FADE_MS);
+            let fades = self.settings.fades;
             let s = self.session.as_mut().expect("checked");
             if let Some(producer) = s.stop_worker() {
                 let flushed = s.stream.pause().and_then(|()| s.stream.flush());
@@ -595,6 +865,14 @@ impl Control {
                         events: self.worker_tx.clone(),
                         controls: s.controls.clone(),
                     }));
+                    // Mid-track starts fade in; a track's own beginning needs no fade.
+                    s.controls
+                        .set_fade_frames(fade_frames(s.format, SEEK_FADE_MS, fades));
+                    s.controls.set_fade(if fades && ms > 0.0 {
+                        Fade::In
+                    } else {
+                        Fade::Audible
+                    });
                     if play && let Err(e) = s.stream.start() {
                         self.on_device_error(e);
                         return;
@@ -608,7 +886,7 @@ impl Control {
                 }
             }
         }
-        self.close_session();
+        self.close_session(SEEK_FADE_MS);
         self.open_session(track, choice, play);
     }
 
@@ -621,6 +899,13 @@ impl Control {
         if let Some(db) = choice.software_gain_db {
             controls.set_gain(SoftwareGain::new(db));
         }
+        let fades = self.settings.fades;
+        controls.set_fade_frames(fade_frames(format, PAUSE_FADE_MS, fades));
+        controls.set_fade(if fades && track.start_ms > 0 {
+            Fade::In
+        } else {
+            Fade::Audible
+        });
         let request = OpenRequest {
             device_id: self.settings.device_id.clone(),
             mode: choice.plan.mode,
@@ -640,6 +925,7 @@ impl Control {
                         mix_format: choice.plan.mix_format,
                         prefer_deepest: false,
                     },
+                    device_id: choice.device_id,
                     device_name: choice.device_name,
                     fallback_reason: Some(e.to_string()),
                     software_gain_db: None,
@@ -659,7 +945,7 @@ impl Control {
             Err(e) => {
                 self.report(e.code(), e.to_string());
                 self.park_track(&track.meta, track.start_ms as f64);
-                self.status = PlaybackStatus::Stopped;
+                self.status = PlaybackStatus::Paused;
                 return;
             }
         };
@@ -689,6 +975,7 @@ impl Control {
             format,
             plan: choice.plan,
             controls,
+            device_id: choice.device_id,
             device_name: choice.device_name,
             fallback_reason: choice.fallback_reason,
             software_gain_db: choice.software_gain_db,
@@ -703,7 +990,9 @@ impl Control {
         };
     }
 
-    fn close_session(&mut self) {
+    /// Releases the device, fading out first (by `fade_ms`) if music is playing.
+    fn close_session(&mut self, fade_ms: u32) {
+        self.fade_out(fade_ms);
         if let Some(mut s) = self.session.take() {
             s.stop_worker();
             let _ = s.stream.pause();
@@ -733,9 +1022,44 @@ impl Control {
         });
     }
 
-    fn finish_queue(&mut self) {
+    /// Shows a queue item that isn't playing (restored or freshly queued).
+    fn park_item(&mut self, id: u32, position_ms: f64) {
+        let Some(item) = self.queue.lock().get(id).cloned() else {
+            return;
+        };
+        match read_meta(&item) {
+            Ok((meta, cover)) => {
+                if let (Some(key), Some(cover)) = (meta.cover_key.clone(), cover) {
+                    self.covers.insert(key, cover);
+                }
+                self.park_track(&meta, position_ms);
+            }
+            Err(e) => {
+                tracing::debug!("can't read {}: {e}", item.path.display());
+                self.parked = None;
+            }
+        }
+    }
+
+    fn restore(&mut self, snapshot: QueueSnapshot) {
+        self.close_session(0);
+        let position = snapshot.position_ms.max(0.0);
+        let current = self.queue.lock().restore(snapshot);
+        self.current = current;
+        self.parked = None;
+        if let Some(id) = current {
+            self.park_item(id, position);
+        }
+        self.status = if self.parked.is_some() {
+            PlaybackStatus::Paused
+        } else {
+            PlaybackStatus::Stopped
+        };
+    }
+
+    fn finish_queue(&mut self, fade_ms: u32) {
         self.park();
-        self.close_session();
+        self.close_session(fade_ms);
         self.status = PlaybackStatus::Stopped;
         if let Some(p) = &mut self.parked {
             p.position_ms = 0.0;
@@ -746,7 +1070,7 @@ impl Control {
         tracing::warn!("output error: {error}");
         self.report(error.code(), error.to_string());
         self.park();
-        self.close_session();
+        self.close_session(0);
         self.caps.clear();
         self.status = if self.current.is_some() {
             PlaybackStatus::Paused
@@ -764,7 +1088,10 @@ impl Control {
 
     fn position_ms(&self) -> f64 {
         match &self.session {
-            Some(s) => s.position_ms(s.stream.played_frames()).unwrap_or(0.0),
+            Some(s) => s
+                .position_ms(s.stream.played_frames())
+                .or_else(|| self.parked.as_ref().map(|p| p.position_ms))
+                .unwrap_or(0.0),
             None => self.parked.as_ref().map(|p| p.position_ms).unwrap_or(0.0),
         }
     }
@@ -801,16 +1128,20 @@ impl Control {
                         started = true;
                     }
                 }
-                WorkerEvent::Ended { at_frame, next } => {
+                WorkerEvent::Ended {
+                    at_frame,
+                    next,
+                    version,
+                } => {
                     if let Some(s) = &mut self.session {
-                        s.ended = Some((at_frame, next));
+                        s.ended = Some((at_frame, next, version));
                     }
                 }
-                WorkerEvent::TrackFailed { pos, error } => {
+                WorkerEvent::TrackFailed { id, error } => {
                     let name = self
                         .queue
                         .lock()
-                        .get(pos)
+                        .get(id)
                         .map(|item| item.path.display().to_string())
                         .unwrap_or_default();
                     self.report("trackFailed", format!("Skipped {name}: {error}"));
@@ -832,31 +1163,43 @@ impl Control {
             s.boundaries.drain(..i);
         }
         if let Some(b) = s.boundaries.first() {
-            self.current = Some(b.track.pos);
+            self.current = Some(b.track.id);
         }
 
-        let drained = s.ended.as_ref().is_some_and(|(end, _)| played >= *end);
+        let drained = s.ended.as_ref().is_some_and(|(end, ..)| played >= *end);
         if drained {
-            let (_, next) = s.ended.take().expect("checked");
+            let (_, next, version) = s.ended.take().expect("checked");
             // A track shorter than a tick can start and drain between two ticks; announce
             // it (title, badge) before the session closes, or it would never be published.
             if started {
                 self.publish();
             }
-            match next {
-                Some(track) => {
+            let play = self.status == PlaybackStatus::Playing;
+            // The queue may have been edited since the worker decided what comes next.
+            let edited = self.queue.lock().version() != version;
+            let successor = if edited {
+                self.current.and_then(|c| self.queue.lock().after(c))
+            } else {
+                next.as_ref().map(|t| t.id)
+            };
+            match (next, successor) {
+                (Some(track), Some(id)) if track.id == id => {
                     // The next track needs another device format: reopen with a pre-roll.
-                    let play = self.status == PlaybackStatus::Playing;
-                    self.close_session();
+                    self.close_session(0);
                     match self.plan() {
                         Ok(choice) => {
-                            self.current = Some(track.pos);
+                            self.current = Some(track.id);
+                            self.park_track(&track.meta, 0.0);
                             self.open_session(*track, choice, play);
                         }
                         Err(e) => self.on_device_error(e),
                     }
                 }
-                None => self.finish_queue(),
+                (_, Some(id)) => {
+                    self.close_session(0);
+                    self.start_at(id, 0.0, play, 0);
+                }
+                (_, None) => self.finish_queue(0),
             }
         }
     }
@@ -866,10 +1209,16 @@ impl Control {
         let mut snap = PlayerSnapshot {
             status: self.status,
             track: None,
-            queue_index: self.current.map(|c| c as u32),
+            current_id: self.current,
+            queue_index: self
+                .current
+                .and_then(|id| queue.index_of(id))
+                .map(|i| i as u32),
             queue_length: queue.len() as u32,
+            queue_version: queue.version(),
             position_ms: 0.0,
             repeat: queue.repeat,
+            shuffle: queue.is_shuffled(),
             output: None,
         };
         drop(queue);

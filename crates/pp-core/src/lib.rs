@@ -11,13 +11,15 @@ pub mod gain;
 pub mod negotiate;
 pub mod output;
 pub mod pcm;
+pub mod render;
 
 pub use badge::OutputBadge;
 pub use format::{OutputFormat, SampleFormat, SampleKind, SourceFormat};
 pub use gain::SoftwareGain;
 pub use negotiate::{Conversion, FormatCandidate, Negotiated, negotiate};
 pub use output::{
-    DeviceCapabilities, DeviceInfo, OpenRequest, OutputBackend, OutputError, OutputStream,
-    ShareMode, StreamControls, StreamStats,
+    DeviceCapabilities, DeviceChange, DeviceInfo, DeviceWatch, Fade, OpenRequest, OutputBackend,
+    OutputError, OutputStream, ShareMode, StreamControls, StreamStats,
 };
 pub use pcm::{Packer, PcmBlock, Samples};
+pub use render::{Fill, RenderFeed};

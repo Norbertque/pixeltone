@@ -125,7 +125,7 @@ jobs:
           Compress-Archive -Path $portable -DestinationPath "$out\$name-portable.zip" -Force
           Get-ChildItem $out -File | Format-Table Name, Length
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: PixelPlayerPC-${{ env.PP_CHANNEL }}
           path: artifacts/*.*

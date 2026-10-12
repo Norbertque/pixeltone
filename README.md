@@ -11,6 +11,10 @@ sample rate and bit depth.
   them; albums, artists (with configurable "feat." splitting), genres and folders; instant
   search that ignores accents ("Bjork" finds "Björk"); cover art from the files or from
   `cover.jpg`/`folder.jpg` next to them.
+- **Playback:** a queue with *Play next*, *Add to queue*, drag-to-reorder and a shuffle you
+  can undo; queue and position survive a restart; media keys and the Windows media flyout;
+  click-free fades on pause and seek; follows device changes (see the keyboard shortcuts
+  with `?`).
 - **UI (Svelte 5 in WebView2 via Tauri 2):** Material You colours from the album art, M3
   Expressive shapes and spring motion, Google Sans Flex.
 
@@ -41,16 +45,20 @@ Building the Rust code on Linux needs a C toolchain and libclang (`build-essenti
 `clang`, `pkg-config`); building the Tauri app crate itself also needs the WebKitGTK dev
 packages listed in `.github/workflows/ci.yml`.
 
-Windows-only code (`crates/pp-output-wasapi`, title bar, power) compiles on CI; check it
-locally with `cargo check --target x86_64-pc-windows-msvc -p pp-output-wasapi`.
+Windows-only code (`crates/pp-output-wasapi`, `crates/pp-media-controls`, title bar, power)
+compiles on CI; check it locally with `cargo check --target x86_64-pc-windows-msvc -p
+pp-output-wasapi -p pp-media-controls`. Checking the whole app for Windows also needs
+FFmpeg's Windows headers, a C compiler for the target and a resource-compiler stand-in; see
+`CLAUDE.md`.
 
 | Path | What |
 |---|---|
 | `crates/pp-core` | Formats, negotiator, PCM packing, gain, badge, output traits |
 | `crates/pp-decode` | FFmpeg decoder (via `rsmpeg`), tags, cover art |
-| `crates/pp-engine` | Queue, gapless pipeline, engine thread, capture backend for tests |
+| `crates/pp-engine` | Queue, gapless pipeline, transport fades, engine thread, capture backend for tests |
 | `crates/pp-library` | Library: scanner, tag reading, SQLite + FTS5 search, thumbnails, folder watcher |
-| `crates/pp-output-wasapi` | WASAPI backend (Windows) |
+| `crates/pp-media-controls` | Media keys and the Windows media flyout (Windows) |
+| `crates/pp-output-wasapi` | WASAPI backend and device notifications (Windows) |
 | `src-tauri` | The app: commands, events, cover protocol, settings, library glue |
 | `ui` | Svelte 5 UI |
 

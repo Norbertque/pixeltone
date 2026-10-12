@@ -227,7 +227,8 @@ impl Library {
     }
 
     /// (id, path, cover hash) for playback, in the order given.
-    pub fn track_paths(&self, ids: &[u32]) -> Result<Vec<(u32, String, Option<String>)>> {
-        Ok(self.db.lock().track_paths(ids)?)
+    /// Tracks by id, in the order asked for; unknown ids are skipped.
+    pub fn tracks_by_id(&self, ids: &[u32]) -> Result<Vec<TrackRow>> {
+        Ok(self.db.lock().tracks_by_id(ids)?)
     }
 }

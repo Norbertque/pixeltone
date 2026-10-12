@@ -58,13 +58,33 @@ Never applied in exclusive mode: dithering, EQ, ReplayGain, crossfade, speed cha
 - Same device format: one continuous stream — gapless.
 - Different format (e.g. 44.1 → 96 kHz): the stream drains, the device is reopened in the new
   format and 150 ms of silence lets the DAC's clock lock before the music starts.
+- The next track's file is opened early, but which track it is gets decided about 0.4 s
+  before it starts, so *Play next* or a reorder just before the end of a song still counts.
+
+## Transport fades
+
+Stopping or starting a waveform mid-cycle clicks. With **Smooth pause and seek** on (the
+default), the render thread ramps the level along a raised-cosine curve:
+
+- pause, resume and stop: 80 ms; seek and skip: 25 ms;
+- a resume or seek fades back in from the first non-silent frame (not over pre-roll silence);
+- a track started from its beginning is not faded in, and the natural end of a track or of
+  the queue is not faded out.
+
+Only the frames inside a ramp change; everything between two transport actions reaches the
+DAC untouched, so the badge stays *Bit-perfect*. The pause waits until the device has played
+the end of the ramp before stopping the stream. Turn the setting off for hard cuts.
 
 ## Errors
 
 - Device in use by another app, exclusive mode disabled in the Sound control panel
   ("Allow applications to take exclusive control of this device"), or format rejected:
   the app falls back to shared mode and says why.
-- Device unplugged: playback pauses and the queue is kept; pressing play reopens the device.
+- Device unplugged: playback pauses and the queue is kept; pressing play reopens the device
+  and continues where it stopped.
+- *System default* device: when Windows makes another device the default, playback moves to
+  it at the same spot, unless the old device went away (headphones unplugged), in which case
+  it pauses rather than continuing on the speakers.
 
 ## Timing
 

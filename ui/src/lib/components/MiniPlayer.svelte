@@ -58,6 +58,7 @@
     {/if}
 
     <div class="end">
+      <IconButton icon="queue_music" label="Show the queue" onclick={() => router.toggleQueue()} />
       <IconButton icon="expand_less" label="Open Now Playing" onclick={() => router.setNowPlaying(true)} />
     </div>
   </div>
@@ -131,6 +132,11 @@
 
   .badge {
     min-width: 0;
+  }
+
+  .end {
+    display: flex;
+    align-items: center;
   }
 
   @container mini (width < 1000px) {

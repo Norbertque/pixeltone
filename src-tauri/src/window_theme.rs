@@ -1,8 +1,6 @@
 //! Native title bar colours (DWM). Caption and text colours need Windows 11; on Windows 10
 //! only the dark-mode flag applies and the other calls fail harmlessly.
 
-use std::ffi::c_void;
-
 use windows::Win32::Foundation::{COLORREF, HWND};
 use windows::Win32::Graphics::Dwm::{
     DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute,
@@ -26,7 +24,7 @@ pub fn apply(window: &tauri::WebviewWindow, caption: &str, dark: bool) -> Result
     let rgb = parse_hex(caption).ok_or_else(|| format!("not a #rrggbb colour: {caption}"))?;
     // Tauri may link a different `windows` crate version; go through the raw handle.
     let raw = window.hwnd().map_err(|e| e.to_string())?.0;
-    let hwnd = HWND(raw as *mut c_void);
+    let hwnd = HWND(raw);
 
     let dark_flag: i32 = dark.into();
     let caption_color = colorref(rgb);

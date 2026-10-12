@@ -1,7 +1,7 @@
 //! The contract between the engine and an audio output backend.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -61,6 +61,18 @@ pub struct OpenRequest {
     pub controls: Arc<StreamControls>,
 }
 
+/// Transport fade requested from a stream's render thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Fade {
+    /// Full level at once (playback starting from the beginning of a track).
+    Audible = 0,
+    /// Ramp up from the current level; the ramp waits for the first non-silent frame.
+    In = 1,
+    /// Ramp down to silence, then stop taking audio from the ring.
+    Out = 2,
+}
+
 /// Live controls shared between the engine and a stream's render thread.
 #[derive(Debug)]
 pub struct StreamControls {
@@ -68,6 +80,11 @@ pub struct StreamControls {
     gain_q16: AtomicI64,
     /// While set, an empty ring buffer counts as an underrun.
     expect_data: AtomicBool,
+    fade: AtomicU8,
+    /// Fade level change per frame (of [`crate::render::UNITY`]); 0 switches instantly.
+    fade_step: AtomicU32,
+    /// Set by the render side once a fade-out has reached the listener as silence.
+    faded_out: AtomicBool,
 }
 
 impl Default for StreamControls {
@@ -75,6 +92,9 @@ impl Default for StreamControls {
         Self {
             gain_q16: AtomicI64::new(-1),
             expect_data: AtomicBool::new(false),
+            fade: AtomicU8::new(Fade::Audible as u8),
+            fade_step: AtomicU32::new(0),
+            faded_out: AtomicBool::new(false),
         }
     }
 }
@@ -98,7 +118,81 @@ impl StreamControls {
     pub fn expect_data(&self) -> bool {
         self.expect_data.load(Ordering::Relaxed)
     }
+
+    /// Requests a fade. A fade-out clears [`Self::faded_out`] until the silence is heard.
+    pub fn set_fade(&self, fade: Fade) {
+        if fade == Fade::Out {
+            self.faded_out.store(false, Ordering::Release);
+        }
+        self.fade.store(fade as u8, Ordering::Release);
+    }
+
+    pub fn fade(&self) -> Fade {
+        match self.fade.load(Ordering::Acquire) {
+            1 => Fade::In,
+            2 => Fade::Out,
+            _ => Fade::Audible,
+        }
+    }
+
+    /// Length of the next fade ramps in frames; 0 makes fades instant.
+    pub fn set_fade_frames(&self, frames: u32) {
+        let step = if frames == 0 {
+            0
+        } else {
+            crate::render::UNITY.div_ceil(frames)
+        };
+        self.fade_step.store(step, Ordering::Release);
+    }
+
+    pub fn fade_step(&self) -> u32 {
+        self.fade_step.load(Ordering::Acquire)
+    }
+
+    pub fn set_faded_out(&self, done: bool) {
+        self.faded_out.store(done, Ordering::Release);
+    }
+
+    /// The last fade-out has been played to the end (the device is now playing silence).
+    pub fn faded_out(&self) -> bool {
+        self.faded_out.load(Ordering::Acquire)
+    }
 }
+
+/// A change in the set of audio devices, as the backend reports it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(export)]
+pub enum DeviceChange {
+    /// The system's default output device changed (to `id`, or to none at all).
+    DefaultChanged {
+        id: Option<String>,
+    },
+    Added {
+        id: String,
+    },
+    Removed {
+        id: String,
+    },
+    /// A device became available (`active`) or unavailable (unplugged, disabled).
+    StateChanged {
+        id: String,
+        active: bool,
+    },
+}
+
+impl DeviceChange {
+    /// The device that went away, if this change means one did.
+    pub fn lost(&self) -> Option<&str> {
+        match self {
+            Self::Removed { id } | Self::StateChanged { id, active: false } => Some(id),
+            _ => None,
+        }
+    }
+}
+
+/// Keeps device-change notifications coming while it is alive.
+pub type DeviceWatch = Box<dyn Send>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -173,6 +267,15 @@ pub trait OutputBackend: Send + Sync {
         &self,
         _device_id: Option<&str>,
     ) -> Result<Option<Box<dyn HardwareVolume>>, OutputError> {
+        Ok(None)
+    }
+
+    /// Reports device changes to `on_change` (from a backend thread) until the returned
+    /// watch is dropped. `None` when the backend can't watch devices.
+    fn watch_devices(
+        &self,
+        _on_change: Box<dyn Fn(DeviceChange) + Send + Sync>,
+    ) -> Result<Option<DeviceWatch>, OutputError> {
         Ok(None)
     }
 }

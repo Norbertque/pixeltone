@@ -3,8 +3,11 @@
   import Artwork from '../components/Artwork.svelte';
   import Button from '../components/Button.svelte';
   import EmptyState from '../components/EmptyState.svelte';
+  import IconButton from '../components/IconButton.svelte';
   import TrackItem from '../components/TrackItem.svelte';
-  import { library, playRows, shuffleRows } from '../library.svelte';
+  import { library, playAll, playRows, shuffleRows } from '../library.svelte';
+  import { menu } from '../menu.svelte';
+  import { rowsMenu } from '../menus';
   import { coverOf, formatDuration, formatShort, seedFromImage } from '../player.svelte';
   import { theme } from '../theme/theme.svelte';
   import { tintStyle } from '../theme/tint';
@@ -64,8 +67,15 @@
             .join(' · ')}
         </p>
         <div class="actions">
-          <Button variant="filled" size="md" icon="play_arrow" onclick={() => playRows(detail!.tracks, 0)}>Play</Button>
+          <Button variant="filled" size="md" icon="play_arrow" onclick={() => playAll(detail!.tracks)}>Play</Button>
           <Button variant="tonal" size="md" icon="shuffle" onclick={() => shuffleRows(detail!.tracks)}>Shuffle</Button>
+          <IconButton
+            icon="more_vert"
+            label="More options"
+            variant="tonal"
+            size="md"
+            onclick={(e) => menu.show(e.currentTarget, rowsMenu(() => detail!.tracks, album.title || 'Unknown album'), 'More options')}
+          />
         </div>
       </div>
     </header>

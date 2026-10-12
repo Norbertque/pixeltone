@@ -27,4 +27,8 @@ softwareGainDb: number,
 /**
  * Full-scale output, bypassing the software gain stage (for an external amplifier).
  */
-lineLevel: boolean, };
+lineLevel: boolean, 
+/**
+ * Short fades on pause, resume, seek and skip, so they don't click.
+ */
+fades: boolean, };

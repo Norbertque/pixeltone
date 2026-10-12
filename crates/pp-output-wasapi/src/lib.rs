@@ -6,5 +6,6 @@ mod backend;
 mod convert;
 mod stream;
 mod volume;
+mod watch;
 
 pub use backend::WasapiBackend;

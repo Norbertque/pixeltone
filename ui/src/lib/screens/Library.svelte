@@ -87,7 +87,7 @@
 <ScreenHeader title="Library" {subtitle}>
   {#snippet actions()}
     {#if o && o.trackCount > 0}
-      <Button variant="tonal" icon="shuffle" onclick={() => api.playLibrary('title', 0, true)}>Shuffle all</Button>
+      <Button variant="tonal" icon="shuffle" onclick={() => api.playLibrary('title', null, true)}>Shuffle all</Button>
     {/if}
   {/snippet}
 </ScreenHeader>
@@ -155,7 +155,7 @@
       onrange={(s, e) => songs.ensure(s, e)}
     >
       {#snippet row(i)}
-        <TrackItem track={songs.rows[i]} onplay={() => api.playLibrary(trackSort, i, false)} />
+        <TrackItem track={songs.rows[i]} onplay={() => api.playLibrary(trackSort, i, null)} />
       {/snippet}
     </VirtualList>
   {:else if tab === 'albums'}

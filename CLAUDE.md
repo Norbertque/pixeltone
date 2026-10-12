@@ -22,6 +22,12 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   --all-targets -- -D warnings`; its tests run on CI. Test everything else with
   `cargo test --workspace --exclude pixelplayer-pc`.
 - No browser, so no screenshots; UI changes are verified with check/test/build only.
+- Windows type-check of everything, including the app crate's `cfg(windows)` code:
+  `. ~/.local/opt/pp-toolchain/env.sh && . ~/.local/opt/pp-toolchain/win-check.sh &&
+  cargo clippy --target x86_64-pc-windows-msvc -p pixelplayer-pc -p pp-media-controls
+  -p pp-output-wasapi --all-targets -- -D warnings` (needs `scripts/fetch-ffmpeg.sh win64`;
+  type-checks only, nothing links). CI doesn't run clippy on Windows, so run this after
+  touching Windows-only code.
 
 ## Library
 
@@ -31,6 +37,17 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Library covers are `cover://localhost/lib/<hash>-<300|1000>`; queue items carry the cover
   key (`QueueItem`) so Now Playing uses the same art, including folder images.
 - Bump `PRAGMA user_version` in `db.rs` with a migration for any schema change.
+
+## Playback (M3)
+
+- Queue items have ids (`pp-engine` queue.rs) that stay stable across edits; the worker
+  follows ids, not positions. Edits bump `queue_version`; the UI refetches pages on change.
+- Transport fades live in `pp-core` render.rs (`RenderFeed`), shared by every backend; the
+  engine waits for `StreamControls::faded_out` (set once the device has played the ramp).
+- `src-tauri/src/queue.rs` saves the queue (`queue.json`, debounced, and on exit) and restores
+  it paused at startup. `media.rs` drives the flyout from a thread of its own.
+- Device notifications: `OutputBackend::watch_devices` → `Engine::device_changed` and the
+  `output://devices` event.
 
 ## Rules
 

@@ -790,21 +790,15 @@ impl Db {
         })
     }
 
-    /// (path, cover hash) for each id, in the order given; unknown ids are skipped.
-    pub fn track_paths(&self, ids: &[u32]) -> rusqlite::Result<Vec<(u32, String, Option<String>)>> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT t.path, COALESCE(t.cover, a.cover) FROM tracks t JOIN albums a ON a.id = t.album_id \
-             WHERE t.id = ?1",
-        )?;
+    /// Tracks by id, in the order asked for; unknown ids are skipped.
+    pub fn tracks_by_id(&self, ids: &[u32]) -> rusqlite::Result<Vec<TrackRow>> {
+        let mut stmt = self.conn.prepare_cached(&format!(
+            "SELECT {TRACK_COLUMNS} FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.id = ?1"
+        ))?;
         let mut out = Vec::with_capacity(ids.len());
         for &id in ids {
-            if let Some((path, cover)) = stmt
-                .query_row([id], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
-                })
-                .optional()?
-            {
-                out.push((id, path, cover));
+            if let Some(row) = stmt.query_row([id], track_row).optional()? {
+                out.push(row);
             }
         }
         Ok(out)

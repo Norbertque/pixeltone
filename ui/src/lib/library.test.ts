@@ -84,4 +84,43 @@ describe('PagedRows', () => {
       [0, 100],
     ]);
   });
+
+  it('refresh keeps old rows until new ones arrive and drops stale answers', async () => {
+    let version = 1;
+    let release: (() => void) | null = null;
+    const fetch = async (offset: number, limit: number): Promise<string[]> => {
+      const v = version;
+      if (v === 1 && offset === 0 && release === null) {
+        // The first answer is slow: it must not overwrite the refreshed data.
+        await new Promise<void>((r) => (release = r));
+      }
+      return Array.from({ length: Math.min(limit, 5 - offset) }, (_, i) => `v${v}-${offset + i}`);
+    };
+    const rows = new PagedRows(5, fetch, 10);
+    rows.ensure(0, 5);
+    await settle();
+    expect(rows.rows[0]).toBeUndefined();
+
+    version = 2;
+    rows.refresh(4);
+    await settle();
+    expect(rows.count).toBe(4);
+    expect(rows.rows[0]).toBe('v2-0');
+    release!();
+    await settle();
+    expect(rows.rows[0]).toBe('v2-0');
+    expect(rows.rows).toHaveLength(4);
+  });
+
+  it('moves rows locally for an optimistic reorder', async () => {
+    const s = source(4);
+    const rows = new PagedRows(4, s.fetch, 10);
+    rows.ensure(0, 4);
+    await settle();
+    rows.move(3, 0);
+    expect(rows.rows).toEqual([3, 0, 1, 2]);
+    rows.move(0, 99);
+    expect(rows.rows).toEqual([0, 1, 2, 3]);
+  });
 });
+

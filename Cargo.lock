@@ -2947,11 +2947,13 @@ dependencies = [
 name = "pixelplayer-pc"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "parking_lot",
  "pp-core",
  "pp-decode",
  "pp-engine",
  "pp-library",
+ "pp-media-controls",
  "pp-output-wasapi",
  "serde",
  "serde_json",
@@ -3113,6 +3115,14 @@ dependencies = [
  "ts-rs",
  "walkdir",
  "xxhash-rust",
+]
+
+[[package]]
+name = "pp-media-controls"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "windows",
 ]
 
 [[package]]

@@ -48,15 +48,42 @@
   const gain = $derived(gainDraft ?? Math.min(prefs.softwareGainDb, gainMax));
   const live = $derived(player.snapshot?.output ?? null);
 
-  onMount(async () => {
-    try {
-      settings = await api.getSettings();
-      devices = await api.outputDevices();
-    } catch (e) {
-      toasts.show(`Can't list audio devices: ${e}`, 'error');
-    }
-    await probe();
+  onMount(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    void (async () => {
+      try {
+        settings = await api.getSettings();
+        devices = await api.outputDevices();
+      } catch (e) {
+        toasts.show(`Can't list audio devices: ${e}`, 'error');
+      }
+      await probe();
+    })();
+    // Device notifications come in bursts (one per role and state): let them settle.
+    void api
+      .onDevicesChanged(() => {
+        clearTimeout(timer);
+        timer = setTimeout(refreshDevices, 400);
+      })
+      .then((u) => (disposed ? u() : (unlisten = u)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+      clearTimeout(timer);
+    };
   });
+
+  async function refreshDevices(): Promise<void> {
+    try {
+      devices = await api.outputDevices();
+    } catch {
+      return;
+    }
+    // "Windows default" may mean a different device now.
+    if (deviceId === null) await probe();
+  }
 
   async function probe(): Promise<void> {
     capsLoading = true;
@@ -174,6 +201,16 @@
     />
   </div>
 
+  <div class="row">
+    <div class="row-text">
+      <span class="title-medium">Smooth pause and seek</span>
+      <span class="body-medium">
+        A short fade when you pause, resume, seek or skip, so it doesn't click. The music in between stays
+        untouched (bit-perfect).
+      </span>
+    </div>
+    <Switch label="Smooth pause and seek" checked={output.fades} onchange={(v) => update({ fades: v })} />
+  </div>
   <div class="row column">
     <div class="row-text">
       <span class="title-medium">Volume</span>

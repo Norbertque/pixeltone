@@ -1,8 +1,11 @@
 <script lang="ts">
   import type { TrackRow } from '../api';
+  import { contextMenu, menu } from '../menu.svelte';
+  import { trackMenu } from '../menus';
   import { coverOf, formatShort, formatTime, player } from '../player.svelte';
   import Artwork from './Artwork.svelte';
   import Icon from './Icon.svelte';
+  import IconButton from './IconButton.svelte';
 
   interface Props {
     track: TrackRow | undefined;
@@ -20,23 +23,33 @@
 </script>
 
 {#if track}
-  <button class={['track', { current }]} onclick={onplay} title={track.path}>
-    <span class="lead">
-      {#if current}
-        <span class="eq" aria-label="Now playing"><Icon name={player.playing ? 'graphic_eq' : 'pause'} size={20} /></span>
-      {:else if numbered}
-        <span class="no label-large">{track.trackNo ?? '–'}</span>
-      {:else}
-        <Artwork src={coverOf(track.cover)} size="40px" radius="var(--shape-sm)" />
-      {/if}
+  <div class={['track', { current }]}>
+    <button class="main" onclick={onplay} oncontextmenu={contextMenu(() => trackMenu(track), track.title)} title={track.path}>
+      <span class="lead">
+        {#if current}
+          <span class="eq" aria-label="Now playing"><Icon name={player.playing ? 'graphic_eq' : 'pause'} size={20} /></span>
+        {:else if numbered}
+          <span class="no label-large">{track.trackNo ?? '–'}</span>
+        {:else}
+          <Artwork src={coverOf(track.cover)} size="40px" radius="var(--shape-sm)" />
+        {/if}
+      </span>
+      <span class="text">
+        <span class="title title-small">{track.title}</span>
+        <span class="sub body-small">{subtitle}</span>
+      </span>
+      <span class="format label-small">{formatShort(track)}</span>
+      <span class="time body-medium">{formatTime(track.durationMs)}</span>
+    </button>
+    <span class="more">
+      <IconButton
+        icon="more_vert"
+        label="More options for {track.title}"
+        size="xs"
+        onclick={(e) => menu.show(e.currentTarget, trackMenu(track), track.title)}
+      />
     </span>
-    <span class="text">
-      <span class="title title-small">{track.title}</span>
-      <span class="sub body-small">{subtitle}</span>
-    </span>
-    <span class="format label-small">{formatShort(track)}</span>
-    <span class="time body-medium">{formatTime(track.durationMs)}</span>
-  </button>
+  </div>
 {:else}
   <div class="track placeholder" aria-hidden="true">
     <span class="lead"><span class="ph-box"></span></span>
@@ -48,12 +61,23 @@
   .track {
     container: row / inline-size;
     display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    height: 100%;
+    border-radius: var(--shape-md);
+  }
+  .track:hover,
+  .track:focus-within {
+    background: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent);
+  }
+  .main {
+    display: grid;
     grid-template-columns: 40px 1fr auto auto;
     align-items: center;
     gap: 16px;
-    width: 100%;
+    min-width: 0;
     height: 100%;
-    padding: 0 16px 0 8px;
+    padding: 0 8px;
     border: none;
     border-radius: var(--shape-md);
     background: none;
@@ -61,11 +85,17 @@
     text-align: start;
     cursor: pointer;
   }
-  .track:hover {
+  .main:active {
     background: color-mix(in srgb, var(--md-sys-color-on-surface) 6%, transparent);
   }
-  .track:active {
-    background: color-mix(in srgb, var(--md-sys-color-on-surface) 10%, transparent);
+  .more {
+    padding-right: 8px;
+    opacity: 0;
+    transition: opacity var(--motion-effects-fast-duration) var(--motion-effects-fast);
+  }
+  .track:hover .more,
+  .track:focus-within .more {
+    opacity: 1;
   }
   .current .title {
     color: var(--md-sys-color-primary);
@@ -122,7 +152,12 @@
   }
 
   .placeholder {
-    cursor: default;
+    grid-template-columns: 40px 1fr;
+    gap: 16px;
+    padding: 0 8px;
+  }
+  .placeholder:hover {
+    background: none;
   }
   .ph-box,
   .ph-line {

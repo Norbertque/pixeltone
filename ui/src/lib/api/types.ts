@@ -5,6 +5,7 @@
 
 export type { Conversion } from './bindings/Conversion';
 export type { DeviceCapabilities } from './bindings/DeviceCapabilities';
+export type { DeviceChange } from './bindings/DeviceChange';
 export type { DeviceInfo } from './bindings/DeviceInfo';
 export type { FormatCandidate } from './bindings/FormatCandidate';
 export type { OutputBadge } from './bindings/OutputBadge';
@@ -13,6 +14,7 @@ export type { OutputSettings } from './bindings/OutputSettings';
 export type { OutputState } from './bindings/OutputState';
 export type { PlaybackStatus } from './bindings/PlaybackStatus';
 export type { PlayerSnapshot } from './bindings/PlayerSnapshot';
+export type { QueueEntry } from './bindings/QueueEntry';
 export type { RepeatMode } from './bindings/RepeatMode';
 export type { SampleFormat } from './bindings/SampleFormat';
 export type { SampleKind } from './bindings/SampleKind';
@@ -38,9 +40,11 @@ export type { TrackRow } from './bindings/TrackRow';
 export type { TrackSort } from './bindings/TrackSort';
 
 import type { DeviceCapabilities } from './bindings/DeviceCapabilities';
+import type { DeviceChange } from './bindings/DeviceChange';
 import type { DeviceInfo } from './bindings/DeviceInfo';
 import type { OutputSettings } from './bindings/OutputSettings';
 import type { PlayerSnapshot } from './bindings/PlayerSnapshot';
+import type { QueueEntry } from './bindings/QueueEntry';
 import type { RepeatMode } from './bindings/RepeatMode';
 import type { AlbumDetail } from './bindings/AlbumDetail';
 import type { AlbumRow } from './bindings/AlbumRow';
@@ -99,10 +103,27 @@ export interface Backend {
   setWindowTheme(caption: string, dark: boolean): Promise<void>;
 
   playerState(): Promise<PlayerSnapshot>;
+  /** Plays files in the given order from `start` (shuffle off). */
   playFiles(paths: string[], start: number): Promise<void>;
   playerAction(action: PlayerAction): Promise<void>;
   seek(ms: number): Promise<void>;
   setRepeat(mode: RepeatMode): Promise<void>;
+  setShuffle(on: boolean): Promise<void>;
+
+  /** Queue rows in play order. */
+  queueItems(offset: number, limit: number): Promise<QueueEntry[]>;
+  /** Removes queue items (never the one playing). */
+  queueRemove(ids: number[]): Promise<void>;
+  /** Moves a queue item to `to` in play order. */
+  queueMove(id: number, to: number): Promise<void>;
+  /** Removes everything but the current track. */
+  queueClear(): Promise<void>;
+  /** Plays a queue item. */
+  queueJump(id: number): Promise<void>;
+  /** "Play next" (`next`) or "Add to queue" for library tracks. */
+  queueAddTracks(ids: number[], next: boolean): Promise<void>;
+  /** "Play next" (`next`) or "Add to queue" for files. */
+  queueAddFiles(paths: string[], next: boolean): Promise<void>;
   /** Native file picker for audio files; empty when cancelled. */
   pickAudioFiles(): Promise<string[]>;
   coverUrl(key: string): string;
@@ -117,6 +138,8 @@ export interface Backend {
   onPlayerState(cb: (s: PlayerSnapshot) => void): Promise<Unlisten>;
   onPosition(cb: (positionMs: number) => void): Promise<Unlisten>;
   onPlayerError(cb: (e: PlayerError) => void): Promise<Unlisten>;
+  /** Audio devices were added, removed or changed roles. */
+  onDevicesChanged(cb: (c: DeviceChange) => void): Promise<Unlisten>;
 
   // Library
   libraryOverview(): Promise<LibraryOverview>;
@@ -135,10 +158,13 @@ export interface Backend {
   librarySearch(query: string, limit: number): Promise<SearchResults>;
   libraryDelimiters(): Promise<string[]>;
   librarySetDelimiters(delimiters: string[]): Promise<void>;
-  /** Plays library tracks, starting at index `start` of `ids`. */
-  playTracks(ids: number[], start: number): Promise<void>;
-  /** Queues the whole library in `sort` order (or shuffled) and plays from `start`. */
-  playLibrary(sort: TrackSort, start: number, shuffled: boolean): Promise<void>;
+  /**
+   * Plays library tracks from index `start` of `ids` (`null`: the top, or a random track when
+   * shuffling). `shuffle` turns shuffle on or off; `null` keeps the current mode.
+   */
+  playTracks(ids: number[], start: number | null, shuffle: boolean | null): Promise<void>;
+  /** Queues the whole library in `sort` order and plays it, like `playTracks`. */
+  playLibrary(sort: TrackSort, start: number | null, shuffle: boolean | null): Promise<void>;
   /** Native yes/no dialog. */
   confirm(message: string, title: string): Promise<boolean>;
   /** Native folder picker (starts in the Music folder); null when cancelled. */

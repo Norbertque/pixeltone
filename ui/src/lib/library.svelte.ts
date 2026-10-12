@@ -47,22 +47,42 @@ export async function addMusicFolder(): Promise<void> {
   }
 }
 
-/** Plays `rows` starting at `index`. */
+const ids = (rows: readonly TrackRow[]) => rows.map((r) => r.id);
+
+/** A track was clicked: plays `rows` from it, keeping the shuffle mode. */
 export function playRows(rows: readonly TrackRow[], index: number): void {
-  void api.playTracks(
-    rows.map((r) => r.id),
-    index,
-  );
+  void api.playTracks(ids(rows), index, null);
 }
 
-/** Plays `rows` in random order. */
+/** "Play" buttons: in order from the top (shuffle off). */
+export function playAll(rows: readonly TrackRow[]): void {
+  void api.playTracks(ids(rows), 0, false);
+}
+
+/** "Shuffle" buttons: shuffle on, starting anywhere. */
 export function shuffleRows(rows: readonly TrackRow[]): void {
-  const ids = rows.map((r) => r.id);
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+  void api.playTracks(ids(rows), null, true);
+}
+
+/**
+ * What the confirmation says after "Play next" / "Add to queue": the song, the collection
+ * (`label`, e.g. an album) or a count.
+ */
+export function queuedMessage(titles: readonly string[], next: boolean, label?: string): string {
+  const what =
+    label !== undefined ? `“${label}”` : titles.length === 1 ? `“${titles[0]}”` : `${titles.length.toLocaleString()} songs`;
+  return next ? `${what} will play next` : `Added ${what} to the queue`;
+}
+
+/** "Play next" (`next`) or "Add to queue". */
+export async function queueRows(rows: readonly TrackRow[], next: boolean, label?: string): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await api.queueAddTracks(ids(rows), next);
+    toasts.show(queuedMessage(rows.map((r) => r.title), next, label));
+  } catch (e) {
+    toasts.show(String(e), 'error');
   }
-  void api.playTracks(ids, 0);
 }
 
 /**
@@ -74,6 +94,9 @@ export class PagedRows<T> {
   #loaded = new Set<number>();
   #pending = new Set<number>();
   #reported = false;
+  /** Bumped by `refresh`, so answers to older requests are dropped. */
+  #generation = 0;
+  #lastRange: [number, number] | null = null;
   #fetch: (offset: number, limit: number) => Promise<T[]>;
   #pageSize: number;
 
@@ -89,6 +112,7 @@ export class PagedRows<T> {
 
   /** Loads every page touching rows `start..end`. */
   ensure(start: number, end: number): void {
+    this.#lastRange = [start, end];
     if (end <= start) return;
     const first = Math.floor(start / this.#pageSize);
     const last = Math.floor((end - 1) / this.#pageSize);
@@ -97,12 +121,39 @@ export class PagedRows<T> {
     }
   }
 
+  /**
+   * The data changed (now `count` rows): reloads what is in view, keeping the old rows on
+   * screen until the new ones arrive so nothing flashes.
+   */
+  refresh(count: number): void {
+    this.#generation += 1;
+    this.#loaded.clear();
+    this.#pending.clear();
+    const old = this.rows;
+    this.rows = Array.from({ length: count }, (_, i) => old[i]);
+    if (this.#lastRange) this.ensure(...this.#lastRange);
+  }
+
+  /** Moves a row locally (an optimistic reorder; `refresh` brings the truth). */
+  move(from: number, to: number): void {
+    if (from === to || from < 0 || from >= this.rows.length) return;
+    const next = this.rows.slice();
+    const [row] = next.splice(from, 1);
+    next.splice(Math.min(to, next.length), 0, row);
+    this.rows = next;
+  }
+
   async #load(page: number): Promise<void> {
+    const generation = this.#generation;
     this.#pending.add(page);
     try {
       const items = await this.#fetch(page * this.#pageSize, this.#pageSize);
+      if (generation !== this.#generation) return;
       const next = this.rows.slice();
-      items.forEach((item, i) => (next[page * this.#pageSize + i] = item));
+      items.forEach((item, i) => {
+        const at = page * this.#pageSize + i;
+        if (at < next.length) next[at] = item;
+      });
       this.rows = next;
       this.#loaded.add(page);
     } catch (e) {
@@ -110,7 +161,7 @@ export class PagedRows<T> {
       if (!this.#reported) toasts.show(`Can't read the library: ${e}`, 'error');
       this.#reported = true;
     } finally {
-      this.#pending.delete(page);
+      if (generation === this.#generation) this.#pending.delete(page);
     }
   }
 }

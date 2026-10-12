@@ -3,7 +3,10 @@
 mod commands;
 mod library;
 #[cfg(windows)]
+mod media;
+#[cfg(windows)]
 mod power;
+mod queue;
 mod settings;
 #[cfg(windows)]
 mod window_theme;
@@ -12,14 +15,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use pp_core::OutputBackend;
+use pp_core::{DeviceWatch, OutputBackend};
 use pp_engine::{Engine, EngineEvent};
 use pp_library::Library;
 use serde::Serialize;
 use tauri::http::Response;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tracing_subscriber::EnvFilter;
 
+use crate::queue::QueueStore;
 use crate::settings::AppSettings;
 
 pub struct AppState {
@@ -28,6 +32,11 @@ pub struct AppState {
     pub library: Arc<Library>,
     pub settings: Mutex<AppSettings>,
     pub settings_path: PathBuf,
+    pub queue_store: QueueStore,
+    /// Device notifications stay on while this is held.
+    pub device_watch: Mutex<Option<DeviceWatch>>,
+    #[cfg(windows)]
+    pub media: Mutex<Option<media::Media>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -121,18 +130,51 @@ pub(crate) fn emit_settings(app: &AppHandle, settings: &AppSettings) {
 }
 
 fn forward(app: &AppHandle, event: EngineEvent) {
+    let state = app.try_state::<AppState>();
     match event {
         EngineEvent::State(snapshot) => {
             #[cfg(windows)]
             power::keep_awake(snapshot.status == pp_engine::PlaybackStatus::Playing);
+            if let Some(state) = &state {
+                state.queue_store.on_state(&snapshot);
+                #[cfg(windows)]
+                if let Some(m) = &*state.media.lock() {
+                    m.send(media::Update::State(snapshot.clone()));
+                }
+            }
             let _ = app.emit("player://state", snapshot);
         }
         EngineEvent::Position { position_ms } => {
+            if let Some(state) = &state {
+                state.queue_store.on_position();
+                #[cfg(windows)]
+                if let Some(m) = &*state.media.lock() {
+                    m.send(media::Update::Position(position_ms));
+                }
+            }
             let _ = app.emit("player://position", PositionEvent { position_ms });
         }
         EngineEvent::Error { code, message } => {
             let _ = app.emit("player://error", ErrorEvent { code, message });
         }
+    }
+}
+
+/// Tells the engine and the UI when audio devices come, go or change roles.
+fn watch_devices(app: &AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let handle = app.clone();
+    let watch = state.backend.watch_devices(Box::new(move |change| {
+        if let Some(state) = handle.try_state::<AppState>() {
+            state.engine.device_changed(change.clone());
+        }
+        let _ = handle.emit("output://devices", &change);
+    }));
+    match watch {
+        Ok(watch) => *state.device_watch.lock() = watch,
+        Err(e) => tracing::warn!("can't watch audio devices: {e}"),
     }
 }
 
@@ -169,6 +211,11 @@ pub fn run() {
             let engine = Engine::new(backend.clone(), settings.effective_output(), move |event| {
                 forward(&handle, event)
             });
+            let queue_path = app.path().app_local_data_dir()?.join("queue.json");
+            if let Some(saved) = queue::load(&queue_path) {
+                engine.restore(saved);
+            }
+            let queue_store = QueueStore::start(app.handle(), queue_path);
             library::start(app.handle(), &library);
             app.manage(AppState {
                 engine,
@@ -176,7 +223,20 @@ pub fn run() {
                 library,
                 settings: Mutex::new(settings),
                 settings_path,
+                queue_store,
+                device_watch: Mutex::new(None),
+                #[cfg(windows)]
+                media: Mutex::new(None),
             });
+            watch_devices(app.handle());
+            #[cfg(windows)]
+            {
+                let state = app.state::<AppState>();
+                if let Some(m) = media::start(app.handle()) {
+                    m.send(media::Update::State(Box::new(state.engine.snapshot())));
+                    *state.media.lock() = Some(m);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -211,9 +271,24 @@ pub fn run() {
             library::library_set_delimiters,
             library::play_tracks,
             library::play_library,
+            queue::queue_items,
+            queue::queue_remove,
+            queue::queue_move,
+            queue::queue_clear,
+            queue::queue_jump,
+            queue::queue_add_tracks,
+            queue::queue_add_files,
+            queue::player_set_shuffle,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running PixelPlayer PC");
+        .build(tauri::generate_context!())
+        .expect("error while building PixelPlayer PC")
+        .run(|app, event| {
+            if let RunEvent::Exit = event
+                && let Some(state) = app.try_state::<AppState>()
+            {
+                state.queue_store.save_now(&state.engine);
+            }
+        });
 }
 
 #[cfg(test)]

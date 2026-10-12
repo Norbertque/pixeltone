@@ -1,5 +1,7 @@
-//! An output backend that records everything it is sent, as fast as it arrives. Used for
-//! end-to-end bit-exactness tests and for running the engine without an audio device.
+//! An output backend that records everything it is sent. Used for end-to-end bit-exactness
+//! tests and for running the engine without an audio device. By default it plays as fast as
+//! audio arrives; [`CaptureBackend::paced`] plays in (scaled) real time instead, so tests can
+//! pause or seek in the middle of a track.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -7,10 +9,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use pp_core::gain::apply_q16_in_place;
 use pp_core::{
     DeviceCapabilities, DeviceInfo, FormatCandidate, OpenRequest, OutputBackend, OutputError,
-    OutputFormat, OutputStream, SampleFormat, ShareMode, StreamControls, StreamStats,
+    OutputFormat, OutputStream, RenderFeed, SampleFormat, ShareMode, StreamControls, StreamStats,
 };
 
 /// Every stream the backend opened, in order.
@@ -27,6 +28,9 @@ pub struct CaptureBackend {
     pub opened: Arc<Mutex<Vec<Opened>>>,
     /// Make `open` fail in exclusive mode with this error (fallback tests).
     pub exclusive_error: Option<OutputError>,
+    /// Playback speed relative to real time; `None` plays as fast as audio arrives.
+    pace: Option<f64>,
+    unplugged: Arc<AtomicBool>,
 }
 
 impl CaptureBackend {
@@ -36,7 +40,24 @@ impl CaptureBackend {
             captured: Arc::default(),
             opened: Arc::default(),
             exclusive_error: None,
+            pace: None,
+            unplugged: Arc::default(),
         }
+    }
+
+    /// Plays at `speed` × real time, like a device clock would.
+    pub fn paced(mut self, speed: f64) -> Self {
+        self.pace = Some(speed);
+        self
+    }
+
+    /// Simulates unplugging the device: open streams fail, and it can't be found or opened.
+    pub fn unplug(&self) {
+        self.unplugged.store(true, Ordering::Release);
+    }
+
+    pub fn replug(&self) {
+        self.unplugged.store(false, Ordering::Release);
     }
 
     /// A DAC-like device: 16-bit, 24-in-32 and 32-bit stereo at 44.1–384 kHz, with a
@@ -86,10 +107,16 @@ impl OutputBackend for CaptureBackend {
     }
 
     fn list_devices(&self) -> Result<Vec<DeviceInfo>, OutputError> {
+        if self.unplugged.load(Ordering::Acquire) {
+            return Ok(Vec::new());
+        }
         Ok(vec![self.caps.device.clone()])
     }
 
     fn capabilities(&self, _device_id: Option<&str>) -> Result<DeviceCapabilities, OutputError> {
+        if self.unplugged.load(Ordering::Acquire) {
+            return Err(OutputError::DeviceNotFound);
+        }
         Ok(self.caps.clone())
     }
 
@@ -98,6 +125,9 @@ impl OutputBackend for CaptureBackend {
         request: &OpenRequest,
         source: rtrb::Consumer<u8>,
     ) -> Result<Box<dyn OutputStream>, OutputError> {
+        if self.unplugged.load(Ordering::Acquire) {
+            return Err(OutputError::DeviceNotFound);
+        }
         if request.mode == ShareMode::Exclusive
             && let Some(e) = &self.exclusive_error
         {
@@ -109,18 +139,22 @@ impl OutputBackend for CaptureBackend {
         });
         Ok(Box::new(CaptureStream::spawn(
             request.format,
-            source,
+            RenderFeed::new(source, request.controls.clone(), request.format),
             self.captured.clone(),
             request.controls.clone(),
+            self.pace,
+            self.unplugged.clone(),
         )))
     }
 }
 
+#[derive(Default)]
 struct Shared {
     running: AtomicBool,
     flush: AtomicBool,
     stop: AtomicBool,
     played: AtomicU64,
+    error: Mutex<Option<OutputError>>,
 }
 
 struct CaptureStream {
@@ -132,47 +166,65 @@ struct CaptureStream {
 impl CaptureStream {
     fn spawn(
         format: OutputFormat,
-        mut source: rtrb::Consumer<u8>,
+        mut feed: RenderFeed,
         captured: Arc<Mutex<Vec<u8>>>,
         controls: Arc<StreamControls>,
+        pace: Option<f64>,
+        unplugged: Arc<AtomicBool>,
     ) -> Self {
-        let shared = Arc::new(Shared {
-            running: AtomicBool::new(false),
-            flush: AtomicBool::new(false),
-            stop: AtomicBool::new(false),
-            played: AtomicU64::new(0),
-        });
+        let shared = Arc::new(Shared::default());
         let s = shared.clone();
         let bpf = format.bytes_per_frame();
         let thread = thread::spawn(move || {
             let mut scratch = vec![0u8; 64 * 1024 / bpf * bpf];
+            let scratch_frames = scratch.len() / bpf;
+            let rate = f64::from(format.sample_rate) * pace.unwrap_or(1.0);
+            // (start, frames rendered since) while running in paced mode.
+            let mut clock: Option<(Instant, u64)> = None;
             while !s.stop.load(Ordering::Acquire) {
+                if unplugged.load(Ordering::Acquire) {
+                    *s.error.lock() = Some(OutputError::DeviceInvalidated);
+                    break;
+                }
                 if s.flush.load(Ordering::Acquire) {
-                    let n = source.slots();
-                    if let Ok(chunk) = source.read_chunk(n) {
-                        chunk.commit_all();
-                    }
+                    feed.discard();
                     s.played.store(0, Ordering::Release);
                     s.flush.store(false, Ordering::Release);
                     continue;
                 }
                 if !s.running.load(Ordering::Acquire) {
+                    clock = None;
                     thread::sleep(Duration::from_millis(1));
                     continue;
                 }
-                let frames = (source.slots() / bpf).min(scratch.len() / bpf);
-                if frames == 0 {
+                let want = match pace {
+                    None => scratch_frames,
+                    Some(_) => {
+                        let (start, done) = *clock.get_or_insert((Instant::now(), 0));
+                        let due = (start.elapsed().as_secs_f64() * rate) as u64;
+                        due.saturating_sub(done).min(scratch_frames as u64) as usize
+                    }
+                };
+                if want == 0 {
+                    thread::sleep(Duration::from_micros(500));
+                    continue;
+                }
+                let fill = feed.fill(&mut scratch[..want * bpf]);
+                if fill.silent_from.is_some() {
+                    controls.set_faded_out(true);
+                }
+                if pace.is_none() && fill.ring_frames == 0 {
                     thread::sleep(Duration::from_micros(200));
                     continue;
                 }
-                let bytes = frames * bpf;
-                let (filled, _) = source.pop_partial_slice(&mut scratch[..bytes]);
-                let filled = filled.len();
-                if let Some(q16) = controls.gain_q16() {
-                    apply_q16_in_place(&mut scratch[..filled], format.sample, q16);
+                if let Some((_, done)) = &mut clock {
+                    *done += want as u64;
                 }
-                captured.lock().extend_from_slice(&scratch[..filled]);
-                s.played.fetch_add((filled / bpf) as u64, Ordering::AcqRel);
+                captured
+                    .lock()
+                    .extend_from_slice(&scratch[..fill.ring_frames * bpf]);
+                s.played
+                    .fetch_add(fill.ring_frames as u64, Ordering::AcqRel);
             }
         });
         Self {
@@ -219,7 +271,7 @@ impl OutputStream for CaptureStream {
     }
 
     fn take_error(&mut self) -> Option<OutputError> {
-        None
+        self.shared.error.lock().take()
     }
 }
 

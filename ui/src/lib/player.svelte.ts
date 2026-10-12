@@ -19,7 +19,12 @@ class Player {
   readonly progress = $derived(this.durationMs > 0 ? Math.min(1, this.positionMs / this.durationMs) : 0);
   readonly badge = $derived<OutputBadge | null>(this.snapshot?.output?.badge ?? null);
   readonly repeat = $derived<RepeatMode>(this.snapshot?.repeat ?? 'off');
+  readonly shuffle = $derived(this.snapshot?.shuffle ?? false);
   readonly queueLength = $derived(this.snapshot?.queueLength ?? 0);
+  readonly queueIndex = $derived(this.snapshot?.queueIndex ?? null);
+  /** Changes whenever the queue's items or their order change. */
+  readonly queueVersion = $derived(this.snapshot?.queueVersion ?? 0);
+  readonly currentId = $derived(this.snapshot?.currentId ?? null);
 
   setPosition(ms: number): void {
     this.positionMs = Math.max(0, ms);
@@ -64,9 +69,20 @@ class Player {
     void api.seek(ms);
   }
 
+  /** Jumps by `deltaMs` within the track. */
+  seekBy(deltaMs: number): void {
+    if (!this.track) return;
+    const end = this.durationMs > 0 ? this.durationMs - 500 : Infinity;
+    this.seek(Math.max(0, Math.min(end, this.livePosition() + deltaMs)));
+  }
+
   cycleRepeat(): void {
     const next: RepeatMode = this.repeat === 'off' ? 'all' : this.repeat === 'all' ? 'one' : 'off';
     void api.setRepeat(next);
+  }
+
+  toggleShuffle(): void {
+    void api.setShuffle(!this.shuffle);
   }
 
   async openFiles(): Promise<void> {

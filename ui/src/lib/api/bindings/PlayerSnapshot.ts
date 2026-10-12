@@ -4,4 +4,12 @@ import type { PlaybackStatus } from "./PlaybackStatus";
 import type { RepeatMode } from "./RepeatMode";
 import type { TrackMeta } from "./TrackMeta";
 
-export type PlayerSnapshot = { status: PlaybackStatus, track: TrackMeta | null, queueIndex: number | null, queueLength: number, positionMs: number, repeat: RepeatMode, output: OutputState | null, };
+export type PlayerSnapshot = { status: PlaybackStatus, track: TrackMeta | null, 
+/**
+ * Queue item id of the current track.
+ */
+currentId: number | null, queueIndex: number | null, queueLength: number, 
+/**
+ * Changes whenever the queue's items or their order change.
+ */
+queueVersion: number, positionMs: number, repeat: RepeatMode, shuffle: boolean, output: OutputState | null, };

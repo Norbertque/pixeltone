@@ -21,10 +21,12 @@ import {
   type SearchResults,
   type TrackRow,
   type DeviceCapabilities,
+  type DeviceChange,
   type DeviceInfo,
   type HardwareVolumeInfo,
   type PlayerError,
   type PlayerSnapshot,
+  type QueueEntry,
 } from './types';
 
 export const tauriBackend: Backend = {
@@ -36,6 +38,15 @@ export const tauriBackend: Backend = {
   playerAction: (action) => invoke('player_action', { action }),
   seek: (ms) => invoke('player_seek', { ms }),
   setRepeat: (mode) => invoke('player_set_repeat', { mode }),
+  setShuffle: (on) => invoke('player_set_shuffle', { on }),
+
+  queueItems: (offset, limit) => invoke<QueueEntry[]>('queue_items', { offset, limit }),
+  queueRemove: (ids) => invoke('queue_remove', { ids }),
+  queueMove: (id, to) => invoke('queue_move', { id, to }),
+  queueClear: () => invoke('queue_clear'),
+  queueJump: (id) => invoke('queue_jump', { id }),
+  queueAddTracks: (ids, next) => invoke('queue_add_tracks', { ids, next }),
+  queueAddFiles: (paths, next) => invoke('queue_add_files', { paths, next }),
   async pickAudioFiles() {
     const picked = await open({
       multiple: true,
@@ -58,6 +69,7 @@ export const tauriBackend: Backend = {
   onPlayerState: (cb) => listen<PlayerSnapshot>('player://state', (e) => cb(e.payload)),
   onPosition: (cb) => listen<{ positionMs: number }>('player://position', (e) => cb(e.payload.positionMs)),
   onPlayerError: (cb) => listen<PlayerError>('player://error', (e) => cb(e.payload)),
+  onDevicesChanged: (cb) => listen<DeviceChange>('output://devices', (e) => cb(e.payload)),
 
   libraryOverview: () => invoke<LibraryOverview>('library_overview'),
   libraryFolders: () => invoke<LibraryFolder[]>('library_folders'),
@@ -75,8 +87,8 @@ export const tauriBackend: Backend = {
   librarySearch: (query, limit) => invoke<SearchResults>('library_search', { query, limit }),
   libraryDelimiters: () => invoke<string[]>('library_delimiters'),
   librarySetDelimiters: (delimiters) => invoke('library_set_delimiters', { delimiters }),
-  playTracks: (ids, start) => invoke('play_tracks', { ids, start }),
-  playLibrary: (sort, start, shuffled) => invoke('play_library', { sort, start, shuffled }),
+  playTracks: (ids, start, shuffle) => invoke('play_tracks', { ids, start, shuffle }),
+  playLibrary: (sort, start, shuffle) => invoke('play_library', { sort, start, shuffle }),
   confirm: (message, title) => ask(message, { title, kind: 'warning' }),
   async pickFolder() {
     const defaultPath = await audioDir().catch(() => undefined);

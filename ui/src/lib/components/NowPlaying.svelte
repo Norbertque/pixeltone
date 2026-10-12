@@ -5,6 +5,7 @@
   import IconButton from './IconButton.svelte';
   import OutputBadge from './OutputBadge.svelte';
   import PlayButton from './PlayButton.svelte';
+  import QueuePanel from './QueuePanel.svelte';
   import WavyProgress from './WavyProgress.svelte';
 
   const track = $derived(player.track);
@@ -20,7 +21,7 @@
 <svelte:window {onkeydown} />
 
 {#if track}
-  <section class="sheet" aria-labelledby="np-title" style:view-transition-name="np-sheet">
+  <section class={['sheet', { 'with-queue': router.queueOpen }]} aria-labelledby="np-title" style:view-transition-name="np-sheet">
     <header class="top">
       <IconButton
         icon="keyboard_arrow_down"
@@ -32,7 +33,12 @@
         <span class="overline">Playing from</span>
         <span>{track.album ?? 'Files'}</span>
       </p>
-      <span class="spacer"></span>
+      <IconButton
+        icon="queue_music"
+        label={router.queueOpen ? 'Hide the queue' : 'Show the queue'}
+        selected={router.queueOpen}
+        onclick={() => router.toggleQueue()}
+      />
     </header>
 
     <div class="body">
@@ -74,7 +80,12 @@
         </div>
 
         <div class="transport">
-          <IconButton icon="shuffle" label="Shuffle (coming soon)" disabled />
+          <IconButton
+            icon="shuffle"
+            label={player.shuffle ? 'Shuffle: on' : 'Shuffle: off'}
+            selected={player.shuffle}
+            onclick={() => player.toggleShuffle()}
+          />
           <IconButton icon="skip_previous" label="Previous" variant="tonal" size="md" wide onclick={() => player.previous()} />
           <PlayButton playing={player.playing} onclick={() => player.togglePlay()} size={104} />
           <IconButton icon="skip_next" label="Next" variant="tonal" size="md" wide onclick={() => player.next()} />
@@ -90,6 +101,12 @@
           <div class="badge"><OutputBadge badge={player.badge} /></div>
         {/if}
       </div>
+
+      {#if router.queueOpen}
+        <div class="queue-slot">
+          <QueuePanel onclose={() => (router.queueOpen = false)} />
+        </div>
+      {/if}
     </div>
   </section>
 {/if}
@@ -180,7 +197,32 @@
     display: flex;
   }
 
+  .queue-slot {
+    display: grid;
+    align-self: stretch;
+    min-height: 0;
+  }
+  .with-queue .body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 400px);
+    padding-right: 16px;
+  }
+  @container sheet (width < 1180px) {
+    .with-queue .art-wrap {
+      display: none;
+    }
+    .with-queue .body {
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    }
+  }
+
   @container sheet (width < 820px) {
+    .queue-slot {
+      position: absolute;
+      inset: 64px 8px 8px;
+      z-index: 2;
+      box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
+      border-radius: var(--shape-xl);
+    }
     .body {
       grid-template-columns: 1fr;
       align-content: start;

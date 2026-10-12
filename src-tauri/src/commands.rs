@@ -1,6 +1,5 @@
 //! Tauri commands called from the UI (`ui/src/lib/api/tauri.ts`).
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use pp_core::{DeviceCapabilities, DeviceInfo, OutputBackend};
@@ -74,11 +73,16 @@ pub fn player_state(state: State<'_, AppState>) -> PlayerSnapshot {
     state.engine.snapshot()
 }
 
+/// Plays files in the order given, starting at `start`.
 #[tauri::command]
-pub fn player_play_files(state: State<'_, AppState>, paths: Vec<String>, start: usize) {
-    state
-        .engine
-        .play_files(paths.into_iter().map(PathBuf::from).collect(), start);
+pub async fn player_play_files(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+    start: usize,
+) -> Result<(), String> {
+    let items = crate::queue::items_from_files(paths).await?;
+    state.engine.play_items(items, Some(start), Some(false));
+    Ok(())
 }
 
 #[tauri::command]

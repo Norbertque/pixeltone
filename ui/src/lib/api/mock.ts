@@ -4,10 +4,12 @@
  */
 import { scallopPath } from '../shapes';
 import { mockArt, mockLibrary } from './mockLibrary';
+import { MockQueue, type Slot } from './mockQueue';
 import type {
   AppSettings,
   Backend,
   DeviceCapabilities,
+  DeviceChange,
   DeviceInfo,
   FormatCandidate,
   HardwareVolumeInfo,
@@ -82,17 +84,44 @@ const BADGE: OutputBadge = {
 };
 
 let settings: AppSettings = {
-  output: { deviceId: 'mock-dac', exclusive: true, eventDriven: false, bufferMs: 50, softwareGainDb: -30, lineLevel: false },
+  output: {
+    deviceId: 'mock-dac',
+    exclusive: true,
+    eventDriven: false,
+    bufferMs: 50,
+    softwareGainDb: -30,
+    lineLevel: false,
+    fades: true,
+  },
   devices: { 'mock-dac': { softwareGainDb: -24, lineLevel: false, loudnessAcknowledged: false } },
 };
+
+const queue = new MockQueue<TrackMeta>();
+
+function slotFor(meta: TrackMeta, trackId: number | null): Slot<TrackMeta> {
+  const { path, title, artist, album, durationMs, coverKey } = meta;
+  return queue.slot({ path, title, artist, album, durationMs, coverKey, trackId }, meta);
+}
+
+/** A file outside the library: the demo track, or a name-only stand-in. */
+function fileMeta(path: string): TrackMeta {
+  if (path === DEMO_TRACK.path) return DEMO_TRACK;
+  const name = path.split(/[\\/]/).pop() ?? path;
+  return { ...DEMO_TRACK, path, title: name.replace(/\.[^.]+$/, ''), artist: null, album: null, coverKey: null };
+}
+
+queue.set([slotFor(DEMO_TRACK, null)], 0, false);
 
 let snapshot: PlayerSnapshot = {
   status: 'paused',
   track: DEMO_TRACK,
+  currentId: queue.playing?.entry.id ?? null,
   queueIndex: 0,
   queueLength: 1,
+  queueVersion: queue.version,
   positionMs: 67_000,
   repeat: 'off',
+  shuffle: false,
   output: {
     deviceName: DEVICES[0]!.name,
     requested: 'exclusive',
@@ -157,11 +186,47 @@ function simulateScan(): void {
 const stateListeners = new Set<(s: PlayerSnapshot) => void>();
 const positionListeners = new Set<(ms: number) => void>();
 const errorListeners = new Set<(e: PlayerError) => void>();
+const deviceListeners = new Set<(c: DeviceChange) => void>();
 let speakersVolume: HardwareVolumeInfo = { db: -12, minDb: -65.25, maxDb: 0, stepDb: 0.75, muted: false };
 
 function publish(next: Partial<PlayerSnapshot>): void {
   snapshot = { ...snapshot, ...next };
   for (const l of stateListeners) l(snapshot);
+}
+
+/** Publishes the queue's state along with `next`. */
+function sync(next: Partial<PlayerSnapshot> = {}): void {
+  const slot = queue.playing;
+  publish({
+    track: slot?.meta ?? null,
+    currentId: slot?.entry.id ?? null,
+    queueIndex: slot ? queue.current : null,
+    queueLength: queue.items.length,
+    queueVersion: queue.version,
+    repeat: queue.repeat,
+    shuffle: queue.shuffle,
+    ...next,
+  });
+}
+
+/** Moves to queue index `i` from the top of the track, or stops at the end. */
+function goTo(i: number | null): void {
+  if (i === null) return sync({ status: 'stopped', positionMs: 0 });
+  queue.current = i;
+  sync({ positionMs: 0 });
+}
+
+function play(slots: Slot<TrackMeta>[], start: number | null, shuffle: boolean | null): void {
+  if (slots.length === 0) return;
+  queue.set(slots, start, shuffle);
+  sync({ status: 'playing', positionMs: 0 });
+}
+
+function rowSlots(ids: number[]): Slot<TrackMeta>[] {
+  return ids.flatMap((id) => {
+    const row = mockLibrary.track(id);
+    return row ? [slotFor(metaFromRow(row), row.id)] : [];
+  });
 }
 
 let lastTick = performance.now();
@@ -170,8 +235,11 @@ setInterval(() => {
   const dt = now - lastTick;
   lastTick = now;
   if (snapshot.status !== 'playing') return;
-  let pos = snapshot.positionMs + dt;
-  if (pos >= (snapshot.track?.durationMs ?? 0)) pos = 0;
+  const pos = snapshot.positionMs + dt;
+  if (pos >= (snapshot.track?.durationMs ?? 0)) {
+    goTo(queue.after());
+    return;
+  }
   snapshot = { ...snapshot, positionMs: pos };
   for (const l of positionListeners) l(pos);
 }, 250);
@@ -192,7 +260,7 @@ export const mockBackend: Backend = {
   setWindowTheme: async () => {},
 
   playerState: async () => snapshot,
-  playFiles: async () => publish({ status: 'playing', positionMs: 0 }),
+  playFiles: async (paths, start) => play(paths.map((p) => slotFor(fileMeta(p), null)), start, false),
   async playerAction(action) {
     switch (action) {
       case 'play':
@@ -204,12 +272,48 @@ export const mockBackend: Backend = {
       case 'stop':
         return publish({ status: 'stopped', positionMs: 0 });
       case 'next':
+        return goTo(queue.next());
       case 'previous':
-        return publish({ positionMs: 0 });
+        return snapshot.positionMs > 3000 ? publish({ positionMs: 0 }) : goTo(queue.previous());
     }
   },
   seek: async (ms) => publish({ positionMs: ms }),
-  setRepeat: async (repeat) => publish({ repeat }),
+  async setRepeat(repeat) {
+    queue.repeat = repeat;
+    sync();
+  },
+  async setShuffle(on) {
+    queue.setShuffle(on);
+    sync();
+  },
+
+  queueItems: async (offset, limit) => queue.entries(offset, limit),
+  async queueRemove(ids) {
+    queue.remove(ids);
+    sync();
+  },
+  async queueMove(id, to) {
+    queue.move(id, to);
+    sync();
+  },
+  async queueClear() {
+    queue.clear();
+    sync();
+  },
+  async queueJump(id) {
+    if (queue.jump(id)) sync({ status: 'playing', positionMs: 0 });
+  },
+  async queueAddTracks(ids, next) {
+    queue.add(rowSlots(ids), next);
+    sync();
+  },
+  async queueAddFiles(paths, next) {
+    queue.add(
+      paths.map((p) => slotFor(fileMeta(p), null)),
+      next,
+    );
+    sync();
+  },
   pickAudioFiles: async () => [DEMO_TRACK.path],
   coverUrl: (key) => (key === 'demo' ? demoArtwork() : key.startsWith('lib/') ? mockArt(key.slice(4)) : ''),
 
@@ -232,6 +336,7 @@ export const mockBackend: Backend = {
   onPlayerState: (cb) => subscribe(stateListeners, cb),
   onPosition: (cb) => subscribe(positionListeners, cb),
   onPlayerError: (cb) => subscribe(errorListeners, cb),
+  onDevicesChanged: (cb) => subscribe(deviceListeners, cb),
 
   libraryOverview: async () => mockLibrary.overview(scanning),
   libraryFolders: async () => mockLibrary.folders(),
@@ -252,24 +357,14 @@ export const mockBackend: Backend = {
     delimiters = [...d];
     simulateScan();
   },
-  async playTracks(ids, start) {
-    const row = mockLibrary.track(ids[start] ?? ids[0] ?? -1);
-    if (!row) return;
-    publish({
-      status: 'playing',
-      track: metaFromRow(row),
-      positionMs: 0,
-      queueIndex: start,
-      queueLength: ids.length,
-    });
-  },
-  async playLibrary(sort, start, shuffled) {
+  playTracks: async (ids, start, shuffle) => play(rowSlots(ids), start, shuffle),
+  async playLibrary(sort, start, shuffle) {
     const rows = mockLibrary.tracks(sort, 0, 100_000);
-    const index = shuffled ? Math.floor(Math.random() * rows.length) : start;
-    const row = rows[index];
-    if (row) {
-      publish({ status: 'playing', track: metaFromRow(row), positionMs: 0, queueIndex: index, queueLength: rows.length });
-    }
+    play(
+      rows.map((r) => slotFor(metaFromRow(r), r.id)),
+      start,
+      shuffle,
+    );
   },
   confirm: async (message) => window.confirm(message),
   pickFolder: async () => 'C:\\Users\\You\\Music',

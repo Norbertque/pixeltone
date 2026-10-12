@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api, type AlbumRow } from '../api';
-  import { playRows } from '../library.svelte';
+  import { playAll } from '../library.svelte';
+  import { contextMenu } from '../menu.svelte';
+  import { albumMenu } from '../menus';
   import { coverOf } from '../player.svelte';
   import { router } from '../router.svelte';
   import Artwork from './Artwork.svelte';
@@ -16,13 +18,18 @@
     e.stopPropagation();
     if (!album) return;
     const detail = await api.libraryAlbum(album.id);
-    if (detail) playRows(detail.tracks, 0);
+    if (detail) playAll(detail.tracks);
   }
 </script>
 
 {#if album}
   <div class="card">
-    <button class="open" onclick={() => router.go({ screen: 'album', id: album.id })} title="{album.title} — {album.artist}">
+    <button
+      class="open"
+      onclick={() => router.go({ screen: 'album', id: album.id })}
+      oncontextmenu={contextMenu(() => albumMenu(album), album.title || 'Album')}
+      title="{album.title} — {album.artist}"
+    >
       <Artwork src={coverOf(album.cover, size > 300 ? 1000 : 300)} size="100%" radius="var(--shape-xl)" />
       <span class="title title-small">{album.title || 'Unknown album'}</span>
       <span class="artist body-small">{album.artist || 'Unknown artist'}</span>

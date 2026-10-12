@@ -1,11 +1,14 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
 
+  import ContextMenu from './lib/components/ContextMenu.svelte';
   import MiniPlayer from './lib/components/MiniPlayer.svelte';
   import NavBar from './lib/components/NavBar.svelte';
   import NavRail from './lib/components/NavRail.svelte';
   import NowPlaying from './lib/components/NowPlaying.svelte';
+  import ShortcutsDialog from './lib/components/ShortcutsDialog.svelte';
   import Snackbar from './lib/components/Snackbar.svelte';
+  import { help } from './lib/help.svelte';
   import { player } from './lib/player.svelte';
   import { router } from './lib/router.svelte';
   import About from './lib/screens/About.svelte';
@@ -17,6 +20,7 @@
   import Library from './lib/screens/Library.svelte';
   import Search from './lib/screens/Search.svelte';
   import Settings from './lib/screens/Settings.svelte';
+  import { type ShortcutAction, shortcutFor } from './lib/shortcuts';
   import { theme } from './lib/theme/theme.svelte';
 
   const SCREENS = { home: Home, search: Search, library: Library, settings: Settings, about: About };
@@ -28,19 +32,58 @@
     theme.artworkSeed = player.artworkSeed;
   });
 
-  function onkeydown(e: KeyboardEvent): void {
-    const target = e.target as HTMLElement | null;
-    const typing = target?.closest('input, textarea, [contenteditable="true"]');
-    if (e.altKey && e.key === 'ArrowLeft') {
-      e.preventDefault();
-      router.back();
-    } else if (e.ctrlKey && e.key.toLowerCase() === 'o') {
-      e.preventDefault();
-      void player.openFiles();
-    } else if (e.key === ' ' && !typing && !target?.closest('button, [role="slider"]')) {
-      e.preventDefault();
-      player.togglePlay();
+  const SEEK_STEP_MS = 10_000;
+
+  function run(action: ShortcutAction): void {
+    switch (action) {
+      case 'toggle':
+        return player.togglePlay();
+      case 'next':
+        return player.next();
+      case 'previous':
+        return player.previous();
+      case 'seekForward':
+        return player.seekBy(SEEK_STEP_MS);
+      case 'seekBack':
+        return player.seekBy(-SEEK_STEP_MS);
+      case 'shuffle':
+        return player.toggleShuffle();
+      case 'repeat':
+        return player.cycleRepeat();
+      case 'queue':
+        return void router.toggleQueue();
+      case 'search':
+        if (router.screen === 'search') document.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+        else void router.go('search');
+        return;
+      case 'library':
+        return void router.go('library');
+      case 'settings':
+        return void router.go('settings');
+      case 'openFiles':
+        return void player.openFiles();
+      case 'back':
+        return void router.back();
+      case 'help':
+        help.shortcuts = true;
+        return;
     }
+  }
+
+  function onkeydown(e: KeyboardEvent): void {
+    // Menus, sliders and dialogs handle their own keys first.
+    if (e.defaultPrevented || document.querySelector('dialog:modal')) return;
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    const action = shortcutFor(e, {
+      typing: !!target?.closest(
+        'input:not([type="range"], [type="checkbox"], [type="radio"], [type="color"]), textarea, select, [contenteditable="true"]',
+      ),
+      activates: !!target?.closest('button, a[href], summary, [role="switch"], [role="menuitem"], [role="slider"]'),
+      slider: !!target?.closest('[role="slider"], input[type="range"]'),
+    });
+    if (!action) return;
+    e.preventDefault();
+    run(action);
   }
 </script>
 
@@ -85,6 +128,8 @@
   {/if}
 
   <Snackbar />
+  <ContextMenu />
+  <ShortcutsDialog />
 </div>
 
 <style>

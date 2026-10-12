@@ -4,6 +4,7 @@
   import Icon from '../components/Icon.svelte';
   import ScreenHeader from '../components/ScreenHeader.svelte';
   import SegmentedButtons from '../components/SegmentedButtons.svelte';
+  import { help } from '../help.svelte';
   import { router } from '../router.svelte';
   import { buildScheme, PALETTE_STYLE_LABELS, PALETTE_STYLES, type PaletteStyle } from '../theme/scheme';
   import { SEED_PRESETS, theme, type ColorSource, type ThemeMode } from '../theme/theme.svelte';
@@ -125,6 +126,11 @@
     <h2 id="library" class="title-large rounded emphasized"><Icon name="library_music" /> Library</h2>
     <LibrarySettings />
   </section>
+
+  <button class="section link" onclick={() => (help.shortcuts = true)}>
+    <span class="title-large rounded emphasized"><Icon name="keyboard" /> Keyboard shortcuts</span>
+    <Icon name="chevron_right" />
+  </button>
 
   <button class="section link" onclick={() => router.go('about')}>
     <span class="title-large rounded emphasized"><Icon name="info" /> About PixelPlayer PC</span>

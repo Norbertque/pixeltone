@@ -17,6 +17,10 @@ use crate::track::{LoadedTrack, StartedTrack, load};
 
 /// Bytes decoded ahead of the ring before the worker waits for space.
 const PENDING_HIGH_WATER: usize = 512 * 1024;
+/// Audio still queued for the device when the worker commits to the next track. The next
+/// file is opened early (so the switch stays gapless), but which track it is gets decided
+/// this late, so queue edits made near the end of a track still count.
+const COMMIT_LOW_WATER_MS: u64 = 400;
 
 pub enum WorkerEvent {
     /// `track` becomes audible once the device has played `at_frame` frames of this stream.
@@ -25,13 +29,15 @@ pub enum WorkerEvent {
         track: Box<StartedTrack>,
     },
     /// The stream ends at `at_frame`. `next` is a track that needs a different device format
-    /// (the stream must be reopened); `None` means the queue is finished.
+    /// (the stream must be reopened); `None` means the queue is finished. `version` is the
+    /// queue version this was decided on.
     Ended {
         at_frame: u64,
         next: Option<Box<LoadedTrack>>,
+        version: u32,
     },
     TrackFailed {
-        pos: usize,
+        id: u32,
         error: String,
     },
 }
@@ -91,6 +97,8 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
         let _ = events.send((generation, e));
     };
     let bpf = format.bytes_per_frame();
+    let low_water = (u64::from(format.sample_rate) * COMMIT_LOW_WATER_MS / 1000) as usize * bpf;
+    let low_water = low_water.min(producer.buffer().capacity() / 2);
     let mut pending: Vec<u8> = Vec::with_capacity(PENDING_HIGH_WATER);
     let mut frames: u64 = preroll_frames;
     pending.resize(preroll_frames as usize * bpf, 0);
@@ -99,18 +107,19 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
         Ok(p) => p,
         Err(error) => {
             send(WorkerEvent::TrackFailed {
-                pos: first.pos,
+                id: first.id,
                 error,
             });
             send(WorkerEvent::Ended {
                 at_frame: frames,
                 next: None,
+                version: queue.lock().version(),
             });
             return producer;
         }
     };
     let mut track = first;
-    let mut pos = track.pos;
+    let mut id = track.id;
     send(WorkerEvent::TrackStarted {
         at_frame: frames,
         track: Box::new(track.started()),
@@ -144,27 +153,34 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
         pipeline.finish(&mut pending);
         frames += ((pending.len() - before) / bpf) as u64;
 
-        let next = next_playable(&queue, pos, &plan, &send);
+        // Open the successor now, commit to it shortly before the device needs it.
+        let expected = queue.lock().after(id);
+        let mut next = next_playable(&queue, id, &plan, &send);
+        if !drain_to_low_water(&mut producer, &mut pending, stop, &controls, low_water) {
+            return producer;
+        }
+        if queue.lock().after(id) != expected {
+            next = next_playable(&queue, id, &plan, &send);
+        }
+        let version = queue.lock().version();
         match next {
             Some(mut next) if next.negotiated.format == format => {
                 if !pipeline.accepts(&next.meta.source) {
                     match Pipeline::new(next.meta.source, format) {
                         Ok(p) => pipeline = p,
                         Err(error) => {
-                            send(WorkerEvent::TrackFailed {
-                                pos: next.pos,
-                                error,
-                            });
+                            send(WorkerEvent::TrackFailed { id: next.id, error });
                             finish_stream(&mut producer, &mut pending, stop, &controls);
                             send(WorkerEvent::Ended {
                                 at_frame: frames,
                                 next: None,
+                                version,
                             });
                             return producer;
                         }
                     }
                 }
-                pos = next.pos;
+                id = next.id;
                 send(WorkerEvent::TrackStarted {
                     at_frame: frames,
                     track: Box::new(next.started()),
@@ -176,6 +192,7 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
                 send(WorkerEvent::Ended {
                     at_frame: frames,
                     next: other.map(Box::new),
+                    version,
                 });
                 return producer;
             }
@@ -184,10 +201,10 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
     producer
 }
 
-/// The next track after `pos` that opens, skipping (and reporting) broken files.
+/// The next track after `id` that opens, skipping (and reporting) broken files.
 fn next_playable(
     queue: &Mutex<Queue>,
-    mut pos: usize,
+    mut id: u32,
     plan: &OutputPlan,
     send: &impl Fn(WorkerEvent),
 ) -> Option<LoadedTrack> {
@@ -195,21 +212,45 @@ fn next_playable(
     for _ in 0..attempts {
         let (next, item) = {
             let q = queue.lock();
-            let next = q.after(pos)?;
+            let next = q.after(id)?;
             (next, q.get(next)?.clone())
         };
         match load(next, &item, 0, plan) {
             Ok(track) => return Some(track),
             Err(error) => {
-                send(WorkerEvent::TrackFailed { pos: next, error });
-                if next == pos {
+                send(WorkerEvent::TrackFailed { id: next, error });
+                if next == id {
                     return None;
                 }
-                pos = next;
+                id = next;
             }
         }
     }
     None
+}
+
+/// Writes everything decoded and waits until the ring holds at most `low_water` bytes.
+/// Returns false when the worker was stopped meanwhile.
+fn drain_to_low_water(
+    producer: &mut Producer<u8>,
+    pending: &mut Vec<u8>,
+    stop: &AtomicBool,
+    controls: &StreamControls,
+    low_water: usize,
+) -> bool {
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return false;
+        }
+        if write_pending(producer, pending) > 0 {
+            controls.set_expect_data(true);
+        }
+        let queued = producer.buffer().capacity() - producer.slots();
+        if pending.is_empty() && queued <= low_water {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// Writes all remaining bytes (unless stopped) once nothing more will be decoded.

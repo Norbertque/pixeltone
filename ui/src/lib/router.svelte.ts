@@ -68,6 +68,8 @@ function sameRoute(a: Route, b: Route): boolean {
 class Router {
   route = $state<Route>({ screen: 'home' });
   nowPlayingOpen = $state(false);
+  /** The queue panel inside Now Playing. */
+  queueOpen = $state(false);
   /** Remembered while browsing away and back. */
   libraryTab = $state<LibraryTab>('songs');
   readonly screen = $derived<Screen>(this.route.screen);
@@ -94,6 +96,15 @@ class Router {
       await tick();
       focusScreenHeading();
     }
+  }
+
+  /** Shows or hides the queue, opening Now Playing if needed. */
+  async toggleQueue(): Promise<void> {
+    if (!this.nowPlayingOpen) {
+      this.queueOpen = true;
+      return this.setNowPlaying(true);
+    }
+    this.queueOpen = !this.queueOpen;
   }
 
   async setNowPlaying(open: boolean): Promise<void> {

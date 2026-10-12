@@ -30,7 +30,8 @@ pub struct TrackMeta {
 }
 
 pub struct LoadedTrack {
-    pub pos: usize,
+    /// Queue item id.
+    pub id: u32,
     pub decoder: Decoder,
     pub negotiated: Negotiated,
     pub start_ms: u64,
@@ -41,7 +42,7 @@ pub struct LoadedTrack {
 /// What the engine needs to know when a track becomes the one being decoded.
 #[derive(Clone, Debug)]
 pub struct StartedTrack {
-    pub pos: usize,
+    pub id: u32,
     pub negotiated: Negotiated,
     pub start_ms: u64,
     pub meta: TrackMeta,
@@ -52,7 +53,7 @@ impl LoadedTrack {
     /// Track details for the engine; the cover moves along with them.
     pub fn started(&mut self) -> StartedTrack {
         StartedTrack {
-            pos: self.pos,
+            id: self.id,
             negotiated: self.negotiated,
             start_ms: self.start_ms,
             meta: self.meta.clone(),
@@ -63,7 +64,7 @@ impl LoadedTrack {
 
 /// Opens a queue item at `start_ms` and negotiates its output format under `plan`.
 pub fn load(
-    pos: usize,
+    id: u32,
     item: &QueueItem,
     start_ms: u64,
     plan: &OutputPlan,
@@ -78,6 +79,26 @@ pub fn load(
         let frame = start_ms * u64::from(info.source.sample_rate) / 1000;
         decoder.seek(frame).map_err(|e| e.to_string())?;
     }
+    let (meta, cover) = describe(&mut decoder, item);
+    Ok(LoadedTrack {
+        id,
+        decoder,
+        negotiated,
+        start_ms,
+        meta,
+        cover,
+    })
+}
+
+/// Reads what Now Playing shows for an item (and its embedded cover) without playing it.
+pub fn read_meta(item: &QueueItem) -> Result<(TrackMeta, Option<CoverArt>), String> {
+    let mut decoder = Decoder::open(&item.path).map_err(|e| e.to_string())?;
+    Ok(describe(&mut decoder, item))
+}
+
+fn describe(decoder: &mut Decoder, item: &QueueItem) -> (TrackMeta, Option<CoverArt>) {
+    let path = item.path.as_path();
+    let info = decoder.info().clone();
     let tags = decoder.tags();
     // A library cover wins; otherwise the embedded picture is served from the engine.
     let cover = if item.cover_key.is_some() {
@@ -87,9 +108,15 @@ pub fn load(
     };
     let meta = TrackMeta {
         path: path.display().to_string(),
-        title: tags.title.unwrap_or_else(|| file_stem(path)),
-        artist: tags.artist.or(tags.album_artist),
-        album: tags.album,
+        title: tags
+            .title
+            .or_else(|| item.title.clone())
+            .unwrap_or_else(|| file_stem(path)),
+        artist: tags
+            .artist
+            .or(tags.album_artist)
+            .or_else(|| item.artist.clone()),
+        album: tags.album.or_else(|| item.album.clone()),
         duration_ms: info.duration_ms.map(|d| d as f64),
         codec: info.codec.clone(),
         source: info.source,
@@ -100,14 +127,7 @@ pub fn load(
             .clone()
             .or_else(|| cover.as_ref().map(|c| cover_key(&c.data))),
     };
-    Ok(LoadedTrack {
-        pos,
-        decoder,
-        negotiated,
-        start_ms,
-        meta,
-        cover,
-    })
+    (meta, cover)
 }
 
 fn file_stem(path: &Path) -> String {

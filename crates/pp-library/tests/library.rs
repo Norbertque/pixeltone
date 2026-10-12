@@ -256,6 +256,18 @@ fn scans_groups_and_searches() {
     assert_eq!(order, ["D1T1", "D1T2", "D2T1", "D2T2"]);
     assert!(detail.tracks[0].cover.is_some(), "cover.png next to disc 1");
 
+    // Rows by id keep the requested order and skip unknown ids.
+    let ids: Vec<u32> = detail
+        .tracks
+        .iter()
+        .rev()
+        .map(|t| t.id)
+        .chain([999_999])
+        .collect();
+    let rows = lib.tracks_by_id(&ids).unwrap();
+    let titles: Vec<&str> = rows.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(titles, ["D2T2", "D2T1", "D1T2", "D1T1"]);
+
     // The featured artist became an artist of their own.
     let artists = lib.artists(0, 100).unwrap();
     let names: Vec<&str> = artists.iter().map(|a| a.name.as_str()).collect();

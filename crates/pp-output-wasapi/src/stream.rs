@@ -9,8 +9,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
-use pp_core::gain::apply_q16_in_place;
-use pp_core::{OpenRequest, OutputError, OutputFormat, OutputStream, ShareMode, StreamStats};
+use pp_core::{
+    OpenRequest, OutputError, OutputFormat, OutputStream, RenderFeed, ShareMode, StreamStats,
+};
 use wasapi::{AudioClient, Direction, Handle, StreamMode, WasapiError, calculate_period_100ns};
 use windows::Win32::Media::Audio::AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED;
 use windows::Win32::System::Threading::{
@@ -277,7 +278,7 @@ fn open_device(request: &OpenRequest) -> Result<Device, OutputError> {
 
 fn render_thread(
     request: OpenRequest,
-    mut source: rtrb::Consumer<u8>,
+    source: rtrb::Consumer<u8>,
     shared: Arc<Shared>,
     ready: mpsc::Sender<Result<(), OutputError>>,
 ) {
@@ -298,7 +299,8 @@ fn render_thread(
     shared.period_frames.store(period_frames, Ordering::Relaxed);
     let _ = ready.send(Ok(()));
 
-    if let Err(e) = run(&request, &dev, &mut source, &shared) {
+    let mut feed = RenderFeed::new(source, request.controls.clone(), request.format);
+    if let Err(e) = run(&request, &dev, &mut feed, &shared) {
         tracing::warn!("render thread stopped: {e}");
         *shared.error.lock() = Some(e);
     }
@@ -308,16 +310,19 @@ fn render_thread(
 fn run(
     request: &OpenRequest,
     dev: &Device,
-    source: &mut rtrb::Consumer<u8>,
+    feed: &mut RenderFeed,
     shared: &Shared,
 ) -> Result<(), OutputError> {
     let format = request.format;
+    let controls = &request.controls;
     let bpf = format.bytes_per_frame();
     let rate = u64::from(format.sample_rate);
     let frequency = dev.clock.get_frequency().map_err(map_error)?.max(1);
     let mut scratch = vec![0u8; dev.buffer_frames as usize * bpf];
     let mut accounting = Accounting::default();
     let mut started = false;
+    // Device frame where fade-out silence begins; the fade is over once that is played.
+    let mut silence_at: Option<u64> = None;
 
     // Exclusive event mode must be pre-filled with a full buffer before starting.
     let prefill = |accounting: &mut Accounting, scratch: &mut [u8]| -> Result<(), OutputError> {
@@ -341,10 +346,8 @@ fn run(
                 started = false;
             }
             dev.client.reset_stream().map_err(map_error)?;
-            let n = source.slots();
-            if let Ok(chunk) = source.read_chunk(n) {
-                chunk.commit_all();
-            }
+            feed.discard();
+            silence_at = None;
             accounting = Accounting::default();
             shared.played.store(0, Ordering::Release);
             prefill(&mut accounting, &mut scratch)?;
@@ -381,22 +384,20 @@ fn run(
             .map_err(map_error)? as usize;
         if space > 0 {
             let bytes = space * bpf;
-            let ready = (source.slots() / bpf).min(space) * bpf;
-            let (filled, _) = source.pop_partial_slice(&mut scratch[..ready]);
-            let filled = filled.len();
-            if let Some(q16) = request.controls.gain_q16() {
-                apply_q16_in_place(&mut scratch[..filled], format.sample, q16);
-            }
-            if filled < bytes {
-                scratch[filled..bytes].fill(0);
-                if request.controls.expect_data() {
-                    shared.underruns.fetch_add(1, Ordering::Relaxed);
-                }
+            let fill = feed.fill(&mut scratch[..bytes]);
+            if fill.ring_frames < space && fill.silent_from.is_none() && controls.expect_data() {
+                shared.underruns.fetch_add(1, Ordering::Relaxed);
             }
             dev.render
                 .write_to_device(space, &scratch[..bytes], None)
                 .map_err(map_error)?;
-            accounting.wrote((filled / bpf) as u64, space as u64);
+            match fill.silent_from {
+                Some(frame) => {
+                    silence_at.get_or_insert(accounting.device_written + frame as u64);
+                }
+                None => silence_at = None,
+            }
+            accounting.wrote(fill.ring_frames as u64, space as u64);
         }
 
         let (position, _) = dev.clock.get_position().map_err(map_error)?;
@@ -405,6 +406,9 @@ fn run(
         shared
             .played
             .store(accounting.played(device_played), Ordering::Release);
+        if silence_at.is_some_and(|at| device_played >= at) {
+            controls.set_faded_out(true);
+        }
     }
     Ok(())
 }
