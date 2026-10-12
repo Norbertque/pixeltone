@@ -68,12 +68,16 @@ struct Harness {
 }
 
 fn harness(backend: CaptureBackend, exclusive: bool) -> Harness {
-    let backend = Arc::new(backend);
-    let (tx, rx) = crossbeam_channel::unbounded();
     let config = EngineConfig {
         preroll_ms: 0,
         ..EngineConfig::default()
     };
+    harness_with(backend, exclusive, config)
+}
+
+fn harness_with(backend: CaptureBackend, exclusive: bool, config: EngineConfig) -> Harness {
+    let backend = Arc::new(backend);
+    let (tx, rx) = crossbeam_channel::unbounded();
     let settings = OutputSettings {
         exclusive,
         ..OutputSettings::default()
@@ -335,4 +339,31 @@ fn software_gain_engages_on_devices_without_hardware_volume() {
         .flat_map(|c| (((i64::from(i32::from_le_bytes(*c)) * q16) >> 16) as i32).to_le_bytes())
         .collect();
     assert!(captured == expected, "software gain output differs");
+}
+
+/// The capture device plays faster than real time, so with a long control tick the whole
+/// track starts and drains between two ticks. Its state must still be published once.
+#[test]
+fn a_track_that_ends_within_one_tick_still_reports_its_output() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = fixture(
+        dir.path(),
+        "a.flac",
+        44_100,
+        "0.3",
+        &["-c:a", "flac", "-sample_fmt", "s16"],
+    );
+    let config = EngineConfig {
+        preroll_ms: 0,
+        tick: Duration::from_millis(500),
+        ..EngineConfig::default()
+    };
+    let h = harness_with(
+        CaptureBackend::new(CaptureBackend::typical_dac()),
+        true,
+        config,
+    );
+    let events = h.play_to_end(vec![f]);
+    let badge = last_badge(&events).expect("the track's output state was never published");
+    assert!(badge.bit_perfect);
 }

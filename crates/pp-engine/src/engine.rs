@@ -770,6 +770,7 @@ impl Control {
     }
 
     fn tick(&mut self) {
+        let mut started = false;
         while let Ok((generation, event)) = self.worker_rx.try_recv() {
             if generation != self.generation {
                 continue;
@@ -797,6 +798,7 @@ impl Control {
                             track: *track,
                             badge,
                         });
+                        started = true;
                     }
                 }
                 WorkerEvent::Ended { at_frame, next } => {
@@ -836,6 +838,11 @@ impl Control {
         let drained = s.ended.as_ref().is_some_and(|(end, _)| played >= *end);
         if drained {
             let (_, next) = s.ended.take().expect("checked");
+            // A track shorter than a tick can start and drain between two ticks; announce
+            // it (title, badge) before the session closes, or it would never be published.
+            if started {
+                self.publish();
+            }
             match next {
                 Some(track) => {
                     // The next track needs another device format: reopen with a pre-roll.
