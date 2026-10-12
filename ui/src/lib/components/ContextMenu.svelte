@@ -89,7 +89,8 @@
   }
 
   function ontoggle(e: ToggleEvent): void {
-    if (e.newState !== 'closed') return;
+    // Toggle events arrive late: another menu may already be showing in this popover.
+    if (e.newState !== 'closed' || el?.matches(':popover-open')) return;
     const back = menu.current?.returnFocus;
     // Only steal focus back when it was in the menu (keyboard), not after a click elsewhere.
     const focusInMenu = !document.activeElement || document.activeElement === document.body || el?.contains(document.activeElement);

@@ -51,11 +51,11 @@
   let frame = 0;
   let announcement = $state('');
 
+  // The grabbed row stays hidden in place; a floating copy follows the pointer (the virtual
+  // list may stop rendering the original once auto-scroll has carried it far away).
   function shift(i: number): number {
     const d = drag;
-    if (!d?.active) return 0;
-    if (i === d.from) return d.top - i * ROW;
-    return displacement(i, d.from, d.to, ROW);
+    return d?.active ? displacement(i, d.from, d.to, ROW) : 0;
   }
 
   /** Follows the pointer at `clientY`. */
@@ -164,7 +164,7 @@
   {#if entry}
     {@const current = entry.id === player.currentId}
     {@const played = player.queueIndex !== null && i < player.queueIndex}
-    <div class={['qrow', { current, played, dragged: drag?.active && drag.id === entry.id }]}>
+    <div class={['qrow', { current, played, ghosted: drag?.active && drag.from === i }]}>
       <button
         type="button"
         class="handle"
@@ -222,7 +222,7 @@
     {#if count === 0}
       <EmptyState icon="queue_music" title="Nothing queued" body="Play something, or use “Add to queue” on any song." />
     {:else}
-      <div bind:this={listEl} class:dragging={drag?.active}>
+      <div bind:this={listEl} class={['list', { dragging: drag?.active }]}>
         <VirtualList
           {count}
           rowHeight={ROW}
@@ -232,6 +232,19 @@
           animate={drag?.active ?? false}
           onrange={(s, e) => pager.ensure(s, e)}
         />
+        {#if drag?.active && pager.rows[drag.from]}
+          {@const entry = pager.rows[drag.from]!}
+          <div class="qrow ghost" style:transform="translateY({drag.top}px)" style:height="{ROW}px" aria-hidden="true">
+            <span class="handle"><Icon name="drag_indicator" size={20} /></span>
+            <span class="main">
+              <Artwork src={artworkUrl(entry.coverKey, 300)} size="40px" radius="var(--shape-sm)" />
+              <span class="text">
+                <span class="title title-small">{entry.title}</span>
+                <span class="sub body-small">{entry.artist ?? entry.album ?? ''}</span>
+              </span>
+            </span>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
@@ -291,15 +304,21 @@
   .qrow.played .main {
     opacity: 0.6;
   }
-  .qrow.dragged {
+  .list {
     position: relative;
+  }
+  .qrow.ghosted {
+    visibility: hidden;
+  }
+  .ghost {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
     z-index: 1;
     background: var(--md-sys-color-surface-container-highest);
     box-shadow: 0 6px 16px rgb(0 0 0 / 0.25);
-  }
-  .dragging :global(.vrow:has(.dragged)) {
-    z-index: 1;
-    transition: none;
+    pointer-events: none;
   }
 
   .handle {
