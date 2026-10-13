@@ -88,6 +88,12 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Tag editor: `pp-library` edit.rs writes only the file's primary tag through lofty (covers and
   other fields survive; tests compare every untouched item). `tags_write` reloads the engine
   if the playing file was edited (`Engine::reload`) and rescans.
+- AI playlists: `pp-ai` (raw HTTP to the Messages API; the library goes in a cached system
+  block, structured JSON output, `fallbacks: "default"`; returned ids are checked against
+  the catalog sent). The key lives in Windows Credential Manager (`src-tauri/src/secret.rs`)
+  and never reaches the UI.
+- Never create a webview window in a synchronous command or an event handler: on Windows
+  it deadlocks (Tauri documents it). `tray::open_mini` builds on its own thread.
 - Tray and mini player: `src-tauri/src/tray.rs`. The mini player is the same UI at `#mini`
   (`ui/src/MiniWindow.svelte`); its window label `mini` is in the capability file.
 

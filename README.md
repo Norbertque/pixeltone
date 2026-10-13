@@ -34,13 +34,17 @@ here, and [`docs/hardware-checklist.md`](docs/hardware-checklist.md) for testing
 ## Online features
 
 Everything works offline. Two lookups use the internet, and both can be turned off in
-**Settings → Online**:
+**Settings → Online**; AI playlists are a third, opt-in feature:
 
 - **Lyrics (LRCLIB):** for songs without lyrics of their own, the title, artist, album and
   length are sent to [lrclib.net](https://lrclib.net). Answers (and "not found") are cached.
 - **Artist pictures (Deezer):** the names of the artists in your library are looked up on
   [Deezer](https://www.deezer.com); pictures of exact matches are kept in the app's cache.
   Turning it off removes them.
+- **AI playlists (optional, your own Anthropic API key):** describe a playlist and Claude
+  picks it from your library. The titles, artists, albums, years and genres of your songs
+  are sent to Anthropic with each request, billed to your key; the key is kept in Windows
+  Credential Manager. Nothing is sent until you add a key in **Settings → AI playlists**.
 
 ## Getting builds
 

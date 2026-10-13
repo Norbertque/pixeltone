@@ -7,6 +7,7 @@
   import OutputBadge from './OutputBadge.svelte';
   import PlayButton from './PlayButton.svelte';
   import QueuePanel from './QueuePanel.svelte';
+  import VolumeSlider from './VolumeSlider.svelte';
   import WavyProgress from './WavyProgress.svelte';
 
   const track = $derived(player.track);
@@ -115,6 +116,8 @@
             onclick={() => player.cycleRepeat()}
           />
         </div>
+
+        <div class="volume"><VolumeSlider compact /></div>
 
         {#if player.badge}
           <div class="badge"><OutputBadge badge={player.badge} /></div>
@@ -233,6 +236,12 @@
     gap: 8px;
   }
 
+  .volume {
+    width: min(100%, 360px);
+    /* The slider's handle gaps take the colour behind it. */
+    --slider-surface: var(--md-sys-color-surface-container-low);
+  }
+
   .badge {
     display: flex;
   }
@@ -282,6 +291,9 @@
     }
     .badge {
       justify-content: center;
+    }
+    .volume {
+      justify-self: center;
     }
   }
 </style>

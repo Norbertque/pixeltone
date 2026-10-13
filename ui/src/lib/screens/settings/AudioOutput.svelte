@@ -7,12 +7,11 @@
   import IconButton from '../../components/IconButton.svelte';
   import OutputBadge from '../../components/OutputBadge.svelte';
   import SegmentedButtons from '../../components/SegmentedButtons.svelte';
-  import Slider from '../../components/Slider.svelte';
   import Switch from '../../components/Switch.svelte';
+  import VolumeSlider from '../../components/VolumeSlider.svelte';
   import { output as store } from '../../output.svelte';
   import { player } from '../../player.svelte';
   import { toasts } from '../../toasts.svelte';
-  import { formatDb, volumeIcon } from '../../volume';
 
   const RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000, 705_600, 768_000];
   const CONTAINERS: { label: string; sample: SampleFormat }[] = [
@@ -30,7 +29,6 @@
   const prefs = $derived(store.prefs);
   const caps = $derived(store.caps);
   const volume = $derived(store.volume);
-  const volumeDb = $derived(store.draft ?? volume?.db ?? 0);
   const hasDeviceVolume = $derived(store.hardware !== null);
   const live = $derived(player.snapshot?.output ?? null);
 
@@ -203,25 +201,7 @@
     </div>
 
     {#if volume && volume.kind !== 'fixed'}
-      <div class="volume">
-        <IconButton
-          icon={volumeIcon({ ...volume, db: volumeDb })}
-          label={volume.muted ? 'Unmute' : 'Mute'}
-          selected={volume.muted}
-          onclick={() => store.toggleMute()}
-        />
-        <Slider
-          label={volume.label}
-          min={volume.min}
-          max={volume.max}
-          step={volume.step}
-          value={volumeDb}
-          valueText={formatDb(volumeDb, volume.kind)}
-          oninput={(v) => store.setVolume(v)}
-          onchange={(v) => store.setVolume(v)}
-        />
-        <span class="db label-large">{volume.muted ? 'Muted' : formatDb(volumeDb, volume.kind)}</span>
-      </div>
+      <div class="volume"><VolumeSlider /></div>
     {/if}
 
     {#if output.exclusive && hasDeviceVolume}
@@ -386,17 +366,7 @@
     color: var(--md-sys-color-on-surface);
   }
   .volume {
-    display: grid;
-    grid-template-columns: auto 1fr 5.5em;
     --slider-surface: var(--md-sys-color-surface-container-low);
-    align-items: center;
-    gap: 16px;
-    color: var(--md-sys-color-on-surface-variant);
-  }
-  .db {
-    text-align: end;
-    font-variant-numeric: tabular-nums;
-    color: var(--md-sys-color-on-surface);
   }
   .caps-head {
     display: flex;

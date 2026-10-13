@@ -108,6 +108,7 @@ let settings: AppSettings = {
   },
 };
 const settingsListeners = new Set<(s: AppSettings) => void>();
+let mockAiKey = false;
 
 function settingsChanged(): AppSettings {
   for (const cb of settingsListeners) cb(structuredClone(settings));
@@ -457,6 +458,23 @@ export const mockBackend: Backend = {
   },
   lyricsSave: async (track, text) => mockUserData.saveLyrics(track.path, text),
 
+  aiStatus: async () => ({ hasKey: mockAiKey, songs: 1863, sentSongs: 1863, estimateUsd: 0.21 }),
+  async aiSetKey(key) {
+    if (!key.trim()) throw new Error("That doesn't look like an API key.");
+    mockAiKey = true;
+  },
+  async aiRemoveKey() {
+    mockAiKey = false;
+  },
+  async aiPlaylist(prompt, songs) {
+    if (!mockAiKey) throw new Error('Add your Anthropic API key in Settings → AI playlists first.');
+    await new Promise((r) => setTimeout(r, 1500)); // Claude takes a while
+    const ids = mockLibrary.tracks('title', 0, 2000).filter((_, i) => i % 37 === 0).slice(0, songs).map((t) => t.id);
+    const name = 'Night Drive';
+    const playlistId = mockUserData.createPlaylist(name, ids);
+    userDataChanged();
+    return { playlistId, name, description: `Picked for “${prompt}”.`, songs: ids.length };
+  },
   async openMiniPlayer() {
     window.open(`${location.pathname}#mini`, 'pp-mini', 'popup,width=420,height=128');
   },

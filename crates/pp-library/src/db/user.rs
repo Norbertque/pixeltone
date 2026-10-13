@@ -583,6 +583,28 @@ impl Db {
         spread_artists(&mut rows);
         Ok(rows)
     }
+
+    /// Every track as (id, title, artist, album, year, genres), by artist and album.
+    pub fn song_summaries(&self) -> rusqlite::Result<Vec<crate::SongSummary>> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT t.id, t.title, t.artist, a.title, t.year, \
+             COALESCE((SELECT group_concat(g.name, '; ') FROM track_genres tg \
+                 JOIN genres g ON g.id = tg.genre_id WHERE tg.track_id = t.id), '') \
+             FROM tracks t JOIN albums a ON a.id = t.album_id \
+             ORDER BY t.artist COLLATE NOCASE, a.title COLLATE NOCASE, t.disc_no, t.track_no",
+        )?;
+        stmt.query_map([], |r| {
+            Ok(crate::SongSummary {
+                id: r.get(0)?,
+                title: r.get(1)?,
+                artist: r.get(2)?,
+                album: r.get(3)?,
+                year: r.get(4)?,
+                genres: r.get(5)?,
+            })
+        })?
+        .collect()
+    }
 }
 
 /// Reorders so the same artist rarely plays twice in a row.

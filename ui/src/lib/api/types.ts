@@ -124,6 +124,23 @@ export interface HardwareVolumeInfo {
   muted: boolean;
 }
 
+/** AI playlists (src-tauri/src/ai.rs). */
+export interface AiStatus {
+  hasKey: boolean;
+  /** Songs in the library. */
+  songs: number;
+  /** Songs sent with a request (big libraries are sampled). */
+  sentSongs: number;
+  /** Rough price of one request, US dollars. */
+  estimateUsd: number;
+}
+export interface AiPlaylistResult {
+  playlistId: number;
+  name: string;
+  description: string;
+  songs: number;
+}
+
 /** What writing tags did (src-tauri/src/tags.rs). */
 export interface TagWriteReport {
   written: number;
@@ -270,6 +287,13 @@ export interface Backend {
   openMiniPlayer(): Promise<void>;
   /** Brings the main window back (and closes the mini player). */
   showMainWindow(): Promise<void>;
+
+  // AI playlists (the key goes to Windows Credential Manager and never comes back)
+  aiStatus(): Promise<AiStatus>;
+  aiSetKey(key: string): Promise<void>;
+  aiRemoveKey(): Promise<void>;
+  /** Asks Claude for a playlist of up to `songs` songs and saves it. */
+  aiPlaylist(prompt: string, songs: number): Promise<AiPlaylistResult>;
 
   // Tag editor
   /** The editable fields of each file, in order. */

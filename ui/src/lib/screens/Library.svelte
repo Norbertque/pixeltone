@@ -13,6 +13,7 @@
   import TrackItem from '../components/TrackItem.svelte';
   import VirtualGrid from '../components/VirtualGrid.svelte';
   import VirtualList from '../components/VirtualList.svelte';
+  import { dialogs } from '../dialogs.svelte';
   import { addMusicFolder, library, PagedRows } from '../library.svelte';
   import { formatDuration } from '../player.svelte';
   import { importPlaylist, newPlaylist } from '../playlists';
@@ -218,6 +219,7 @@
       <span class="label-large count">{playlists.length.toLocaleString()} playlist{playlists.length === 1 ? '' : 's'}</span>
       <div class="toolbar-actions">
         <Button variant="tonal" icon="add" onclick={newPlaylist}>New playlist</Button>
+        <Button variant="tonal" icon="auto_awesome" onclick={() => (dialogs.ai = true)}>Create with AI</Button>
         <Button variant="text" icon="upload_file" onclick={importPlaylist}>Import M3U</Button>
       </div>
     </div>

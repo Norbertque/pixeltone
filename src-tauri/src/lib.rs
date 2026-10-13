@@ -1,5 +1,6 @@
 //! PixelPlayer PC desktop app: wires the Rust core to the Svelte UI through Tauri.
 
+mod ai;
 mod artist_images;
 mod commands;
 mod history;
@@ -9,6 +10,7 @@ mod media;
 #[cfg(windows)]
 mod power;
 mod queue;
+mod secret;
 mod settings;
 mod tags;
 mod tray;
@@ -27,6 +29,7 @@ use pp_lyrics::LyricsService;
 use serde::Serialize;
 use tauri::http::Response;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_window_state::StateFlags;
 use tracing_subscriber::EnvFilter;
 
 use crate::artist_images::ArtistImages;
@@ -209,7 +212,13 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::reveal_main(app);
         }))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Positions and sizes only: a window hidden at exit (mini player, tray) must still
+        // open visibly next time, and the mini player keeps its own frameless look.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::all() - StateFlags::VISIBLE - StateFlags::DECORATIONS)
+                .build(),
+        )
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol("cover", |ctx, request| {
             cover(ctx.app_handle(), request.uri().path())
@@ -311,6 +320,10 @@ pub fn run() {
             tags::tags_write,
             tray::open_mini_player,
             tray::show_main_window,
+            ai::ai_status,
+            ai::ai_set_key,
+            ai::ai_remove_key,
+            ai::ai_playlist,
             library::library_overview,
             library::library_folders,
             library::library_add_folder,

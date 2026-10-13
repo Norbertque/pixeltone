@@ -8,6 +8,7 @@
   import { router } from '../router.svelte';
   import { buildScheme, PALETTE_STYLE_LABELS, PALETTE_STYLES, type PaletteStyle } from '../theme/scheme';
   import { SEED_PRESETS, theme, type ColorSource, type ThemeMode } from '../theme/theme.svelte';
+  import AiSettings from './settings/AiSettings.svelte';
   import AudioOutput from './settings/AudioOutput.svelte';
   import LibrarySettings from './settings/LibrarySettings.svelte';
   import OnlineSettings from './settings/OnlineSettings.svelte';
@@ -133,6 +134,11 @@
   <section class="section" aria-labelledby="library">
     <h2 id="library" class="title-large rounded emphasized"><Icon name="library_music" /> Library</h2>
     <LibrarySettings />
+  </section>
+
+  <section class="section" aria-labelledby="ai">
+    <h2 id="ai" class="title-large rounded emphasized"><Icon name="auto_awesome" /> AI playlists</h2>
+    <AiSettings />
   </section>
 
   <section class="section" aria-labelledby="window">

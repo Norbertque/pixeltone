@@ -9,6 +9,7 @@ authors = ["Norbertque"]
 publish = false
 
 [workspace.dependencies]
+pp-ai = { path = "crates/pp-ai" }
 pp-core = { path = "crates/pp-core" }
 pp-decode = { path = "crates/pp-decode" }
 pp-deezer = { path = "crates/pp-deezer" }

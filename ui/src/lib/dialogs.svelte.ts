@@ -29,6 +29,8 @@ class Dialogs {
   prompt = $state.raw<PromptRequest | null>(null);
   pick = $state.raw<PickRequest | null>(null);
   tags = $state.raw<TagRequest | null>(null);
+  /** The "Create a playlist with AI" dialog is open. */
+  ai = $state(false);
 
   /** Asks for a line of text; null when cancelled. */
   ask(title: string, opts: { label: string; confirm: string; value?: string }): Promise<string | null> {

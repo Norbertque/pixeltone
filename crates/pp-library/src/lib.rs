@@ -368,6 +368,25 @@ fn playlist_name(name: &str) -> Result<String> {
     Ok(name.chars().take(200).collect())
 }
 
+/// A track in brief, for describing the library to an AI.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongSummary {
+    pub id: u32,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub year: Option<i32>,
+    /// "Breakcore; Electronic"
+    pub genres: String,
+}
+
+impl Library {
+    /// Every track in brief, by artist and album.
+    pub fn song_summaries(&self) -> Result<Vec<SongSummary>> {
+        Ok(self.db.lock().song_summaries()?)
+    }
+}
+
 // ── Artist pictures (found online by the app) ────────────────────────────────────
 
 impl Library {

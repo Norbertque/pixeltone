@@ -1,6 +1,8 @@
 //! The notification-area icon (playback controls, the current song as its tooltip) and the
 //! mini player: a small always-on-top window that stands in for the main one.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use pp_engine::{PlaybackStatus, PlayerSnapshot};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -99,7 +101,22 @@ pub fn reveal_main(app: &AppHandle) {
 }
 
 /// Swaps the main window for the mini player.
+///
+/// The window is built on a thread of its own: on Windows, creating a webview from a
+/// synchronous command or an event handler (the tray menu) deadlocks the app.
 pub fn open_mini(app: &AppHandle) {
+    static OPENING: AtomicBool = AtomicBool::new(false);
+    if OPENING.swap(true, Ordering::AcqRel) {
+        return; // a second click while the first is still opening it
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        build_mini(&app);
+        OPENING.store(false, Ordering::Release);
+    });
+}
+
+fn build_mini(app: &AppHandle) {
     let window = match app.get_webview_window(MINI) {
         Some(w) => Ok(w),
         None => WebviewWindowBuilder::new(app, MINI, WebviewUrl::App("index.html#mini".into()))
@@ -126,12 +143,13 @@ pub fn open_mini(app: &AppHandle) {
     }
 }
 
+// Async, so they never run on the thread that owns the windows (see `open_mini`).
 #[tauri::command]
-pub fn open_mini_player(app: AppHandle) {
+pub async fn open_mini_player(app: AppHandle) {
     open_mini(&app);
 }
 
 #[tauri::command]
-pub fn show_main_window(app: AppHandle) {
+pub async fn show_main_window(app: AppHandle) {
     show_main(&app);
 }

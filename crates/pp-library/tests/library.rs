@@ -575,6 +575,24 @@ fn artist_pictures_found_online_replace_album_covers() {
 }
 
 #[test]
+fn songs_in_brief_carry_their_genres() {
+    let fx = fixture();
+    let lib = open(&fx.data);
+    lib.add_folder(&fx.music).unwrap();
+    scan(&lib);
+    let songs = lib.song_summaries().unwrap();
+    assert_eq!(songs.len(), lib.overview().unwrap().track_count as usize);
+    let neon = songs.iter().find(|s| s.title == "Neon Tidepool").unwrap();
+    assert_eq!(neon.album, "Pixel Dreams");
+    assert_eq!(neon.year, Some(2024));
+    assert!(
+        neon.genres.contains("Synthpop") && neon.genres.contains("Electronic"),
+        "{}",
+        neon.genres
+    );
+}
+
+#[test]
 fn favourites_show_up_in_track_lists() {
     let f = fixture();
     let lib = open(&f.data);

@@ -34,6 +34,8 @@ import {
   type PlaylistRow,
   type TagFields,
   type TagWriteReport,
+  type AiStatus,
+  type AiPlaylistResult,
 } from './types';
 
 export const tauriBackend: Backend = {
@@ -153,6 +155,10 @@ export const tauriBackend: Backend = {
   lyricsFind: (track) => invoke<Lyrics | null>('lyrics_find', { track }),
   lyricsSave: (track, text) => invoke<Lyrics>('lyrics_save', { track, text }),
 
+  aiStatus: () => invoke<AiStatus>('ai_status'),
+  aiSetKey: (key) => invoke('ai_set_key', { key }),
+  aiRemoveKey: () => invoke('ai_remove_key'),
+  aiPlaylist: (prompt, songs) => invoke<AiPlaylistResult>('ai_playlist', { prompt, songs }),
   openMiniPlayer: () => invoke('open_mini_player'),
   showMainWindow: () => invoke('show_main_window'),
   tagsRead: (paths) => invoke<TagFields[]>('tags_read', { paths }),

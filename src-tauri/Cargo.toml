@@ -17,6 +17,7 @@ tauri-build = { version = "2.7", features = [] }
 [dependencies]
 crossbeam-channel.workspace = true
 parking_lot.workspace = true
+pp-ai.workspace = true
 pp-core.workspace = true
 pp-decode.workspace = true
 pp-deezer.workspace = true
@@ -35,4 +36,4 @@ tracing-subscriber.workspace = true
 [target.'cfg(windows)'.dependencies]
 pp-media-controls.workspace = true
 pp-output-wasapi.workspace = true
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_System_Power"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Security_Credentials", "Win32_System_Power"] }

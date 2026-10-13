@@ -51,3 +51,6 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
     and skips; *Mini player* swaps the window for the small one (drag it around, it stays on
     top), and its expand button brings the main window back. With *Keep playing in the tray*
     on, closing the window keeps the music going; *Quit* in the tray menu ends it.
+20. AI playlists (needs an Anthropic API key): Settings → AI playlists → save the key;
+    Library → Playlists → *Create with AI*, describe a mood: a playlist of your own songs
+    appears and opens. A wrong key says so instead of hanging.

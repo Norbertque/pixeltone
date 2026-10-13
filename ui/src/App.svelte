@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
 
+  import AiPlaylistDialog from './lib/components/AiPlaylistDialog.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import MiniPlayer from './lib/components/MiniPlayer.svelte';
   import PlaylistPicker from './lib/components/PlaylistPicker.svelte';
@@ -159,6 +160,7 @@
   <PromptDialog />
   <PlaylistPicker />
   <TagEditor />
+  <AiPlaylistDialog />
 </div>
 
 <style>
