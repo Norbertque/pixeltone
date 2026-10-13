@@ -38,6 +38,18 @@ export type { ScanProgress } from './bindings/ScanProgress';
 export type { SearchResults } from './bindings/SearchResults';
 export type { TrackRow } from './bindings/TrackRow';
 export type { TrackSort } from './bindings/TrackSort';
+export type { DayListening } from './bindings/DayListening';
+export type { HomeFeed } from './bindings/HomeFeed';
+export type { ListeningStats } from './bindings/ListeningStats';
+export type { LyricLine } from './bindings/LyricLine';
+export type { Lyrics } from './bindings/Lyrics';
+export type { LyricsSource } from './bindings/LyricsSource';
+export type { PlaylistDetail } from './bindings/PlaylistDetail';
+export type { PlaylistInput } from './bindings/PlaylistInput';
+export type { PlaylistRow } from './bindings/PlaylistRow';
+export type { TopAlbum } from './bindings/TopAlbum';
+export type { TopArtist } from './bindings/TopArtist';
+export type { TopTrack } from './bindings/TopTrack';
 
 import type { DeviceCapabilities } from './bindings/DeviceCapabilities';
 import type { DeviceChange } from './bindings/DeviceChange';
@@ -60,6 +72,11 @@ import type { ScanProgress } from './bindings/ScanProgress';
 import type { SearchResults } from './bindings/SearchResults';
 import type { TrackRow } from './bindings/TrackRow';
 import type { TrackSort } from './bindings/TrackSort';
+import type { HomeFeed } from './bindings/HomeFeed';
+import type { ListeningStats } from './bindings/ListeningStats';
+import type { Lyrics } from './bindings/Lyrics';
+import type { PlaylistDetail } from './bindings/PlaylistDetail';
+import type { PlaylistRow } from './bindings/PlaylistRow';
 
 // ── App layer (src-tauri/src/commands.rs, settings.rs) ──────────────────────────────
 
@@ -70,9 +87,25 @@ export interface DevicePrefs {
   lineLevel: boolean;
   loudnessAcknowledged: boolean;
 }
+export interface Preferences {
+  /** Look lyrics up on LRCLIB when a track has none of its own. */
+  lyricsOnline: boolean;
+  /** Download artist pictures from Deezer. */
+  artistImagesOnline: boolean;
+}
 export interface AppSettings {
   output: OutputSettings;
   devices: { [key in string]?: DevicePrefs };
+  preferences: Preferences;
+}
+
+/** The track lyrics are wanted for (src-tauri/src/userdata.rs). */
+export interface LyricsRequest {
+  path: string;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  durationMs: number | null;
 }
 export interface HardwareVolumeInfo {
   db: number;
@@ -173,6 +206,45 @@ export interface Backend {
   artUrl(hash: string, size: 300 | 1000): string;
   onLibraryScan(cb: (p: ScanProgress) => void): Promise<Unlisten>;
   onLibraryChanged(cb: () => void): Promise<Unlisten>;
+
+  setPreferences(preferences: Preferences): Promise<AppSettings>;
+
+  // Playlists
+  libraryPlaylists(): Promise<PlaylistRow[]>;
+  libraryPlaylist(id: number): Promise<PlaylistDetail | null>;
+  /** Creates a playlist holding `trackIds`; returns its id. */
+  playlistCreate(name: string, trackIds: number[]): Promise<number>;
+  playlistRename(id: number, name: string): Promise<void>;
+  playlistDelete(id: number): Promise<void>;
+  playlistAddTracks(id: number, trackIds: number[]): Promise<void>;
+  /** Removes the entries at `positions` (0-based). */
+  playlistRemove(id: number, positions: number[]): Promise<void>;
+  playlistMove(id: number, from: number, to: number): Promise<void>;
+  /** Imports an M3U/M3U8 file as a new playlist; returns its id. */
+  playlistImport(path: string): Promise<number>;
+  playlistExport(id: number, path: string): Promise<void>;
+  /** Plays a playlist like `playTracks`. */
+  playPlaylist(id: number, start: number | null, shuffle: boolean | null): Promise<void>;
+  /** Native open dialog for .m3u/.m3u8 files; null when cancelled. */
+  pickPlaylistFile(): Promise<string | null>;
+  /** Native save dialog for exporting `name`; null when cancelled. */
+  pickPlaylistSaveFile(name: string): Promise<string | null>;
+
+  // Favourites, history, Home
+  librarySetFavorite(path: string, on: boolean): Promise<void>;
+  libraryIsFavorite(path: string): Promise<boolean>;
+  libraryFavorites(): Promise<TrackRow[]>;
+  /** Listening over the last `days` days, or all time. */
+  libraryStats(days: number | null): Promise<ListeningStats>;
+  libraryHome(): Promise<HomeFeed>;
+  /** Plays today's mix from track `start`. */
+  playDailyMix(start: number | null): Promise<void>;
+
+  // Lyrics
+  /** Lyrics from the file, a saved copy, embedded tags or LRCLIB; null when there are none. */
+  lyricsFind(track: LyricsRequest): Promise<Lyrics | null>;
+  /** Saves lyrics (LRC or plain text) next to the track, or inside the app. */
+  lyricsSave(track: LyricsRequest, text: string): Promise<Lyrics>;
 }
 
 /** File extensions offered in the open dialog (anything FFmpeg decodes also works). */

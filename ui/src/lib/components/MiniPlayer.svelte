@@ -58,7 +58,8 @@
     {/if}
 
     <div class="end">
-      <IconButton icon="queue_music" label="Show the queue" onclick={() => router.toggleQueue()} />
+      <IconButton icon="lyrics" label="Show the lyrics" onclick={() => router.togglePanel('lyrics')} />
+      <IconButton icon="queue_music" label="Show the queue" onclick={() => router.togglePanel('queue')} />
       <IconButton icon="expand_less" label="Open Now Playing" onclick={() => router.setNowPlaying(true)} />
     </div>
   </div>

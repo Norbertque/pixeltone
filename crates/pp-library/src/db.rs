@@ -13,6 +13,8 @@ use crate::model::{
 };
 use crate::tags::ScannedTrack;
 
+mod user;
+
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE folders(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, added_at INTEGER NOT NULL);
@@ -83,7 +85,7 @@ const ROLE_ALBUM_ARTIST: i64 = 1;
 
 const TRACK_COLUMNS: &str = "t.id, t.title, t.artist, a.title, t.album_id, t.track_no, t.disc_no, \
     t.year, t.duration_ms, t.codec, t.sample_rate, t.bits, t.lossless, t.dsd, \
-    COALESCE(t.cover, a.cover), t.path";
+    COALESCE(t.cover, a.cover), t.path, EXISTS(SELECT 1 FROM favorites fv WHERE fv.path = t.path)";
 
 const ALBUM_SELECT: &str = "SELECT a.id, a.title, a.artist, a.year, COUNT(t.id), \
     COALESCE(SUM(t.duration_ms), 0), a.cover, a.added_at \
@@ -137,6 +139,7 @@ fn track_row(r: &Row) -> rusqlite::Result<TrackRow> {
         dsd: r.get(13)?,
         cover: r.get(14)?,
         path: r.get(15)?,
+        favorite: r.get(16)?,
     })
 }
 
@@ -259,6 +262,12 @@ impl Db {
             let tx = self.conn.transaction()?;
             tx.execute_batch(SCHEMA)?;
             tx.execute_batch("PRAGMA user_version = 1")?;
+            tx.commit()?;
+        }
+        if version < 2 {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(user::SCHEMA_V2)?;
+            tx.execute_batch("PRAGMA user_version = 2")?;
             tx.commit()?;
         }
         Ok(())
@@ -814,6 +823,28 @@ mod tests {
         assert_eq!(fts_query("abba wat").as_deref(), Some("\"abba\"* \"wat\"*"));
         assert_eq!(fts_query("  \" ").as_deref(), None);
         assert_eq!(fts_query("say \"hi\"").as_deref(), Some("\"say\"* \"hi\"*"));
+    }
+
+    #[test]
+    fn version_1_databases_gain_the_user_tables() {
+        let dir = std::env::temp_dir().join(format!("pp-db-migrate-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("v1.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA).unwrap();
+            conn.execute_batch("PRAGMA user_version = 1").unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let version: i64 = db
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 2);
+        db.set_favorite("/a.flac", true, 1).unwrap();
+        assert!(db.is_favorite("/a.flac").unwrap());
+        drop(db);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

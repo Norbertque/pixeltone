@@ -38,7 +38,16 @@
         <span class="title title-small">{track.title}</span>
         <span class="sub body-small">{subtitle}</span>
       </span>
-      <span class="format label-small">{formatShort(track)}</span>
+      {#if track.favorite}
+        <span class="fav" aria-label="Favourite"><Icon name="favorite" fill size={16} /></span>
+      {:else}
+        <span></span>
+      {/if}
+      {#if track.codec}
+        <span class="format label-small">{formatShort(track)}</span>
+      {:else}
+        <span></span>
+      {/if}
       <span class="time body-medium">{formatTime(track.durationMs)}</span>
     </button>
     <span class="more">
@@ -72,7 +81,7 @@
   }
   .main {
     display: grid;
-    grid-template-columns: 40px 1fr auto auto;
+    grid-template-columns: 40px 1fr auto auto auto;
     align-items: center;
     gap: 16px;
     min-width: 0;
@@ -131,6 +140,10 @@
   }
   .sub {
     color: var(--md-sys-color-on-surface-variant);
+  }
+  .fav {
+    display: grid;
+    color: var(--md-sys-color-primary);
   }
   .format {
     padding: 2px 8px;

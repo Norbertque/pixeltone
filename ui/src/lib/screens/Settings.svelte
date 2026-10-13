@@ -10,6 +10,7 @@
   import { SEED_PRESETS, theme, type ColorSource, type ThemeMode } from '../theme/theme.svelte';
   import AudioOutput from './settings/AudioOutput.svelte';
   import LibrarySettings from './settings/LibrarySettings.svelte';
+  import OnlineSettings from './settings/OnlineSettings.svelte';
 
   const MODES = [
     { value: 'system', label: 'System', icon: 'brightness_auto' },
@@ -125,6 +126,11 @@
   <section class="section" aria-labelledby="library">
     <h2 id="library" class="title-large rounded emphasized"><Icon name="library_music" /> Library</h2>
     <LibrarySettings />
+  </section>
+
+  <section class="section" aria-labelledby="online">
+    <h2 id="online" class="title-large rounded emphasized"><Icon name="public" /> Online</h2>
+    <OnlineSettings />
   </section>
 
   <button class="section link" onclick={() => (help.shortcuts = true)}>

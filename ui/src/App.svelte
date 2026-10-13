@@ -3,6 +3,8 @@
 
   import ContextMenu from './lib/components/ContextMenu.svelte';
   import MiniPlayer from './lib/components/MiniPlayer.svelte';
+  import PlaylistPicker from './lib/components/PlaylistPicker.svelte';
+  import PromptDialog from './lib/components/PromptDialog.svelte';
   import NavBar from './lib/components/NavBar.svelte';
   import NavRail from './lib/components/NavRail.svelte';
   import NowPlaying from './lib/components/NowPlaying.svelte';
@@ -14,16 +16,27 @@
   import About from './lib/screens/About.svelte';
   import AlbumScreen from './lib/screens/AlbumScreen.svelte';
   import ArtistScreen from './lib/screens/ArtistScreen.svelte';
+  import FavoritesScreen from './lib/screens/FavoritesScreen.svelte';
   import FolderScreen from './lib/screens/FolderScreen.svelte';
   import GenreScreen from './lib/screens/GenreScreen.svelte';
   import Home from './lib/screens/Home.svelte';
   import Library from './lib/screens/Library.svelte';
+  import PlaylistScreen from './lib/screens/PlaylistScreen.svelte';
   import Search from './lib/screens/Search.svelte';
   import Settings from './lib/screens/Settings.svelte';
+  import StatsScreen from './lib/screens/StatsScreen.svelte';
   import { type ShortcutAction, shortcutFor } from './lib/shortcuts';
   import { theme } from './lib/theme/theme.svelte';
 
-  const SCREENS = { home: Home, search: Search, library: Library, settings: Settings, about: About };
+  const SCREENS = {
+    home: Home,
+    search: Search,
+    library: Library,
+    settings: Settings,
+    about: About,
+    favorites: FavoritesScreen,
+    stats: StatsScreen,
+  };
   const route = $derived(router.route);
   const routeKey = $derived(JSON.stringify(router.route));
 
@@ -51,7 +64,7 @@
       case 'repeat':
         return player.cycleRepeat();
       case 'queue':
-        return void router.toggleQueue();
+        return void router.togglePanel('queue');
       case 'search':
         if (router.screen === 'search') document.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
         else void router.go('search');
@@ -106,6 +119,8 @@
             <GenreScreen id={route.id} />
           {:else if route.screen === 'folder'}
             <FolderScreen path={route.path} />
+          {:else if route.screen === 'playlist'}
+            <PlaylistScreen id={route.id} />
           {:else}
             {@const Screen = SCREENS[route.screen]}
             <Screen />
@@ -130,6 +145,8 @@
   <Snackbar />
   <ContextMenu />
   <ShortcutsDialog />
+  <PromptDialog />
+  <PlaylistPicker />
 </div>
 
 <style>

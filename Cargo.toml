@@ -13,6 +13,7 @@ pp-core = { path = "crates/pp-core" }
 pp-decode = { path = "crates/pp-decode" }
 pp-engine = { path = "crates/pp-engine" }
 pp-library = { path = "crates/pp-library" }
+pp-lyrics = { path = "crates/pp-lyrics" }
 pp-media-controls = { path = "crates/pp-media-controls" }
 pp-output-wasapi = { path = "crates/pp-output-wasapi" }
 

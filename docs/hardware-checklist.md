@@ -27,3 +27,8 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
 11. DSD64/128: DSD indicator on a DoP-capable DAC; PCM conversion elsewhere. *(M5)*
 12. Queue: right-click a song → *Play next* / *Add to queue*; drag rows in the queue panel;
     quit mid-song and start the app again: same queue and track, paused at the same spot.
+13. Lyrics: a song with synced lyrics (LRCLIB, or an `.lrc` next to it) highlights the line
+    being sung; *Edit* → *Stamp* through a few lines → *Save* writes an `.lrc` next to it.
+14. Playlists: import an M3U8 exported by another player (relative paths too), reorder by
+    dragging, export it again; after a few songs, Home shows *Recently played* and the stats
+    count them.

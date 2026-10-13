@@ -20,6 +20,7 @@ pp-core.workspace = true
 pp-decode.workspace = true
 pp-engine.workspace = true
 pp-library.workspace = true
+pp-lyrics.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12", features = [] }

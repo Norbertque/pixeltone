@@ -9,7 +9,10 @@ class Player {
   positionMs = $state(0);
   /** ARGB seed from the current cover, for theming. */
   artworkSeed = $state<number | null>(null);
+  /** The current track is one of the favourites. */
+  favorite = $state(false);
   #positionAt = 0;
+  #favoritePath: string | null = null;
 
   readonly status = $derived(this.snapshot?.status ?? 'stopped');
   readonly playing = $derived(this.status === 'playing');
@@ -44,6 +47,30 @@ class Player {
     this.setPosition(snapshot.positionMs);
     const cover = snapshot.track?.coverKey ?? null;
     if (cover !== previousCover) this.#updateSeed();
+    const path = snapshot.track?.path ?? null;
+    if (path !== this.#favoritePath) {
+      this.#favoritePath = path;
+      void this.refreshFavorite();
+    }
+  }
+
+  async refreshFavorite(): Promise<void> {
+    const path = this.#favoritePath;
+    const on = path ? await api.libraryIsFavorite(path).catch(() => false) : false;
+    if (path === this.#favoritePath) this.favorite = on;
+  }
+
+  async toggleFavorite(): Promise<void> {
+    const path = this.track?.path;
+    if (!path) return;
+    const on = !this.favorite;
+    this.favorite = on;
+    try {
+      await api.librarySetFavorite(path, on);
+    } catch (e) {
+      this.favorite = !on;
+      toasts.show(String(e), 'error');
+    }
   }
 
   async #updateSeed(): Promise<void> {
@@ -98,6 +125,7 @@ export async function initPlayer(): Promise<void> {
   await api.onPlayerState((s) => player.apply(s));
   await api.onPosition((ms) => player.setPosition(ms));
   await api.onPlayerError((e) => toasts.show(e.message, e.code === 'trackFailed' ? 'warning' : 'error'));
+  await api.onLibraryChanged(() => void player.refreshFavorite());
   player.apply(await api.playerState());
 }
 

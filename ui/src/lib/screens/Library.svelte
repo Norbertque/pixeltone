@@ -1,17 +1,21 @@
 <script lang="ts">
-  import { api, type AlbumSort, type GenreRow, type TrackSort } from '../api';
+  import { untrack } from 'svelte';
+
+  import { api, type AlbumSort, type GenreRow, type PlaylistRow, type TrackSort } from '../api';
   import AlbumCard from '../components/AlbumCard.svelte';
   import ArtistItem from '../components/ArtistItem.svelte';
   import Button from '../components/Button.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import GenreCard from '../components/GenreCard.svelte';
   import Icon from '../components/Icon.svelte';
+  import PlaylistCard from '../components/PlaylistCard.svelte';
   import ScreenHeader from '../components/ScreenHeader.svelte';
   import TrackItem from '../components/TrackItem.svelte';
   import VirtualGrid from '../components/VirtualGrid.svelte';
   import VirtualList from '../components/VirtualList.svelte';
   import { addMusicFolder, library, PagedRows } from '../library.svelte';
   import { formatDuration } from '../player.svelte';
+  import { importPlaylist, newPlaylist } from '../playlists';
   import { router, type LibraryTab } from '../router.svelte';
   import FolderView from './FolderView.svelte';
 
@@ -46,20 +50,39 @@
   const o = $derived(library.overview);
   const tab = $derived(router.libraryTab);
 
-  // New pagers whenever the sort or the library changes.
+  // A pager per sort order. When the library or user data changes, the pagers reload in
+  // place: rows stay on screen until their new versions arrive (no flash on a heart toggle).
   const songs = $derived.by(() => {
-    void library.version;
     const sort = trackSort;
-    return new PagedRows(o?.trackCount ?? 0, (offset, limit) => api.libraryTracks(sort, offset, limit));
+    const count = untrack(() => o?.trackCount ?? 0);
+    return new PagedRows(count, (offset, limit) => api.libraryTracks(sort, offset, limit));
   });
   const albums = $derived.by(() => {
-    void library.version;
     const sort = albumSort;
-    return new PagedRows(o?.albumCount ?? 0, (offset, limit) => api.libraryAlbums(sort, offset, limit));
+    const count = untrack(() => o?.albumCount ?? 0);
+    return new PagedRows(count, (offset, limit) => api.libraryAlbums(sort, offset, limit));
   });
-  const artists = $derived.by(() => {
+  const artists = new PagedRows(0, (offset, limit) => api.libraryArtists(offset, limit));
+
+  $effect(() => {
     void library.version;
-    return new PagedRows(o?.artistCount ?? 0, (offset, limit) => api.libraryArtists(offset, limit));
+    const counts = [o?.trackCount ?? 0, o?.albumCount ?? 0, o?.artistCount ?? 0] as const;
+    untrack(() => {
+      songs.refresh(counts[0]);
+      albums.refresh(counts[1]);
+      artists.refresh(counts[2]);
+    });
+  });
+
+  let playlists = $state<PlaylistRow[]>([]);
+  let favourites = $state<{ count: number; covers: string[] }>({ count: 0, covers: [] });
+  $effect(() => {
+    void library.version;
+    if (tab !== 'playlists') return;
+    void api.libraryPlaylists().then((p) => (playlists = p));
+    void api.libraryFavorites().then((f) => {
+      favourites = { count: f.length, covers: [...new Set(f.map((t) => t.cover).filter((c): c is string => !!c))].slice(0, 4) };
+    });
   });
 
   $effect(() => {
@@ -118,7 +141,7 @@
 </div>
 
 <div id="library-panel" role="tabpanel" aria-labelledby="tab-{tab}" class="panel">
-  {#if !o || (o.trackCount === 0 && tab !== 'folders')}
+  {#if !o || (o.trackCount === 0 && tab !== 'folders' && tab !== 'playlists')}
     {#if o && o.folders.length === 0}
       <EmptyState
         icon="library_music"
@@ -191,11 +214,19 @@
   {:else if tab === 'folders'}
     <FolderView path={null} />
   {:else}
-    <EmptyState
-      icon="queue_music"
-      title="Playlists are coming"
-      body="Creating and importing playlists arrives in a later update."
-    />
+    <div class="toolbar">
+      <span class="label-large count">{playlists.length.toLocaleString()} playlist{playlists.length === 1 ? '' : 's'}</span>
+      <div class="toolbar-actions">
+        <Button variant="tonal" icon="add" onclick={newPlaylist}>New playlist</Button>
+        <Button variant="text" icon="upload_file" onclick={importPlaylist}>Import M3U</Button>
+      </div>
+    </div>
+    <div class="playlists">
+      <PlaylistCard {favourites} />
+      {#each playlists as p (p.id)}
+        <PlaylistCard playlist={p} />
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -268,6 +299,17 @@
     background: var(--md-sys-color-surface-container-high);
     color: var(--md-sys-color-on-surface);
     cursor: pointer;
+  }
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .playlists {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 20px;
+    padding-bottom: 32px;
   }
   .genres {
     display: grid;

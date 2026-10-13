@@ -1,6 +1,7 @@
 //! PixelPlayer PC desktop app: wires the Rust core to the Svelte UI through Tauri.
 
 mod commands;
+mod history;
 mod library;
 #[cfg(windows)]
 mod media;
@@ -8,6 +9,7 @@ mod media;
 mod power;
 mod queue;
 mod settings;
+mod userdata;
 #[cfg(windows)]
 mod window_theme;
 
@@ -18,11 +20,13 @@ use parking_lot::Mutex;
 use pp_core::{DeviceWatch, OutputBackend};
 use pp_engine::{Engine, EngineEvent};
 use pp_library::Library;
+use pp_lyrics::LyricsService;
 use serde::Serialize;
 use tauri::http::Response;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tracing_subscriber::EnvFilter;
 
+use crate::history::History;
 use crate::queue::QueueStore;
 use crate::settings::AppSettings;
 
@@ -33,6 +37,8 @@ pub struct AppState {
     pub settings: Mutex<AppSettings>,
     pub settings_path: PathBuf,
     pub queue_store: QueueStore,
+    pub history: History,
+    pub lyrics: Arc<LyricsService>,
     /// Device notifications stay on while this is held.
     pub device_watch: Mutex<Option<DeviceWatch>>,
     #[cfg(windows)]
@@ -137,6 +143,7 @@ fn forward(app: &AppHandle, event: EngineEvent) {
             power::keep_awake(snapshot.status == pp_engine::PlaybackStatus::Playing);
             if let Some(state) = &state {
                 state.queue_store.on_state(&snapshot);
+                state.history.on_state(&snapshot);
                 #[cfg(windows)]
                 if let Some(m) = &*state.media.lock() {
                     m.send(media::Update::State(snapshot.clone()));
@@ -147,6 +154,7 @@ fn forward(app: &AppHandle, event: EngineEvent) {
         EngineEvent::Position { position_ms } => {
             if let Some(state) = &state {
                 state.queue_store.on_position();
+                state.history.on_position(position_ms);
                 #[cfg(windows)]
                 if let Some(m) = &*state.media.lock() {
                     m.send(media::Update::Position(position_ms));
@@ -217,10 +225,17 @@ pub fn run() {
             }
             let queue_store = QueueStore::start(app.handle(), queue_path);
             library::start(app.handle(), &library);
+            let lyrics = Arc::new(LyricsService::new(
+                app.path().app_local_data_dir()?.join("lyrics"),
+                app.path().app_cache_dir()?.join("lyrics"),
+            ));
+            lyrics.set_online(settings.preferences.lyrics_online);
             app.manage(AppState {
                 engine,
                 backend,
+                history: History::new(library.clone()),
                 library,
+                lyrics,
                 settings: Mutex::new(settings),
                 settings_path,
                 queue_store,
@@ -279,6 +294,26 @@ pub fn run() {
             queue::queue_add_tracks,
             queue::queue_add_files,
             queue::player_set_shuffle,
+            commands::set_preferences,
+            userdata::library_playlists,
+            userdata::library_playlist,
+            userdata::playlist_create,
+            userdata::playlist_rename,
+            userdata::playlist_delete,
+            userdata::playlist_add_tracks,
+            userdata::playlist_remove,
+            userdata::playlist_move,
+            userdata::playlist_import,
+            userdata::playlist_export,
+            userdata::play_playlist,
+            userdata::library_set_favorite,
+            userdata::library_is_favorite,
+            userdata::library_favorites,
+            userdata::library_stats,
+            userdata::library_home,
+            userdata::play_daily_mix,
+            userdata::lyrics_find,
+            userdata::lyrics_save,
         ])
         .build(tauri::generate_context!())
         .expect("error while building PixelPlayer PC")
@@ -287,6 +322,7 @@ pub fn run() {
                 && let Some(state) = app.try_state::<AppState>()
             {
                 state.queue_store.save_now(&state.engine);
+                state.history.flush();
             }
         });
 }

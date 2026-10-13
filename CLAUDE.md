@@ -49,6 +49,18 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Device notifications: `OutputBackend::watch_devices` → `Engine::device_changed` and the
   `output://devices` event.
 
+## User data and lyrics (M4)
+
+- Playlists, favourites and play history are schema v2 of the library DB (`db/user.rs`),
+  keyed by file path, never touched by scans; playlist entries outside the library come back
+  as `TrackRow` with id 0 (the UI hides album/folder actions for them).
+- A play counts after half the track or 4 min, and at least 30 s (`src-tauri/src/history.rs`).
+- Lyrics order (`pp-lyrics`): `.lrc` next to the file → copy saved in app data → embedded tag
+  → LRCLIB (cached in app cache; misses retried after 7 days). Saving writes the `.lrc` next
+  to the file, or into app data if the folder is read-only.
+- Chart marks use `--pp-chart-mark` (primary palette tone 40 light / 58 dark); keep
+  `theme/chart.test.ts` passing when touching the theme.
+
 ## Rules
 
 - **Bit-perfect policy** (`docs/exclusive-mode.md`) is a product promise: never add

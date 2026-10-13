@@ -74,12 +74,23 @@ export function queuedMessage(titles: readonly string[], next: boolean, label?: 
   return next ? `${what} will play next` : `Added ${what} to the queue`;
 }
 
-/** "Play next" (`next`) or "Add to queue". */
+/** "Play next" (`next`) or "Add to queue". Rows outside the library (id 0) go by path. */
 export async function queueRows(rows: readonly TrackRow[], next: boolean, label?: string): Promise<void> {
   if (rows.length === 0) return;
   try {
-    await api.queueAddTracks(ids(rows), next);
+    if (rows.every((r) => r.id !== 0)) await api.queueAddTracks(ids(rows), next);
+    else await api.queueAddFiles(rows.map((r) => r.path), next);
     toasts.show(queuedMessage(rows.map((r) => r.title), next, label));
+  } catch (e) {
+    toasts.show(String(e), 'error');
+  }
+}
+
+/** Adds to or removes from the favourites. */
+export async function setFavorite(track: Pick<TrackRow, 'path' | 'title'>, on: boolean): Promise<void> {
+  try {
+    await api.librarySetFavorite(track.path, on);
+    toasts.show(on ? `Added “${track.title}” to your favourites` : `Removed “${track.title}” from your favourites`);
   } catch (e) {
     toasts.show(String(e), 'error');
   }

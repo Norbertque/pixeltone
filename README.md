@@ -15,11 +15,24 @@ sample rate and bit depth.
   can undo; queue and position survive a restart; media keys and the Windows media flyout;
   click-free fades on pause and seek; follows device changes (see the keyboard shortcuts
   with `?`).
+- **Lyrics:** synced lyrics that follow the song (click a line to jump there), from an
+  `.lrc` file next to the song, the file's tags or LRCLIB; edit and sync them yourself.
+- **Playlists & favourites:** playlists with drag-to-reorder and M3U/M3U8 import/export, a
+  heart for favourites, play history with listening stats and a daily mix on Home.
 - **UI (Svelte 5 in WebView2 via Tauri 2):** Material You colours from the album art, M3
   Expressive shapes and spring motion, Google Sans Flex.
 
 See [`docs/exclusive-mode.md`](docs/exclusive-mode.md) for exactly what "bit-perfect" means
 here, and [`docs/hardware-checklist.md`](docs/hardware-checklist.md) for testing with a DAC.
+
+## Online features
+
+Everything works offline. Two lookups use the internet, and both can be turned off in
+**Settings → Online**:
+
+- **Lyrics (LRCLIB):** for songs without lyrics of their own, the title, artist, album and
+  length are sent to [lrclib.net](https://lrclib.net). Answers (and "not found") are cached.
+- **Artist pictures (Deezer):** *(coming with M6)*
 
 ## Getting builds
 
@@ -56,7 +69,8 @@ FFmpeg's Windows headers, a C compiler for the target and a resource-compiler st
 | `crates/pp-core` | Formats, negotiator, PCM packing, gain, badge, output traits |
 | `crates/pp-decode` | FFmpeg decoder (via `rsmpeg`), tags, cover art |
 | `crates/pp-engine` | Queue, gapless pipeline, transport fades, engine thread, capture backend for tests |
-| `crates/pp-library` | Library: scanner, tag reading, SQLite + FTS5 search, thumbnails, folder watcher |
+| `crates/pp-library` | Library: scanner, tags, SQLite + FTS5 search, thumbnails, watcher; playlists, favourites, play history |
+| `crates/pp-lyrics` | Lyrics: LRC parsing, `.lrc` files, embedded tags, LRCLIB with a disk cache |
 | `crates/pp-media-controls` | Media keys and the Windows media flyout (Windows) |
 | `crates/pp-output-wasapi` | WASAPI backend and device notifications (Windows) |
 | `src-tauri` | The app: commands, events, cover protocol, settings, library glue |

@@ -164,6 +164,26 @@ pub fn set_output_settings(
     Ok(updated)
 }
 
+/// Replaces the app preferences (online lookups etc.).
+#[tauri::command]
+pub fn set_preferences(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preferences: crate::settings::Preferences,
+) -> Result<AppSettings, String> {
+    let updated = {
+        let mut s = state.settings.lock();
+        s.preferences = preferences;
+        s.clone()
+    };
+    updated
+        .save(&state.settings_path)
+        .map_err(|e| e.to_string())?;
+    state.lyrics.set_online(updated.preferences.lyrics_online);
+    crate::emit_settings(&app, &updated);
+    Ok(updated)
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HardwareVolumeInfo {

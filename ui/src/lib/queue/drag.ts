@@ -1,3 +1,10 @@
+/** What a row's drag handle gets from `ReorderList` (spread it onto the handle). */
+export interface HandleProps {
+  'data-handle': string;
+  onpointerdown: (e: PointerEvent) => void;
+  onkeydown: (e: KeyboardEvent) => void;
+}
+
 /**
  * Drag-to-reorder maths for fixed-height rows. While row `from` is dragged, it follows the
  * pointer and the rows it passes slide one row up or down to show where it will land.

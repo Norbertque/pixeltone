@@ -9,12 +9,21 @@ import type {
   AlbumSort,
   ArtistDetail,
   ArtistRow,
+  DayListening,
   FolderListing,
   GenreDetail,
   GenreRow,
+  HomeFeed,
   LibraryFolder,
   LibraryOverview,
+  ListeningStats,
+  Lyrics,
+  PlaylistDetail,
+  PlaylistRow,
   SearchResults,
+  TopAlbum,
+  TopArtist,
+  TopTrack,
   TrackRow,
   TrackSort,
 } from './types';
@@ -100,6 +109,7 @@ for (let a = 1; a <= 170; a++) {
       ...format,
       cover: `m${a}`,
       path: `${dir}\\${String(n).padStart(2, '0')}.${format.codec === 'mp3' ? 'mp3' : format.dsd ? 'dsf' : 'flac'}`,
+      favorite: false,
     });
   }
   albums.push({
@@ -276,5 +286,236 @@ export const mockLibrary = {
   },
   track(id: number): TrackRow | undefined {
     return tracks.find((t) => t.id === id);
+  },
+};
+
+// ── User data: favourites, playlists, play history, lyrics ──────────────────────────
+
+const DAY_MS = 86_400_000;
+const trackByPath = new Map(tracks.map((t) => [t.path, t]));
+const favoriteOrder: string[] = [];
+
+interface MockPlaylist {
+  id: number;
+  name: string;
+  paths: string[];
+  updatedAt: number;
+}
+let lastPlaylistId = 0;
+const playlists: MockPlaylist[] = [];
+{
+  const h = rng(11);
+  const pickPaths = (n: number) => Array.from({ length: n }, () => tracks[Math.floor(h() * tracks.length)]!.path);
+  for (const [name, n] of [['Late night', 24], ['Running', 40], ['Sunday morning', 12]] as const) {
+    playlists.push({ id: ++lastPlaylistId, name, paths: pickPaths(n), updatedAt: 1_760_000_000 + lastPlaylistId * 9000 });
+  }
+}
+
+interface Play {
+  path: string;
+  at: number;
+  ms: number;
+}
+
+/** A year of synthetic plays, mostly from a handful of albums, more in the evenings. */
+const plays: Play[] = (() => {
+  const h = rng(7);
+  const loved = [1, 4, 9, 13, 21, 34].map((a) => tracks.filter((t) => t.albumId === a));
+  const out: Play[] = [];
+  const now = Date.now();
+  for (let d = 365; d >= 0; d--) {
+    const count = Math.floor(h() * h() * 26);
+    for (let i = 0; i < count; i++) {
+      const pool = h() < 0.6 ? loved[Math.floor(h() * loved.length)]! : tracks;
+      const t = pool[Math.floor(h() * pool.length)]!;
+      const hour = Math.floor(8 + h() * h() * 16);
+      const at = now - d * DAY_MS - (new Date(now).getHours() - hour) * 3_600_000;
+      if (at <= now) out.push({ path: t.path, at, ms: Math.round(t.durationMs * (0.55 + h() * 0.45)) });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at);
+})();
+
+function localDay(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function playlistRow(p: MockPlaylist): PlaylistRow {
+  const rows = p.paths.map((path) => trackByPath.get(path)).filter((t): t is TrackRow => !!t);
+  const covers = [...new Set(rows.map((t) => t.cover).filter((c): c is string => !!c))].slice(0, 4);
+  return {
+    id: p.id,
+    name: p.name,
+    trackCount: p.paths.length,
+    durationMs: rows.reduce((s, t) => s + t.durationMs, 0),
+    covers,
+    updatedAt: p.updatedAt,
+  };
+}
+
+function top<K>(items: readonly Play[], key: (p: Play) => K | undefined, n: number): { key: K; plays: number; ms: number }[] {
+  const acc = new Map<K, { plays: number; ms: number }>();
+  for (const p of items) {
+    const k = key(p);
+    if (k === undefined) continue;
+    const e = acc.get(k) ?? { plays: 0, ms: 0 };
+    e.plays += 1;
+    e.ms += p.ms;
+    acc.set(k, e);
+  }
+  return [...acc]
+    .sort(([, a], [, b]) => b.plays - a.plays || b.ms - a.ms)
+    .slice(0, n)
+    .map(([key, e]) => ({ key, ...e }));
+}
+
+const albumArtist = (albumId: number) => albums.find((a) => a.row.id === albumId)?.artistId;
+
+const DEMO_LRC = [
+  '[00:00.00]',
+  '[00:12.40]Salt on the glass, the harbour lights hum',
+  '[00:18.90]Every wave a pixel, every pixel a drum',
+  '[00:25.30]We drift where the cables go under the sea',
+  '[00:31.80]And the tide keeps the time for you and me',
+  '[00:38.20]',
+  '[00:44.60]Neon tidepool, glowing in the deep',
+  '[00:50.90]Holding all the colours that the city couldn\'t keep',
+  '[00:57.40]Neon tidepool, slow and bright and blue',
+  '[01:03.80]I would light the whole coastline for you',
+  '[01:10.20]',
+  '[01:22.00]Static in the shallows, a signal from the shore',
+  '[01:28.50]Counting every echo till it isn\'t there no more',
+].join('\n');
+
+const savedLyrics = new Map<string, string>();
+
+function lyricsFromText(text: string, source: Lyrics['source']): Lyrics {
+  const lines = text.split('\n').map((raw) => {
+    const m = /^\[(\d+):(\d+)(?:\.(\d+))?\](.*)$/.exec(raw.trim());
+    if (!m) return { timeMs: null, text: raw.trim() };
+    const frac = (m[3] ?? '0').padEnd(3, '0').slice(0, 3);
+    return { timeMs: (Number(m[1]) * 60 + Number(m[2])) * 1000 + Number(frac), text: m[4]!.trim() };
+  });
+  const synced = lines.some((l) => l.timeMs !== null);
+  return { source, synced, instrumental: false, lines: synced ? lines.filter((l) => l.timeMs !== null) : lines, text };
+}
+
+export const mockUserData = {
+  isFavorite(path: string): boolean {
+    return favoriteOrder.includes(path);
+  },
+  setFavorite(path: string, on: boolean): void {
+    const i = favoriteOrder.indexOf(path);
+    if (on && i < 0) favoriteOrder.unshift(path);
+    if (!on && i >= 0) favoriteOrder.splice(i, 1);
+    const row = trackByPath.get(path);
+    if (row) row.favorite = on;
+  },
+  favorites(): TrackRow[] {
+    return favoriteOrder.map((p) => trackByPath.get(p)).filter((t): t is TrackRow => !!t);
+  },
+
+  playlists(): PlaylistRow[] {
+    return [...playlists].sort((a, b) => b.updatedAt - a.updatedAt).map(playlistRow);
+  },
+  playlist(id: number): PlaylistDetail | null {
+    const p = playlists.find((x) => x.id === id);
+    if (!p) return null;
+    return { playlist: playlistRow(p), tracks: p.paths.map((path) => trackByPath.get(path)).filter((t): t is TrackRow => !!t) };
+  },
+  createPlaylist(name: string, trackIds: number[]): number {
+    const paths = trackIds.map((id) => tracks.find((t) => t.id === id)?.path).filter((p): p is string => !!p);
+    playlists.push({ id: ++lastPlaylistId, name: name.trim(), paths, updatedAt: Date.now() / 1000 });
+    return lastPlaylistId;
+  },
+  editPlaylist(id: number, edit: (p: MockPlaylist) => void): void {
+    const p = playlists.find((x) => x.id === id);
+    if (!p) throw new Error('the playlist no longer exists');
+    edit(p);
+    p.updatedAt = Date.now() / 1000;
+  },
+  deletePlaylist(id: number): void {
+    const i = playlists.findIndex((x) => x.id === id);
+    if (i >= 0) playlists.splice(i, 1);
+  },
+  pathsOf(trackIds: number[]): string[] {
+    return trackIds.map((id) => tracks.find((t) => t.id === id)?.path).filter((p): p is string => !!p);
+  },
+
+  stats(days: number | null): ListeningStats {
+    const since = days === null ? 0 : Date.now() - days * DAY_MS;
+    const ps = plays.filter((p) => p.at >= since);
+    const topTracks: TopTrack[] = top(ps, (p) => p.path, 20).flatMap(({ key, plays, ms }) => {
+      const track = trackByPath.get(key);
+      return track ? [{ track, plays, ms }] : [];
+    });
+    const topArtists: TopArtist[] = top(ps, (p) => albumArtist(trackByPath.get(p.path)?.albumId ?? -1), 20).map(
+      ({ key, plays, ms }) => ({ artist: artistRow(key), plays, ms }),
+    );
+    const topAlbums: TopAlbum[] = top(ps, (p) => trackByPath.get(p.path)?.albumId, 20).flatMap(({ key, plays, ms }) => {
+      const album = albums.find((a) => a.row.id === key)?.row;
+      return album ? [{ album, plays, ms }] : [];
+    });
+    const perDay = new Map<string, number>();
+    const perHour = new Array<number>(24).fill(0);
+    for (const p of ps) {
+      const day = localDay(p.at);
+      perDay.set(day, (perDay.get(day) ?? 0) + p.ms);
+      perHour[new Date(p.at).getHours()]! += p.ms;
+    }
+    const days_: DayListening[] = [...perDay].map(([day, ms]) => ({ day, ms }));
+    return {
+      days,
+      totalMs: ps.reduce((s, p) => s + p.ms, 0),
+      plays: ps.length,
+      distinctTracks: new Set(ps.map((p) => p.path)).size,
+      topTracks,
+      topArtists,
+      topAlbums,
+      perDay: days_,
+      perHour,
+    };
+  },
+
+  dailyMix(): TrackRow[] {
+    const h = rng(Number(localDay(Date.now()).replaceAll('-', '')));
+    const favouriteArtists = new Set(this.stats(60).topArtists.slice(0, 8).map((a) => a.artist.id));
+    const fromArtists = tracks.filter((t) => favouriteArtists.has(albumArtist(t.albumId) ?? -1));
+    const chosen = new Set<TrackRow>();
+    while (chosen.size < 20 && fromArtists.length) chosen.add(fromArtists[Math.floor(h() * fromArtists.length)]!);
+    while (chosen.size < 40) chosen.add(tracks[Math.floor(h() * tracks.length)]!);
+    return [...chosen].sort(() => h() - 0.5);
+  },
+
+  home(): HomeFeed {
+    const recent = [...plays].reverse();
+    const recentTracks = [...new Set(recent.map((p) => p.path))].slice(0, 12).flatMap((p) => trackByPath.get(p) ?? []);
+    const albumIds = [...new Set(recent.map((p) => trackByPath.get(p.path)?.albumId).filter((a): a is number => a !== undefined))];
+    return {
+      recentTracks,
+      recentAlbums: albumIds.slice(0, 12).flatMap((id) => albums.find((a) => a.row.id === id)?.row ?? []),
+      topArtists: this.stats(30).topArtists.slice(0, 8),
+      dailyMix: this.dailyMix(),
+    };
+  },
+
+  /** Demo lyrics: synced for "Pixel Dreams" and the demo track, plain or none elsewhere. */
+  lyrics(path: string, title: string): Lyrics | null {
+    const saved = savedLyrics.get(path);
+    if (saved !== undefined) return lyricsFromText(saved, 'file');
+    if (path.includes('Pixel Dreams') || title === 'Neon Tidepool') return lyricsFromText(DEMO_LRC, 'online');
+    const n = [...path].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 4;
+    if (n === 0) return null;
+    if (n === 1) return { source: 'online', synced: false, instrumental: true, lines: [], text: '' };
+    const h = rng(n * 1000 + path.length);
+    const words = Array.from({ length: 16 }, () => `${pick(WORDS)} ${pick(WORDS).toLowerCase()} in the ${pick(WORDS).toLowerCase()}`);
+    if (n === 2) return lyricsFromText(words.join('\n'), 'embedded');
+    return lyricsFromText(words.map((w, i) => `[00:${String(10 + i * 4 + Math.floor(h() * 2)).padStart(2, '0')}.00]${w}`).join('\n'), 'file');
+  },
+  saveLyrics(path: string, text: string): Lyrics {
+    if (!text.trim()) throw new Error('there are no lyrics to save');
+    savedLyrics.set(path, text);
+    return lyricsFromText(text, 'file');
   },
 };

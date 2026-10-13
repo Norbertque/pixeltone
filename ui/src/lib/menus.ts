@@ -1,6 +1,7 @@
 /** The context menus of tracks, albums and track lists. */
 import { api, type AlbumRow, type TrackRow } from './api';
-import { playAll, queueRows, shuffleRows } from './library.svelte';
+import { dialogs } from './dialogs.svelte';
+import { playAll, queueRows, setFavorite, shuffleRows } from './library.svelte';
 import type { MenuEntry } from './menu.svelte';
 import { router } from './router.svelte';
 
@@ -10,21 +11,38 @@ export function parentDir(path: string): string {
   return i > 0 ? path.slice(0, i) : path;
 }
 
+const libraryIds = (rows: readonly TrackRow[]) => rows.filter((r) => r.id !== 0).map((r) => r.id);
+
 export function trackMenu(track: TrackRow): MenuEntry[] {
-  return [
+  const inLibrary = track.id !== 0;
+  const entries: MenuEntry[] = [
     { icon: 'queue_play_next', label: 'Play next', action: () => queueRows([track], true) },
-    { icon: 'playlist_add', label: 'Add to queue', action: () => queueRows([track], false) },
-    'divider',
-    { icon: 'album', label: 'Go to album', action: () => router.go({ screen: 'album', id: track.albumId }) },
-    { icon: 'folder_open', label: 'Show in folder', action: () => router.go({ screen: 'folder', path: parentDir(track.path) }) },
+    { icon: 'add_to_queue', label: 'Add to queue', action: () => queueRows([track], false) },
   ];
+  if (inLibrary) {
+    entries.push({ icon: 'playlist_add', label: 'Add to playlist…', action: () => dialogs.addToPlaylist([track.id], track.title) });
+  }
+  entries.push(
+    track.favorite
+      ? { icon: 'heart_minus', label: 'Remove from favourites', action: () => setFavorite(track, false) }
+      : { icon: 'favorite', label: 'Add to favourites', action: () => setFavorite(track, true) },
+  );
+  if (inLibrary) {
+    entries.push(
+      'divider',
+      { icon: 'album', label: 'Go to album', action: () => router.go({ screen: 'album', id: track.albumId }) },
+      { icon: 'folder_open', label: 'Show in folder', action: () => router.go({ screen: 'folder', path: parentDir(track.path) }) },
+    );
+  }
+  return entries;
 }
 
-/** "Play next" and "Add to queue" for a whole list (an album, artist or genre page). */
+/** Queue and playlist actions for a whole list (an album, artist or genre page). */
 export function rowsMenu(rows: () => readonly TrackRow[], label: string): MenuEntry[] {
   return [
     { icon: 'queue_play_next', label: 'Play next', action: () => queueRows(rows(), true, label) },
-    { icon: 'playlist_add', label: 'Add to queue', action: () => queueRows(rows(), false, label) },
+    { icon: 'add_to_queue', label: 'Add to queue', action: () => queueRows(rows(), false, label) },
+    { icon: 'playlist_add', label: 'Add to playlist…', action: () => dialogs.addToPlaylist(libraryIds(rows()), label) },
   ];
 }
 
@@ -39,7 +57,8 @@ export function albumMenu(album: AlbumRow): MenuEntry[] {
     { icon: 'shuffle', label: 'Shuffle', action: withTracks(shuffleRows) },
     'divider',
     { icon: 'queue_play_next', label: 'Play next', action: withTracks((t) => queueRows(t, true, title)) },
-    { icon: 'playlist_add', label: 'Add to queue', action: withTracks((t) => queueRows(t, false, title)) },
+    { icon: 'add_to_queue', label: 'Add to queue', action: withTracks((t) => queueRows(t, false, title)) },
+    { icon: 'playlist_add', label: 'Add to playlist…', action: withTracks((t) => dialogs.addToPlaylist(libraryIds(t), title)) },
     'divider',
     { icon: 'album', label: 'Go to album', action: () => router.go({ screen: 'album', id: album.id }) },
   ];

@@ -7,6 +7,7 @@
 pub mod artists;
 pub mod artwork;
 mod db;
+pub mod m3u;
 pub mod model;
 pub mod scan;
 pub mod tags;
@@ -230,5 +231,148 @@ impl Library {
     /// Tracks by id, in the order asked for; unknown ids are skipped.
     pub fn tracks_by_id(&self, ids: &[u32]) -> Result<Vec<TrackRow>> {
         Ok(self.db.lock().tracks_by_id(ids)?)
+    }
+
+    // ── Playlists ───────────────────────────────────────────────────────────────
+
+    pub fn playlists(&self) -> Result<Vec<PlaylistRow>> {
+        Ok(self.db.lock().playlists()?)
+    }
+
+    pub fn playlist(&self, id: u32) -> Result<Option<PlaylistDetail>> {
+        Ok(self.db.lock().playlist(id)?)
+    }
+
+    pub fn playlist_items(&self, id: u32) -> Result<Vec<PlaylistInput>> {
+        Ok(self.db.lock().playlist_items(id)?)
+    }
+
+    /// Creates a playlist holding `items`; returns its id.
+    pub fn create_playlist(&self, name: &str, items: &[PlaylistInput]) -> Result<u32> {
+        let name = playlist_name(name)?;
+        let mut db = self.db.lock();
+        let now = scan::now_secs();
+        let id = db.create_playlist(&name, now)?;
+        if !items.is_empty() {
+            db.playlist_add(id, items, now)?;
+        }
+        Ok(id)
+    }
+
+    pub fn rename_playlist(&self, id: u32, name: &str) -> Result<()> {
+        let name = playlist_name(name)?;
+        Ok(self
+            .db
+            .lock()
+            .rename_playlist(id, &name, scan::now_secs())?)
+    }
+
+    pub fn delete_playlist(&self, id: u32) -> Result<()> {
+        Ok(self.db.lock().delete_playlist(id)?)
+    }
+
+    pub fn playlist_add(&self, id: u32, items: &[PlaylistInput]) -> Result<()> {
+        Ok(self.db.lock().playlist_add(id, items, scan::now_secs())?)
+    }
+
+    /// Appends library tracks.
+    pub fn playlist_add_tracks(&self, id: u32, track_ids: &[u32]) -> Result<()> {
+        let rows = self.tracks_by_id(track_ids)?;
+        self.playlist_add(id, &rows.iter().map(playlist_input).collect::<Vec<_>>())
+    }
+
+    pub fn playlist_remove(&self, id: u32, positions: &[u32]) -> Result<()> {
+        Ok(self
+            .db
+            .lock()
+            .playlist_remove(id, positions, scan::now_secs())?)
+    }
+
+    pub fn playlist_move(&self, id: u32, from: u32, to: u32) -> Result<()> {
+        Ok(self
+            .db
+            .lock()
+            .playlist_move(id, from, to, scan::now_secs())?)
+    }
+
+    /// Imports an M3U/M3U8 file as a new playlist named after it.
+    pub fn import_m3u(&self, file: &Path) -> Result<u32> {
+        let (name, items) = m3u::read(file)?;
+        if items.is_empty() {
+            return Err(LibraryError::Other(format!(
+                "{} lists no files that could be imported",
+                file.display()
+            )));
+        }
+        self.create_playlist(&name, &items)
+    }
+
+    pub fn export_m3u(&self, id: u32, file: &Path) -> Result<()> {
+        let detail = self
+            .playlist(id)?
+            .ok_or_else(|| LibraryError::Other("the playlist no longer exists".into()))?;
+        Ok(m3u::write(file, &detail.tracks)?)
+    }
+
+    // ── Favourites ──────────────────────────────────────────────────────────────
+
+    pub fn set_favorite(&self, path: &str, on: bool) -> Result<()> {
+        Ok(self.db.lock().set_favorite(path, on, scan::now_secs())?)
+    }
+
+    pub fn is_favorite(&self, path: &str) -> Result<bool> {
+        Ok(self.db.lock().is_favorite(path)?)
+    }
+
+    pub fn favorites(&self) -> Result<Vec<TrackRow>> {
+        Ok(self.db.lock().favorites()?)
+    }
+
+    // ── Play history ────────────────────────────────────────────────────────────
+
+    pub fn record_play(&self, play: &PlayRecord) -> Result<()> {
+        Ok(self.db.lock().record_play(play)?)
+    }
+
+    /// Listening over the last `days` days (or everything).
+    pub fn stats(&self, days: Option<u32>) -> Result<ListeningStats> {
+        let since = days.map_or(0, |d| scan::now_secs() - i64::from(d) * 86_400);
+        Ok(self.db.lock().stats(since, days, 20)?)
+    }
+
+    /// What Home shows besides the library counts.
+    pub fn home(&self) -> Result<HomeFeed> {
+        let db = self.db.lock();
+        let now = scan::now_secs();
+        Ok(HomeFeed {
+            recent_tracks: db.recent_tracks(12)?,
+            recent_albums: db.recent_albums(12)?,
+            top_artists: db.stats(now - 30 * 86_400, Some(30), 8)?.top_artists,
+            daily_mix: db.daily_mix(db.local_day()?, now, 40)?,
+        })
+    }
+
+    /// Today's mix, in full.
+    pub fn daily_mix(&self) -> Result<Vec<TrackRow>> {
+        let db = self.db.lock();
+        Ok(db.daily_mix(db.local_day()?, scan::now_secs(), 40)?)
+    }
+}
+
+fn playlist_name(name: &str) -> Result<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(LibraryError::Other("a playlist needs a name".into()));
+    }
+    Ok(name.chars().take(200).collect())
+}
+
+/// A library track as a playlist entry.
+pub fn playlist_input(t: &TrackRow) -> PlaylistInput {
+    PlaylistInput {
+        path: t.path.clone(),
+        title: Some(t.title.clone()),
+        artist: (!t.artist.is_empty()).then(|| t.artist.clone()),
+        duration_ms: Some(t.duration_ms),
     }
 }

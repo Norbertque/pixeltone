@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount } from 'svelte';
 
   import { api, type QueueEntry } from '../api';
   import { PagedRows } from '../library.svelte';
   import { artworkUrl, formatTime, player } from '../player.svelte';
-  import { clampTop, displacement, dropIndex, edgeScroll } from '../queue/drag';
+  import type { HandleProps } from '../queue/drag';
   import { toasts } from '../toasts.svelte';
   import Artwork from './Artwork.svelte';
   import Button from './Button.svelte';
   import EmptyState from './EmptyState.svelte';
   import Icon from './Icon.svelte';
   import IconButton from './IconButton.svelte';
-  import VirtualList from './VirtualList.svelte';
+  import ReorderList from './ReorderList.svelte';
 
   interface Props {
     onclose?: () => void;
@@ -33,111 +33,13 @@
   });
   const count = $derived(pager.count);
 
-  interface Drag {
-    id: number;
-    from: number;
-    to: number;
-    /** Top of the dragged row, px from the list's top. */
-    top: number;
-    /** Where the row was grabbed, px from its top. */
-    grab: number;
-    startY: number;
-    pointerY: number;
-    active: boolean;
-  }
-  let drag = $state<Drag | null>(null);
-  let listEl: HTMLDivElement | undefined = $state();
   let scrollEl: HTMLDivElement | undefined = $state();
-  let frame = 0;
-  let announcement = $state('');
 
-  // The grabbed row stays hidden in place; a floating copy follows the pointer (the virtual
-  // list may stop rendering the original once auto-scroll has carried it far away).
-  function shift(i: number): number {
-    const d = drag;
-    return d?.active ? displacement(i, d.from, d.to, ROW) : 0;
-  }
-
-  /** Follows the pointer at `clientY`. */
-  function follow(clientY: number): void {
-    if (!drag || !listEl) return;
-    const top = clampTop(clientY - listEl.getBoundingClientRect().top - drag.grab, ROW, count);
-    drag = { ...drag, top, to: dropIndex(top, ROW, count), pointerY: clientY };
-  }
-
-  /** Scrolls while the pointer is held near the top or bottom edge. */
-  function autoScroll(): void {
-    frame = 0;
-    if (!drag?.active || !scrollEl) return;
-    const r = scrollEl.getBoundingClientRect();
-    const speed = edgeScroll(drag.pointerY, r.top, r.bottom);
-    if (speed !== 0) {
-      scrollEl.scrollTop += speed;
-      follow(drag.pointerY);
-    }
-    frame = requestAnimationFrame(autoScroll);
-  }
-
-  // Window-level listeners: in a virtual list the grabbed row may be re-rendered mid-drag.
-  function onpointerdown(e: PointerEvent, entry: QueueEntry, index: number): void {
-    if (e.button !== 0 || !listEl) return;
-    e.preventDefault();
-    const grab = e.clientY - listEl.getBoundingClientRect().top - index * ROW;
-    drag = {
-      id: entry.id,
-      from: index,
-      to: index,
-      top: index * ROW,
-      grab,
-      startY: e.clientY,
-      pointerY: e.clientY,
-      active: false,
-    };
-    window.addEventListener('pointermove', onpointermove);
-    window.addEventListener('pointerup', onpointerup);
-    window.addEventListener('pointercancel', onpointercancel);
-  }
-
-  function onpointermove(e: PointerEvent): void {
-    if (!drag) return;
-    if (!drag.active) {
-      // A small threshold keeps a plain click on the handle from starting a drag.
-      if (Math.abs(e.clientY - drag.startY) < 4) return;
-      drag = { ...drag, active: true };
-      frame = requestAnimationFrame(autoScroll);
-    }
-    follow(e.clientY);
-  }
-
-  function end(commit: boolean): void {
-    window.removeEventListener('pointermove', onpointermove);
-    window.removeEventListener('pointerup', onpointerup);
-    window.removeEventListener('pointercancel', onpointercancel);
-    cancelAnimationFrame(frame);
-    const d = drag;
-    drag = null;
-    if (commit && d?.active && d.to !== d.from) move(d.id, d.from, d.to);
-  }
-  const onpointerup = (): void => end(true);
-  const onpointercancel = (): void => end(false);
-
-  function move(id: number, from: number, to: number): void {
-    const title = pager.rows[from]?.title ?? 'Song';
+  function move(from: number, to: number): void {
+    const id = pager.rows[from]?.id;
+    if (id === undefined) return;
     pager.move(from, to);
-    announcement = `${title} moved to position ${to + 1} of ${count}`;
     api.queueMove(id, to).catch((e) => toasts.show(String(e), 'error'));
-  }
-
-  /** The handle's keyboard alternative to dragging: arrow keys move the row. */
-  async function onhandlekey(e: KeyboardEvent, entry: QueueEntry, index: number): Promise<void> {
-    const delta = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
-    if (delta === 0) return;
-    e.preventDefault();
-    const to = index + delta;
-    if (to < 0 || to >= count) return;
-    move(entry.id, index, to);
-    await tick();
-    listEl?.querySelector<HTMLElement>(`[data-handle="${entry.id}"]`)?.focus();
   }
 
   function remove(entry: QueueEntry): void {
@@ -155,25 +57,16 @@
     // Open with the current track near the top.
     const i = player.queueIndex;
     if (scrollEl && i !== null) scrollEl.scrollTop = Math.max(0, (i - 1) * ROW);
-    return () => end(false);
   });
 </script>
 
-{#snippet row(i: number)}
+{#snippet row(i: number, handle: HandleProps)}
   {@const entry = pager.rows[i]}
   {#if entry}
     {@const current = entry.id === player.currentId}
     {@const played = player.queueIndex !== null && i < player.queueIndex}
-    <div class={['qrow', { current, played, ghosted: drag?.active && drag.from === i }]}>
-      <button
-        type="button"
-        class="handle"
-        data-handle={entry.id}
-        aria-label="Move {entry.title} (up and down arrow keys)"
-        title="Drag to reorder"
-        onpointerdown={(e) => onpointerdown(e, entry, i)}
-        onkeydown={(e) => onhandlekey(e, entry, i)}
-      >
+    <div class={['qrow', { current, played }]}>
+      <button type="button" class="handle" aria-label="Move {entry.title} (up and down arrow keys)" title="Drag to reorder" {...handle}>
         <Icon name="drag_indicator" size={20} />
       </button>
       <button type="button" class="main" onclick={() => api.queueJump(entry.id)} title={entry.path}>
@@ -201,6 +94,22 @@
   {/if}
 {/snippet}
 
+{#snippet ghost(i: number)}
+  {@const entry = pager.rows[i]}
+  {#if entry}
+    <div class="qrow lifted">
+      <span class="handle"><Icon name="drag_indicator" size={20} /></span>
+      <span class="main">
+        <Artwork src={artworkUrl(entry.coverKey, 300)} size="40px" radius="var(--shape-sm)" />
+        <span class="text">
+          <span class="title title-small">{entry.title}</span>
+          <span class="sub body-small">{entry.artist ?? entry.album ?? ''}</span>
+        </span>
+      </span>
+    </div>
+  {/if}
+{/snippet}
+
 <aside class="queue" aria-labelledby="queue-title">
   <header class="head">
     <div class="titles">
@@ -222,33 +131,19 @@
     {#if count === 0}
       <EmptyState icon="queue_music" title="Nothing queued" body="Play something, or use “Add to queue” on any song." />
     {:else}
-      <div bind:this={listEl} class={['list', { dragging: drag?.active }]}>
-        <VirtualList
-          {count}
-          rowHeight={ROW}
-          label="Queue"
-          {row}
-          {shift}
-          animate={drag?.active ?? false}
-          onrange={(s, e) => pager.ensure(s, e)}
-        />
-        {#if drag?.active && pager.rows[drag.from]}
-          {@const entry = pager.rows[drag.from]!}
-          <div class="qrow ghost" style:transform="translateY({drag.top}px)" style:height="{ROW}px" aria-hidden="true">
-            <span class="handle"><Icon name="drag_indicator" size={20} /></span>
-            <span class="main">
-              <Artwork src={artworkUrl(entry.coverKey, 300)} size="40px" radius="var(--shape-sm)" />
-              <span class="text">
-                <span class="title title-small">{entry.title}</span>
-                <span class="sub body-small">{entry.artist ?? entry.album ?? ''}</span>
-              </span>
-            </span>
-          </div>
-        {/if}
-      </div>
+      <ReorderList
+        {count}
+        rowHeight={ROW}
+        label="Queue"
+        {row}
+        {ghost}
+        keyOf={(i) => pager.rows[i]?.id}
+        describe={(i) => `${pager.rows[i]?.title ?? 'Song'} moved to position ${i + 1} of ${count}`}
+        onmove={move}
+        onrange={(s, e) => pager.ensure(s, e)}
+      />
     {/if}
   </div>
-  <p class="visually-hidden" aria-live="polite">{announcement}</p>
 </aside>
 
 <style>
@@ -304,21 +199,8 @@
   .qrow.played .main {
     opacity: 0.6;
   }
-  .list {
-    position: relative;
-  }
-  .qrow.ghosted {
-    visibility: hidden;
-  }
-  .ghost {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
-    z-index: 1;
-    background: var(--md-sys-color-surface-container-highest);
-    box-shadow: 0 6px 16px rgb(0 0 0 / 0.25);
-    pointer-events: none;
+  .qrow.lifted {
+    background: none;
   }
 
   .handle {
@@ -335,9 +217,6 @@
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
-  }
-  .dragging .handle {
-    cursor: grabbing;
   }
   .handle:focus-visible {
     outline: 2px solid var(--md-sys-color-secondary);

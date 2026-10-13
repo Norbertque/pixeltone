@@ -12,4 +12,8 @@ bits: number, lossless: boolean, dsd: boolean,
 /**
  * Cover hash (track's own, else the album's).
  */
-cover: string | null, path: string, };
+cover: string | null, path: string, 
+/**
+ * In the user's favourites.
+ */
+favorite: boolean, };

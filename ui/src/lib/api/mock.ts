@@ -3,7 +3,7 @@
  * so the UI can be developed (and screenshotted) without Windows.
  */
 import { scallopPath } from '../shapes';
-import { mockArt, mockLibrary } from './mockLibrary';
+import { mockArt, mockLibrary, mockUserData } from './mockLibrary';
 import { MockQueue, type Slot } from './mockQueue';
 import type {
   AppSettings,
@@ -84,6 +84,7 @@ const BADGE: OutputBadge = {
 };
 
 let settings: AppSettings = {
+  preferences: { lyricsOnline: true, artistImagesOnline: true },
   output: {
     deviceId: 'mock-dac',
     exclusive: true,
@@ -325,7 +326,11 @@ export const mockBackend: Backend = {
   },
   getSettings: async () => structuredClone(settings),
   async setOutputSettings(output, prefs) {
-    settings = { output, devices: { ...settings.devices, [output.deviceId ?? '']: prefs } };
+    settings = { ...settings, output, devices: { ...settings.devices, [output.deviceId ?? '']: prefs } };
+    return structuredClone(settings);
+  },
+  async setPreferences(preferences) {
+    settings = { ...settings, preferences };
     return structuredClone(settings);
   },
   hardwareVolume: async (deviceId) => (deviceId === 'mock-dac' ? null : speakersVolume),
@@ -371,4 +376,67 @@ export const mockBackend: Backend = {
   artUrl: (hash) => mockArt(hash),
   onLibraryScan: (cb) => subscribe(scanListeners, cb),
   onLibraryChanged: (cb) => subscribe(changedListeners, cb),
+
+  libraryPlaylists: async () => mockUserData.playlists(),
+  libraryPlaylist: async (id) => mockUserData.playlist(id),
+  async playlistCreate(name, trackIds) {
+    const id = mockUserData.createPlaylist(name, trackIds);
+    userDataChanged();
+    return id;
+  },
+  async playlistRename(id, name) {
+    mockUserData.editPlaylist(id, (p) => (p.name = name.trim()));
+    userDataChanged();
+  },
+  async playlistDelete(id) {
+    mockUserData.deletePlaylist(id);
+    userDataChanged();
+  },
+  async playlistAddTracks(id, trackIds) {
+    mockUserData.editPlaylist(id, (p) => p.paths.push(...mockUserData.pathsOf(trackIds)));
+    userDataChanged();
+  },
+  async playlistRemove(id, positions) {
+    mockUserData.editPlaylist(id, (p) => (p.paths = p.paths.filter((_, i) => !positions.includes(i))));
+    userDataChanged();
+  },
+  async playlistMove(id, from, to) {
+    mockUserData.editPlaylist(id, (p) => {
+      const [path] = p.paths.splice(from, 1);
+      if (path !== undefined) p.paths.splice(Math.min(to, p.paths.length), 0, path);
+    });
+    userDataChanged();
+  },
+  async playlistImport() {
+    const id = mockUserData.createPlaylist('Imported playlist', mockLibrary.tracks('title', 0, 15).map((t) => t.id));
+    userDataChanged();
+    return id;
+  },
+  playlistExport: async () => {},
+  async playPlaylist(id, start, shuffle) {
+    const detail = mockUserData.playlist(id);
+    if (detail) play(rowSlots(detail.tracks.map((t) => t.id)), start, shuffle);
+  },
+  pickPlaylistFile: async () => 'C:\\Users\\You\\Music\\Imported.m3u8',
+  pickPlaylistSaveFile: async (name) => `C:\\Users\\You\\Music\\${name}.m3u8`,
+
+  async librarySetFavorite(path, on) {
+    mockUserData.setFavorite(path, on);
+    userDataChanged();
+  },
+  libraryIsFavorite: async (path) => mockUserData.isFavorite(path),
+  libraryFavorites: async () => mockUserData.favorites(),
+  libraryStats: async (days) => mockUserData.stats(days),
+  libraryHome: async () => mockUserData.home(),
+  playDailyMix: async (start) => play(rowSlots(mockUserData.dailyMix().map((t) => t.id)), start ?? 0, false),
+
+  async lyricsFind(track) {
+    await new Promise((r) => setTimeout(r, 350)); // a network lookup takes a moment
+    return mockUserData.lyrics(track.path, track.title);
+  },
+  lyricsSave: async (track, text) => mockUserData.saveLyrics(track.path, text),
 };
+
+function userDataChanged(): void {
+  for (const l of changedListeners) l();
+}

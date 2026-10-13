@@ -25,7 +25,7 @@ pub fn item_from_row(row: TrackRow) -> QueueItem {
         artist: (!row.artist.is_empty()).then_some(row.artist),
         album: (!row.album.is_empty()).then_some(row.album),
         duration_ms: Some(f64::from(row.duration_ms)),
-        track_id: Some(row.id),
+        track_id: (row.id != 0).then_some(row.id),
     }
 }
 

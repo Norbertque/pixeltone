@@ -3,6 +3,7 @@
   import { router } from '../router.svelte';
   import Artwork from './Artwork.svelte';
   import IconButton from './IconButton.svelte';
+  import LyricsPanel from './LyricsPanel.svelte';
   import OutputBadge from './OutputBadge.svelte';
   import PlayButton from './PlayButton.svelte';
   import QueuePanel from './QueuePanel.svelte';
@@ -11,17 +12,19 @@
   const track = $derived(player.track);
 
   function onkeydown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      router.setNowPlaying(false);
-    }
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    // Escape belongs to an open dialog, menu or text field first.
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    if (document.querySelector('dialog:modal, :popover-open') || target?.closest('input, textarea')) return;
+    e.preventDefault();
+    router.setNowPlaying(false);
   }
 </script>
 
 <svelte:window {onkeydown} />
 
 {#if track}
-  <section class={['sheet', { 'with-queue': router.queueOpen }]} aria-labelledby="np-title" style:view-transition-name="np-sheet">
+  <section class={['sheet', { 'with-panel': router.panel }]} aria-labelledby="np-title" style:view-transition-name="np-sheet">
     <header class="top">
       <IconButton
         icon="keyboard_arrow_down"
@@ -33,12 +36,20 @@
         <span class="overline">Playing from</span>
         <span>{track.album ?? 'Files'}</span>
       </p>
-      <IconButton
-        icon="queue_music"
-        label={router.queueOpen ? 'Hide the queue' : 'Show the queue'}
-        selected={router.queueOpen}
-        onclick={() => router.toggleQueue()}
-      />
+      <div class="panels">
+        <IconButton
+          icon="lyrics"
+          label={router.panel === 'lyrics' ? 'Hide the lyrics' : 'Show the lyrics'}
+          selected={router.panel === 'lyrics'}
+          onclick={() => router.togglePanel('lyrics')}
+        />
+        <IconButton
+          icon="queue_music"
+          label={router.panel === 'queue' ? 'Hide the queue' : 'Show the queue'}
+          selected={router.panel === 'queue'}
+          onclick={() => router.togglePanel('queue')}
+        />
+      </div>
     </header>
 
     <div class="body">
@@ -54,7 +65,15 @@
 
       <div class="panel">
         <div class="titles">
-          <h2 id="np-title" class="display-small rounded emphasized" tabindex="-1">{track.title}</h2>
+          <div class="title-row">
+            <h2 id="np-title" class="display-small rounded emphasized" tabindex="-1">{track.title}</h2>
+            <IconButton
+              icon="favorite"
+              label={player.favorite ? 'Remove from favourites' : 'Add to favourites'}
+              selected={player.favorite}
+              onclick={() => player.toggleFavorite()}
+            />
+          </div>
           {#if track.artist}<p class="artist title-large">{track.artist}</p>{/if}
           <p class="format body-medium">{[track.album, describeSource(track)].filter(Boolean).join(' · ')}</p>
         </div>
@@ -102,9 +121,13 @@
         {/if}
       </div>
 
-      {#if router.queueOpen}
-        <div class="queue-slot">
-          <QueuePanel onclose={() => (router.queueOpen = false)} />
+      {#if router.panel}
+        <div class="panel-slot">
+          {#if router.panel === 'queue'}
+            <QueuePanel onclose={() => (router.panel = null)} />
+          {:else}
+            <LyricsPanel onclose={() => (router.panel = null)} />
+          {/if}
         </div>
       {/if}
     </div>
@@ -127,9 +150,26 @@
 
   .top {
     display: grid;
-    grid-template-columns: 48px 1fr 48px;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     padding: 12px 16px 0;
+  }
+  .top > :global(:first-child) {
+    justify-self: start;
+  }
+  .panels {
+    display: flex;
+    justify-self: end;
+    gap: 4px;
+  }
+  .title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .title-row :global(.icon-button) {
+    flex: none;
+    margin-top: 4px;
   }
   .context {
     display: grid;
@@ -197,26 +237,26 @@
     display: flex;
   }
 
-  .queue-slot {
+  .panel-slot {
     display: grid;
     align-self: stretch;
     min-height: 0;
   }
-  .with-queue .body {
+  .with-panel .body {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 400px);
     padding-right: 16px;
   }
   @container sheet (width < 1180px) {
-    .with-queue .art-wrap {
+    .with-panel .art-wrap {
       display: none;
     }
-    .with-queue .body {
+    .with-panel .body {
       grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
     }
   }
 
   @container sheet (width < 820px) {
-    .queue-slot {
+    .panel-slot {
       position: absolute;
       inset: 64px 8px 8px;
       z-index: 2;
@@ -236,6 +276,9 @@
     .panel {
       width: 100%;
       text-align: center;
+    }
+    .title-row {
+      justify-content: center;
     }
     .badge {
       justify-content: center;

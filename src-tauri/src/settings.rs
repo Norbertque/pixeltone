@@ -28,12 +28,32 @@ impl Default for DevicePrefs {
     }
 }
 
+/// What the app may do online, and other app-level choices.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Preferences {
+    /// Look lyrics up on LRCLIB when a track has none of its own.
+    pub lyrics_online: bool,
+    /// Download artist pictures from Deezer.
+    pub artist_images_online: bool,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            lyrics_online: true,
+            artist_images_online: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub output: OutputSettings,
     /// Keyed by device id; the empty key is "the Windows default device".
     pub devices: BTreeMap<String, DevicePrefs>,
+    pub preferences: Preferences,
 }
 
 impl AppSettings {

@@ -1,7 +1,7 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { audioDir } from '@tauri-apps/api/path';
-import { ask, open } from '@tauri-apps/plugin-dialog';
+import { audioDir, join } from '@tauri-apps/api/path';
+import { ask, open, save } from '@tauri-apps/plugin-dialog';
 
 import {
   AUDIO_EXTENSIONS,
@@ -27,6 +27,11 @@ import {
   type PlayerError,
   type PlayerSnapshot,
   type QueueEntry,
+  type HomeFeed,
+  type ListeningStats,
+  type Lyrics,
+  type PlaylistDetail,
+  type PlaylistRow,
 } from './types';
 
 export const tauriBackend: Backend = {
@@ -98,4 +103,49 @@ export const tauriBackend: Backend = {
   artUrl: (hash, size) => convertFileSrc(`lib/${hash}-${size}`, 'cover'),
   onLibraryScan: (cb) => listen<ScanProgress>('library://scan', (e) => cb(e.payload)),
   onLibraryChanged: (cb) => listen('library://changed', () => cb()),
+
+  setPreferences: (preferences) => invoke<AppSettings>('set_preferences', { preferences }),
+
+  libraryPlaylists: () => invoke<PlaylistRow[]>('library_playlists'),
+  libraryPlaylist: (id) => invoke<PlaylistDetail | null>('library_playlist', { id }),
+  playlistCreate: (name, trackIds) => invoke<number>('playlist_create', { name, trackIds }),
+  playlistRename: (id, name) => invoke('playlist_rename', { id, name }),
+  playlistDelete: (id) => invoke('playlist_delete', { id }),
+  playlistAddTracks: (id, trackIds) => invoke('playlist_add_tracks', { id, trackIds }),
+  playlistRemove: (id, positions) => invoke('playlist_remove', { id, positions }),
+  playlistMove: (id, from, to) => invoke('playlist_move', { id, from, to }),
+  playlistImport: (path) => invoke<number>('playlist_import', { path }),
+  playlistExport: (id, path) => invoke('playlist_export', { id, path }),
+  playPlaylist: (id, start, shuffle) => invoke('play_playlist', { id, start, shuffle }),
+  async pickPlaylistFile() {
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      title: 'Import a playlist',
+      filters: [{ name: 'Playlists', extensions: ['m3u8', 'm3u'] }],
+    });
+    return typeof picked === 'string' ? picked : null;
+  },
+  async pickPlaylistSaveFile(name) {
+    const file = `${name.replace(/[\\/:*?"<>|]/g, '_')}.m3u8`;
+    const defaultPath = await audioDir()
+      .then((dir) => join(dir, file))
+      .catch(() => file);
+    const picked = await save({
+      title: 'Export the playlist',
+      defaultPath,
+      filters: [{ name: 'M3U8 playlist', extensions: ['m3u8'] }],
+    });
+    return picked ?? null;
+  },
+
+  librarySetFavorite: (path, on) => invoke('library_set_favorite', { path, on }),
+  libraryIsFavorite: (path) => invoke<boolean>('library_is_favorite', { path }),
+  libraryFavorites: () => invoke<TrackRow[]>('library_favorites'),
+  libraryStats: (days) => invoke<ListeningStats>('library_stats', { days }),
+  libraryHome: () => invoke<HomeFeed>('library_home'),
+  playDailyMix: (start) => invoke('play_daily_mix', { start }),
+
+  lyricsFind: (track) => invoke<Lyrics | null>('lyrics_find', { track }),
+  lyricsSave: (track, text) => invoke<Lyrics>('lyrics_save', { track, text }),
 };

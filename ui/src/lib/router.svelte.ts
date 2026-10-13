@@ -9,7 +9,10 @@ export type Route =
   | { screen: 'album'; id: number }
   | { screen: 'artist'; id: number }
   | { screen: 'genre'; id: number }
-  | { screen: 'folder'; path: string | null };
+  | { screen: 'folder'; path: string | null }
+  | { screen: 'playlist'; id: number }
+  | { screen: 'favorites' }
+  | { screen: 'stats' };
 
 export type Screen = Route['screen'];
 /** Destinations in the navigation rail/bar. */
@@ -22,6 +25,8 @@ export const NAV_ITEMS = [
 ] as const satisfies readonly { id: Section; icon: string; label: string }[];
 
 export type LibraryTab = 'songs' | 'albums' | 'artists' | 'genres' | 'folders' | 'playlists';
+/** What Now Playing shows beside the controls. */
+export type SidePanel = 'queue' | 'lyrics';
 
 const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -53,7 +58,11 @@ function sectionOf(route: Route): Section {
     case 'artist':
     case 'genre':
     case 'folder':
+    case 'playlist':
+    case 'favorites':
       return 'library';
+    case 'stats':
+      return 'home';
     case 'about':
       return 'settings';
     default:
@@ -68,8 +77,8 @@ function sameRoute(a: Route, b: Route): boolean {
 class Router {
   route = $state<Route>({ screen: 'home' });
   nowPlayingOpen = $state(false);
-  /** The queue panel inside Now Playing. */
-  queueOpen = $state(false);
+  /** The panel shown inside Now Playing, if any. */
+  panel = $state<SidePanel | null>(null);
   /** Remembered while browsing away and back. */
   libraryTab = $state<LibraryTab>('songs');
   readonly screen = $derived<Screen>(this.route.screen);
@@ -98,13 +107,13 @@ class Router {
     }
   }
 
-  /** Shows or hides the queue, opening Now Playing if needed. */
-  async toggleQueue(): Promise<void> {
+  /** Shows or hides a Now Playing panel (the queue, the lyrics), opening Now Playing if needed. */
+  async togglePanel(panel: SidePanel): Promise<void> {
     if (!this.nowPlayingOpen) {
-      this.queueOpen = true;
+      this.panel = panel;
       return this.setNowPlaying(true);
     }
-    this.queueOpen = !this.queueOpen;
+    this.panel = this.panel === panel ? null : panel;
   }
 
   async setNowPlaying(open: boolean): Promise<void> {

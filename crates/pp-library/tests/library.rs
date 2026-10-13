@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use pp_library::{AlbumSort, Library, ProgressFn, ScanPhase, ScanProgress, TrackSort};
+use pp_library::{
+    AlbumSort, Library, PlayRecord, PlaylistInput, ProgressFn, ScanPhase, ScanProgress, TrackRow,
+    TrackSort,
+};
 
 fn ffmpeg(args: &[&str]) {
     let bin = std::env::var("PP_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
@@ -416,6 +419,198 @@ fn delimiter_changes_take_effect_on_rescan() {
 }
 
 /// `cargo test -p pp-library --release -- --ignored --nocapture large_library`
+fn titles(tracks: &[TrackRow]) -> Vec<&str> {
+    tracks.iter().map(|t| t.title.as_str()).collect()
+}
+
+fn album_tracks(lib: &Library, title: &str) -> Vec<TrackRow> {
+    let album = lib
+        .albums(AlbumSort::Title, 0, 100)
+        .unwrap()
+        .into_iter()
+        .find(|a| a.title == title)
+        .unwrap();
+    lib.album(album.id).unwrap().unwrap().tracks
+}
+
+fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64
+}
+
+#[test]
+fn playlists_keep_their_order_and_survive_rescans() {
+    let f = fixture();
+    let lib = open(&f.data);
+    lib.add_folder(&f.music).unwrap();
+    scan(&lib);
+    let pd = album_tracks(&lib, "Pixel Dreams");
+    let ids: Vec<u32> = pd.iter().map(|t| t.id).collect();
+
+    let id = lib.create_playlist("  Road trip ", &[]).unwrap();
+    assert!(
+        lib.create_playlist("   ", &[]).is_err(),
+        "a name is required"
+    );
+    lib.playlist_add_tracks(id, &ids).unwrap();
+    lib.playlist_add(
+        id,
+        &[PlaylistInput {
+            path: "/elsewhere/song.mp3".into(),
+            title: Some("Elsewhere".into()),
+            artist: Some("Someone".into()),
+            duration_ms: Some(1000),
+        }],
+    )
+    .unwrap();
+    let d = lib.playlist(id).unwrap().unwrap();
+    assert_eq!(d.playlist.name, "Road trip");
+    assert_eq!(d.playlist.track_count, 4);
+    assert_eq!(
+        titles(&d.tracks),
+        ["Neon Tidepool", "Glass Garden", "Afterglow", "Elsewhere"]
+    );
+    assert_eq!(d.tracks[3].id, 0, "outside the library");
+    assert_eq!(d.tracks[3].artist, "Someone");
+    assert_eq!(d.playlist.covers.len(), 1);
+
+    lib.playlist_move(id, 3, 0).unwrap();
+    lib.playlist_remove(id, &[2]).unwrap();
+    let order = |lib: &Library| {
+        titles(&lib.playlist(id).unwrap().unwrap().tracks)
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(order(&lib), ["Elsewhere", "Neon Tidepool", "Afterglow"]);
+    scan(&lib);
+    assert_eq!(
+        order(&lib),
+        ["Elsewhere", "Neon Tidepool", "Afterglow"],
+        "a rescan leaves it alone"
+    );
+
+    lib.rename_playlist(id, "Trip").unwrap();
+    assert_eq!(lib.playlists().unwrap()[0].name, "Trip");
+
+    let file = f.data.join("Trip.m3u8");
+    lib.export_m3u(id, &file).unwrap();
+    let copy = lib.import_m3u(&file).unwrap();
+    let copied = lib.playlist(copy).unwrap().unwrap();
+    assert_eq!(copied.playlist.name, "Trip");
+    let paths = |t: &[TrackRow]| t.iter().map(|t| t.path.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        paths(&copied.tracks),
+        paths(&lib.playlist(id).unwrap().unwrap().tracks)
+    );
+    assert_eq!(
+        copied.tracks[0].title, "Elsewhere",
+        "hints come back from #EXTINF"
+    );
+
+    lib.delete_playlist(id).unwrap();
+    assert!(lib.playlist(id).unwrap().is_none());
+    assert_eq!(lib.playlists().unwrap().len(), 1);
+}
+
+#[test]
+fn favourites_show_up_in_track_lists() {
+    let f = fixture();
+    let lib = open(&f.data);
+    lib.add_folder(&f.music).unwrap();
+    scan(&lib);
+    let after = album_tracks(&lib, "Pixel Dreams")[2].clone();
+    assert_eq!(after.title, "Afterglow");
+    assert!(!after.favorite);
+
+    lib.set_favorite(&after.path, true).unwrap();
+    lib.set_favorite(&after.path, true).unwrap();
+    let tracks = album_tracks(&lib, "Pixel Dreams");
+    assert_eq!(
+        tracks.iter().map(|t| t.favorite).collect::<Vec<_>>(),
+        [false, false, true]
+    );
+    assert_eq!(titles(&lib.favorites().unwrap()), ["Afterglow"]);
+    assert!(lib.is_favorite(&after.path).unwrap());
+
+    lib.set_favorite(&after.path, false).unwrap();
+    assert!(lib.favorites().unwrap().is_empty());
+}
+
+#[test]
+fn history_feeds_stats_recents_and_the_daily_mix() {
+    let f = fixture();
+    let lib = open(&f.data);
+    lib.add_folder(&f.music).unwrap();
+    scan(&lib);
+    let pd = album_tracks(&lib, "Pixel Dreams");
+    let intro = album_tracks(&lib, "Greatest Hits")[0].clone();
+    let t = now();
+    let play = |track: &TrackRow, ago: i64, ms: u32| {
+        lib.record_play(&PlayRecord {
+            path: track.path.clone(),
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            album: track.album.clone(),
+            played_at: t - ago,
+            ms_played: ms,
+        })
+        .unwrap();
+    };
+    play(&pd[0], 7200, 1000);
+    play(&pd[0], 3600, 1000);
+    play(&pd[0], 3 * 86_400, 1000);
+    play(&intro, 100, 500);
+    play(&pd[1], 40 * 86_400, 800);
+    play(
+        &TrackRow::outside("/gone/old.flac", Some("Gone"), Some("Nobody"), 0),
+        50,
+        300,
+    );
+
+    let month = lib.stats(Some(30)).unwrap();
+    assert_eq!(month.plays, 5);
+    assert_eq!(month.total_ms, 3800.0);
+    assert_eq!(month.distinct_tracks, 3);
+    assert_eq!(month.top_tracks[0].track.title, "Neon Tidepool");
+    assert_eq!(month.top_tracks[0].plays, 3);
+    assert!(
+        month
+            .top_tracks
+            .iter()
+            .any(|t| t.track.id == 0 && t.track.title == "Gone")
+    );
+    assert_eq!(month.top_artists[0].artist.name, "Aurora Lane");
+    assert_eq!(month.top_albums[0].album.title, "Pixel Dreams");
+    assert_eq!(month.per_hour.len(), 24);
+    assert_eq!(month.per_hour.iter().sum::<f64>(), 3800.0);
+    assert_eq!(month.per_day.iter().map(|d| d.ms).sum::<f64>(), 3800.0);
+    assert_eq!(lib.stats(None).unwrap().plays, 6);
+
+    let home = lib.home().unwrap();
+    assert_eq!(
+        titles(&home.recent_tracks),
+        ["Intro", "Neon Tidepool", "Glass Garden"]
+    );
+    assert_eq!(home.recent_albums[0].title, "Greatest Hits");
+    assert_eq!(home.top_artists[0].artist.name, "Aurora Lane");
+
+    let mix = lib.daily_mix().unwrap();
+    assert_eq!(mix.len(), 13, "the whole (small) library");
+    let mut ids: Vec<u32> = mix.iter().map(|t| t.id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), 13, "no repeats");
+    let again: Vec<u32> = lib.daily_mix().unwrap().iter().map(|t| t.id).collect();
+    assert_eq!(
+        again,
+        mix.iter().map(|t| t.id).collect::<Vec<_>>(),
+        "stable for the day"
+    );
+}
+
 #[test]
 #[ignore = "slow: builds a 10k-track library"]
 fn large_library() {

@@ -64,12 +64,21 @@ export function tokenName(colorName: string): string {
   return `--md-sys-color-${colorName.replaceAll('_', '-')}`;
 }
 
+/**
+ * Data marks (chart bars) from the primary palette: tone 40 in light, 58 in dark. M3's dark
+ * `primary` (tone 80) is too light and pale for marks on a dark surface.
+ */
+export function chartMark(scheme: DynamicScheme): number {
+  return scheme.primaryPalette.tone(scheme.isDark ? 58 : 40);
+}
+
 /** Every colour role of the scheme as CSS custom properties. */
 export function schemeTokens(scheme: DynamicScheme): Record<string, string> {
   const tokens: Record<string, string> = {};
   for (const color of scheme.colors.allColors) {
     tokens[tokenName(color.name)] = hexFromArgb(color.getArgb(scheme));
   }
+  tokens['--pp-chart-mark'] = hexFromArgb(chartMark(scheme));
   return tokens;
 }
 
