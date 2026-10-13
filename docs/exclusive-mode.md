@@ -39,23 +39,44 @@ except for lossless steps:
 - float decoder output converted to integer, which is exact for material of up to 24 bits;
 - mono duplicated onto both front channels;
 
-and no software gain is active. Anything else (resampling, depth reduction, downmix, DSD
-decoded to PCM, attenuation) shows **Converted** or the attenuation in dB.
+and no software gain is active. DSD sent as DoP (below) is bit-perfect too. Anything else
+(resampling, depth reduction, downmix, DSD decoded to PCM, attenuation) shows **Converted**
+or the attenuation in dB.
 
-Never applied in exclusive mode: dithering, EQ, ReplayGain, crossfade, speed changes.
+The equaliser and ReplayGain are off by default. Turned on (Settings → Sound) they apply in
+either mode, and the badge names them ("EQ", "ReplayGain −6.2 dB") and says **Converted**.
+Never applied in exclusive mode: dithering, crossfade, speed changes.
+
+## DSD
+
+- **DoP** (DSD over PCM, on by default): DSD64/128/… reaches the DAC untouched inside 24-bit
+  frames whose top byte alternates 0x05/0xFA, at the DSD bit rate / 16 (DSD64 → 176.4 kHz,
+  24-in-32 preferred). Pre-roll and pauses send DoP idle (0x69), which keeps the DAC in DSD
+  mode. DoP is never faded, attenuated or equalised, so it is only used where the device
+  has its own volume control, or at fixed line level; never with the app's volume.
+- Otherwise, or with DoP off: FFmpeg decodes DSD to PCM (badge: *DSD→… • Converted*).
 
 ## Volume
 
-- **Hardware volume** (endpoint reports `ENDPOINT_HARDWARE_SUPPORT_VOLUME`): the slider moves
-  the device's own volume; samples stay untouched.
-- **No hardware volume:** a software gain stage (Q16 multiply in the 32-bit domain, on the
-  render thread so it reacts instantly). First use starts at **−30 dB**; levels above
-  **−10 dB** stay locked until the loudness warning is acknowledged; the level is remembered
-  per device. **Fixed line-level output** bypasses it for DACs feeding an amplifier.
+The player bar's volume button (Ctrl+↑/↓, Ctrl+M to mute) and Settings → Audio output move
+whichever control is in charge:
+
+- **Shared mode:** the app's own volume, applied before Windows mixes (0 dB by default); the
+  Windows volume applies on top.
+- **Exclusive mode, device with hardware volume** (the endpoint reports
+  `ENDPOINT_HARDWARE_SUPPORT_VOLUME`): the device's own volume, the same control as the
+  Windows volume; samples stay untouched.
+- **Exclusive mode, no hardware volume,** or **Use the app's volume instead** switched on (for
+  earphones that are still too loud at the device's quietest setting): a software gain stage
+  (Q16 multiply in the 32-bit domain, on the render thread so it reacts instantly). First use
+  starts at **−30 dB**; levels above **−10 dB** stay locked until the loudness warning is
+  acknowledged; the level is remembered per device. **Fixed line-level output** bypasses it
+  for DACs feeding an amplifier.
 
 ## Track transitions
 
-- Same device format: one continuous stream — gapless.
+- Same device format: one continuous stream — gapless. Crossfading (Settings → Sound) only
+  happens in shared mode; tracks of one album stay gapless unless asked otherwise.
 - Different format (e.g. 44.1 → 96 kHz): the stream drains, the device is reopened in the new
   format and 150 ms of silence lets the DAC's clock lock before the music starts.
 - The next track's file is opened early, but which track it is gets decided about 0.4 s

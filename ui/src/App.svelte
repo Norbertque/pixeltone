@@ -11,6 +11,7 @@
   import ShortcutsDialog from './lib/components/ShortcutsDialog.svelte';
   import Snackbar from './lib/components/Snackbar.svelte';
   import { help } from './lib/help.svelte';
+  import { output } from './lib/output.svelte';
   import { player } from './lib/player.svelte';
   import { router } from './lib/router.svelte';
   import About from './lib/screens/About.svelte';
@@ -26,6 +27,7 @@
   import Settings from './lib/screens/Settings.svelte';
   import StatsScreen from './lib/screens/StatsScreen.svelte';
   import { type ShortcutAction, shortcutFor } from './lib/shortcuts';
+  import { nudge } from './lib/volume';
   import { theme } from './lib/theme/theme.svelte';
 
   const SCREENS = {
@@ -63,6 +65,14 @@
         return player.toggleShuffle();
       case 'repeat':
         return player.cycleRepeat();
+      case 'volumeUp':
+      case 'volumeDown': {
+        const v = output.volume;
+        if (v && v.kind !== 'fixed') output.setVolume(nudge({ ...v, db: output.draft ?? v.db }, action === 'volumeUp' ? 1 : -1));
+        return;
+      }
+      case 'mute':
+        return output.toggleMute();
       case 'queue':
         return void router.togglePanel('queue');
       case 'search':

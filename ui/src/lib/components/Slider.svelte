@@ -59,8 +59,8 @@
     border-radius: 2px;
     background: var(--md-sys-color-primary);
     box-shadow:
-      -6px 0 0 var(--md-sys-color-surface-container-low),
-      6px 0 0 var(--md-sys-color-surface-container-low);
+      -6px 0 0 var(--slider-surface, var(--md-sys-color-surface-container-low)),
+      6px 0 0 var(--slider-surface, var(--md-sys-color-surface-container-low));
     appearance: none;
   }
   .slider:disabled {

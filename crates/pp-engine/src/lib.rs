@@ -6,6 +6,7 @@
 //! Track changes are frame-accurate markers in that byte stream, so position and
 //! "now playing" follow what the device has actually played.
 
+pub mod effects;
 mod engine;
 pub mod pipeline;
 pub mod queue;
@@ -14,6 +15,7 @@ pub mod testing;
 pub mod track;
 mod worker;
 
+pub use effects::ReplayGainMode;
 pub use engine::{
     CoverStore, Engine, EngineConfig, EngineEvent, OutputSettings, OutputState, PlaybackStatus,
     PlayerSnapshot,

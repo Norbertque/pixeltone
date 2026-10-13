@@ -21,7 +21,12 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `PKG_CONFIG=~/.local/opt/pp-toolchain/bin/pkg-config-stub cargo clippy -p pixelplayer-pc
   --all-targets -- -D warnings`; its tests run on CI. Test everything else with
   `cargo test --workspace --exclude pixelplayer-pc`.
-- No browser, so no screenshots; UI changes are verified with check/test/build only.
+- Screenshots of the UI (mock backend): Playwright's headless shell is installed in
+  `~/.cache/ms-playwright` with its libraries unpacked from Debian packages into
+  `~/.local/opt/chromium-libs` (no root). Run it with
+  `LD_LIBRARY_PATH=~/.local/opt/chromium-libs/usr/lib/x86_64-linux-gnu:~/.local/opt/chromium-libs/lib/x86_64-linux-gnu`,
+  `executablePath` pointing at `chrome-headless-shell` and `--no-sandbox`, against `npm run dev`.
+  Look at layout changes this way before shipping them.
 - Windows type-check of everything, including the app crate's `cfg(windows)` code:
   `. ~/.local/opt/pp-toolchain/env.sh && . ~/.local/opt/pp-toolchain/win-check.sh &&
   cargo clippy --target x86_64-pc-windows-msvc -p pixelplayer-pc -p pp-media-controls
@@ -60,6 +65,19 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   to the file, or into app data if the folder is read-only.
 - Chart marks use `--pp-chart-mark` (primary palette tone 40 light / 58 dark); keep
   `theme/chart.test.ts` passing when touching the theme.
+
+## Sound (M5)
+
+- DoP (`pp-core` dop.rs) is packed in the decode worker from raw DSD (`Decoder::next_dsd`);
+  DoP sessions never take fades, gain or EQ, so DoP needs a device volume or line level.
+- EQ runs on the render thread (`RenderFeed`, handed over with `eq_version`) and changes
+  live; ReplayGain is applied in the worker per track; crossfade is a hold-back buffer in the
+  worker (shared mode, F32 only). EQ presets live in the UI (`ui/src/lib/eq.ts`).
+- Volume: shared mode always has the app's own gain (`shared_gain_db`); exclusive mode uses
+  the device volume unless it has none or `software_volume` is set (`Control::plan`).
+  `ui/src/lib/volume.ts` mirrors those rules for the player bar and Settings.
+- The UI's output settings live in one store (`output.svelte.ts`) that saves changes one
+  after another; send `$state.snapshot` copies, never the reactive objects themselves.
 
 ## Rules
 

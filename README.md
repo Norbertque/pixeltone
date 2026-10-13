@@ -5,8 +5,10 @@ A Material 3 Expressive music player for Windows, inspired by PixelPlayer for An
 sample rate and bit depth.
 
 - **Audio engine (Rust):** FFmpeg decoding (FLAC, ALAC, WAV, AIFF, MP3, AAC, Vorbis, Opus,
-  APE, WavPack, DSD → PCM, …), an exclusive-mode format negotiator, gapless playback, and
-  WASAPI shared/exclusive output with hardware or safe software volume.
+  APE, WavPack, DSD, …), an exclusive-mode format negotiator, gapless playback, native DSD
+  over DoP, and WASAPI shared/exclusive output with hardware or safe software volume.
+- **Sound (opt-in):** a 10-band equaliser with presets, ReplayGain (track or album) and
+  crossfading in shared mode; the output badge says when they change the samples.
 - **Library (Rust + SQLite):** scans your music folders incrementally and keeps watching
   them; albums, artists (with configurable "feat." splitting), genres and folders; instant
   search that ignores accents ("Bjork" finds "Björk"); cover art from the files or from

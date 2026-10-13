@@ -8,12 +8,14 @@ use std::time::Duration;
 
 use crossbeam_channel::Sender;
 use parking_lot::Mutex;
-use pp_core::{OutputFormat, StreamControls};
+use pp_core::dop::DopPacker;
+use pp_core::{OutputFormat, SampleFormat, ShareMode, StreamControls};
 use rtrb::Producer;
 
+use crate::effects::{apply_gain, crossfade};
 use crate::pipeline::{OutputPlan, Pipeline};
 use crate::queue::Queue;
-use crate::track::{LoadedTrack, StartedTrack, load};
+use crate::track::{LoadedTrack, StartedTrack, TrackMeta, load};
 
 /// Bytes decoded ahead of the ring before the worker waits for space.
 const PENDING_HIGH_WATER: usize = 512 * 1024;
@@ -81,6 +83,118 @@ impl WorkerHandle {
     }
 }
 
+/// Turns a track into device bytes: decoded PCM through the pipeline (with ReplayGain), or
+/// raw DSD packed as DoP.
+enum Stage {
+    Pcm(Box<Pipeline>),
+    Dop(DopPacker),
+}
+
+impl Stage {
+    fn for_track(track: &LoadedTrack, format: OutputFormat) -> Result<Self, String> {
+        if track.negotiated.conversion.dop {
+            Ok(Self::Dop(DopPacker::new(format)))
+        } else {
+            Pipeline::new(track.meta.source, format).map(|p| Self::Pcm(Box::new(p)))
+        }
+    }
+
+    /// Whether `next` can follow through this stage without a gap.
+    fn accepts(&self, next: &LoadedTrack) -> bool {
+        match self {
+            Self::Pcm(p) => !next.negotiated.conversion.dop && p.accepts(&next.meta.source),
+            Self::Dop(_) => next.negotiated.conversion.dop,
+        }
+    }
+
+    /// Appends the next piece of `track` to `out`; false at the end of the track.
+    fn pull(&mut self, track: &mut LoadedTrack, out: &mut Vec<u8>, raw: &mut Vec<u8>) -> bool {
+        let result = match self {
+            Self::Pcm(p) => track.decoder.next_block().map(|block| {
+                block.is_some_and(|mut block| {
+                    if let Some(gain) = track.gain() {
+                        apply_gain(&mut block, gain);
+                    }
+                    p.process(block, out);
+                    true
+                })
+            }),
+            Self::Dop(d) => {
+                raw.clear();
+                track.decoder.next_dsd(raw).inspect(|_| d.pack(raw, out))
+            }
+        };
+        result.unwrap_or_else(|e| {
+            tracing::warn!("decoding {} stopped early: {e}", track.meta.path);
+            false
+        })
+    }
+
+    /// The end of a track: the resampler's tail. (DoP carries over into the next track.)
+    fn end_track(&mut self, out: &mut Vec<u8>) {
+        if let Self::Pcm(p) = self {
+            p.finish(out);
+        }
+    }
+
+    /// The end of the stream: DoP pads an odd last byte.
+    fn end_stream(&mut self, out: &mut Vec<u8>) {
+        if let Self::Dop(d) = self {
+            d.finish(out);
+        }
+    }
+
+    /// Silence of the stream's own kind: DoP idle keeps a DAC in DSD mode.
+    fn silence(&mut self, frames: usize, bpf: usize, out: &mut Vec<u8>) {
+        match self {
+            Self::Dop(d) => d.idle(frames, out),
+            Self::Pcm(_) => out.resize(out.len() + frames * bpf, 0),
+        }
+    }
+}
+
+/// Where decoded bytes go: `pending` (on its way to the ring), counted in `frames`. With
+/// crossfading on, the newest `hold_limit` bytes of each track wait in `hold` first, to be
+/// mixed into the start of the next one.
+struct Out {
+    pending: Vec<u8>,
+    hold: Vec<u8>,
+    hold_limit: usize,
+    frames: u64,
+    bpf: usize,
+}
+
+impl Out {
+    fn emit(&mut self, bytes: &[u8]) {
+        self.pending.extend_from_slice(bytes);
+        self.frames += (bytes.len() / self.bpf) as u64;
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        if self.hold_limit == 0 {
+            self.emit(bytes);
+            return;
+        }
+        self.hold.extend_from_slice(bytes);
+        if self.hold.len() > self.hold_limit {
+            let spill = (self.hold.len() - self.hold_limit) / self.bpf * self.bpf;
+            self.pending.extend(self.hold.drain(..spill));
+            self.frames += (spill / self.bpf) as u64;
+        }
+    }
+
+    /// Lets the held tail through unmixed.
+    fn release(&mut self) {
+        let held = std::mem::take(&mut self.hold);
+        self.emit(&held);
+    }
+}
+
+/// Consecutive tracks of one album (kept gapless unless the user wants them crossfaded).
+fn same_album(a: &TrackMeta, b: &TrackMeta) -> bool {
+    a.album.as_deref().is_some_and(|album| !album.is_empty()) && a.album == b.album
+}
+
 fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
     let WorkerArgs {
         generation,
@@ -99,64 +213,74 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
     let bpf = format.bytes_per_frame();
     let low_water = (u64::from(format.sample_rate) * COMMIT_LOW_WATER_MS / 1000) as usize * bpf;
     let low_water = low_water.min(producer.buffer().capacity() / 2);
-    let mut pending: Vec<u8> = Vec::with_capacity(PENDING_HIGH_WATER);
-    let mut frames: u64 = preroll_frames;
-    pending.resize(preroll_frames as usize * bpf, 0);
+    // Crossfading: shared mode only (exclusive mode stays bit-perfect), on float output.
+    let hold_limit = if plan.mode == ShareMode::Shared
+        && plan.crossfade_ms > 0
+        && format.sample == SampleFormat::F32
+    {
+        (u64::from(format.sample_rate) * u64::from(plan.crossfade_ms) / 1000) as usize * bpf
+    } else {
+        0
+    };
+    let mut out = Out {
+        pending: Vec::with_capacity(PENDING_HIGH_WATER),
+        hold: Vec::new(),
+        hold_limit,
+        frames: 0,
+        bpf,
+    };
 
-    let mut pipeline = match Pipeline::new(first.meta.source, format) {
-        Ok(p) => p,
+    let mut stage = match Stage::for_track(&first, format) {
+        Ok(s) => s,
         Err(error) => {
             send(WorkerEvent::TrackFailed {
                 id: first.id,
                 error,
             });
             send(WorkerEvent::Ended {
-                at_frame: frames,
+                at_frame: 0,
                 next: None,
                 version: queue.lock().version(),
             });
             return producer;
         }
     };
+    let mut scratch = Vec::new();
+    let mut raw = Vec::new();
+    stage.silence(preroll_frames as usize, bpf, &mut scratch);
+    out.emit(&scratch);
+
     let mut track = first;
     let mut id = track.id;
     send(WorkerEvent::TrackStarted {
-        at_frame: frames,
+        at_frame: out.frames,
         track: Box::new(track.started()),
     });
 
     while !stop.load(Ordering::Relaxed) {
-        if write_pending(&mut producer, &mut pending) > 0 {
+        if write_pending(&mut producer, &mut out.pending) > 0 {
             controls.set_expect_data(true);
         }
-        if pending.len() >= PENDING_HIGH_WATER {
+        if out.pending.len() >= PENDING_HIGH_WATER {
             thread::sleep(Duration::from_millis(5));
             continue;
         }
 
-        let block = match track.decoder.next_block() {
-            Ok(block) => block,
-            Err(e) => {
-                tracing::warn!("decoding {} stopped early: {e}", track.meta.path);
-                None
-            }
-        };
-        if let Some(block) = block {
-            let before = pending.len();
-            pipeline.process(block, &mut pending);
-            frames += ((pending.len() - before) / bpf) as u64;
+        scratch.clear();
+        if stage.pull(&mut track, &mut scratch, &mut raw) {
+            out.push(&scratch);
             continue;
         }
 
         // End of the current track.
-        let before = pending.len();
-        pipeline.finish(&mut pending);
-        frames += ((pending.len() - before) / bpf) as u64;
+        scratch.clear();
+        stage.end_track(&mut scratch);
+        out.push(&scratch);
 
         // Open the successor now, commit to it shortly before the device needs it.
         let expected = queue.lock().after(id);
         let mut next = next_playable(&queue, id, &plan, &send);
-        if !drain_to_low_water(&mut producer, &mut pending, stop, &controls, low_water) {
+        if !drain_to_low_water(&mut producer, &mut out.pending, stop, &controls, low_water) {
             return producer;
         }
         if queue.lock().after(id) != expected {
@@ -165,14 +289,15 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
         let version = queue.lock().version();
         match next {
             Some(mut next) if next.negotiated.format == format => {
-                if !pipeline.accepts(&next.meta.source) {
-                    match Pipeline::new(next.meta.source, format) {
-                        Ok(p) => pipeline = p,
+                if !stage.accepts(&next) {
+                    match Stage::for_track(&next, format) {
+                        Ok(s) => stage = s,
                         Err(error) => {
                             send(WorkerEvent::TrackFailed { id: next.id, error });
-                            finish_stream(&mut producer, &mut pending, stop, &controls);
+                            out.release();
+                            finish_stream(&mut producer, &mut out.pending, stop, &controls);
                             send(WorkerEvent::Ended {
-                                at_frame: frames,
+                                at_frame: out.frames,
                                 next: None,
                                 version,
                             });
@@ -180,17 +305,35 @@ fn run(args: WorkerArgs, stop: &AtomicBool) -> Producer<u8> {
                         }
                     }
                 }
+                let mix = !out.hold.is_empty()
+                    && (plan.crossfade_albums || !same_album(&track.meta, &next.meta));
+                if !mix {
+                    out.release();
+                }
+                // The next track becomes audible where the mix (or the next track) begins.
                 id = next.id;
                 send(WorkerEvent::TrackStarted {
-                    at_frame: frames,
+                    at_frame: out.frames,
                     track: Box::new(next.started()),
                 });
+                if mix {
+                    let mut head = Vec::with_capacity(out.hold.len());
+                    while head.len() < out.hold.len() && stage.pull(&mut next, &mut head, &mut raw)
+                    {
+                    }
+                    let tail = std::mem::take(&mut out.hold);
+                    out.push(&crossfade(&tail, &head, usize::from(format.channels)));
+                }
                 track = next;
             }
             other => {
-                finish_stream(&mut producer, &mut pending, stop, &controls);
+                out.release();
+                scratch.clear();
+                stage.end_stream(&mut scratch);
+                out.emit(&scratch);
+                finish_stream(&mut producer, &mut out.pending, stop, &controls);
                 send(WorkerEvent::Ended {
-                    at_frame: frames,
+                    at_frame: out.frames,
                     next: other.map(Box::new),
                     version,
                 });

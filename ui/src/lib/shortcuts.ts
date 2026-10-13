@@ -11,6 +11,9 @@ export type ShortcutAction =
   | 'seekBack'
   | 'shuffle'
   | 'repeat'
+  | 'volumeUp'
+  | 'volumeDown'
+  | 'mute'
   | 'queue'
   | 'search'
   | 'library'
@@ -45,6 +48,9 @@ export const SHORTCUTS: readonly { keys: readonly string[]; label: string }[] = 
   { keys: ['Shift', '←'], label: 'Back 10 seconds' },
   { keys: ['Ctrl', 'S'], label: 'Shuffle on or off' },
   { keys: ['Ctrl', 'R'], label: 'Repeat: off, all, one' },
+  { keys: ['Ctrl', '↑'], label: 'Volume up' },
+  { keys: ['Ctrl', '↓'], label: 'Volume down' },
+  { keys: ['Ctrl', 'M'], label: 'Mute or unmute' },
   { keys: ['Ctrl', 'Q'], label: 'Show or hide the queue' },
   { keys: ['Ctrl', 'F'], label: 'Search' },
   { keys: ['Ctrl', 'L'], label: 'Library' },
@@ -58,6 +64,7 @@ export const SHORTCUTS: readonly { keys: readonly string[]; label: string }[] = 
 const CTRL_KEYS: Record<string, ShortcutAction> = {
   s: 'shuffle',
   r: 'repeat',
+  m: 'mute',
   q: 'queue',
   f: 'search',
   l: 'library',
@@ -76,6 +83,8 @@ export function shortcutFor(e: KeyInput, ctx: KeyContext): ShortcutAction | null
     if (e.shiftKey) return null;
     if (key === 'ArrowRight') return arrowsFree ? 'next' : null;
     if (key === 'ArrowLeft') return arrowsFree ? 'previous' : null;
+    if (key === 'ArrowUp') return arrowsFree ? 'volumeUp' : null;
+    if (key === 'ArrowDown') return arrowsFree ? 'volumeDown' : null;
     return CTRL_KEYS[key] ?? null;
   }
   if (ctx.typing) return null;

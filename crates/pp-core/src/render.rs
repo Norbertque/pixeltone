@@ -7,6 +7,8 @@
 
 use std::sync::Arc;
 
+use crate::dop;
+use crate::eq::{self, Equalizer};
 use crate::format::OutputFormat;
 use crate::gain::apply_q16_in_place;
 use crate::output::{Fade, StreamControls};
@@ -30,6 +32,12 @@ pub struct RenderFeed {
     bpf: usize,
     /// Fade level, 0 (silent) ..= [`UNITY`].
     level: u32,
+    eq: Option<Equalizer>,
+    /// The `eq_version` the equaliser was built from.
+    eq_seen: u64,
+    scratch: Vec<f64>,
+    /// Next DoP marker, so inserted silence continues the sequence.
+    dop_marker: u8,
 }
 
 impl RenderFeed {
@@ -48,6 +56,45 @@ impl RenderFeed {
             format,
             bpf: format.bytes_per_frame(),
             level,
+            eq: None,
+            eq_seen: 0,
+            scratch: Vec::new(),
+            dop_marker: dop::MARKER_A,
+        }
+    }
+
+    /// Picks up changed equaliser settings (without ever waiting for the lock).
+    fn refresh_eq(&mut self) {
+        let version = self.controls.eq_version();
+        if version == self.eq_seen {
+            return;
+        }
+        let Some(settings) = self.controls.try_eq() else {
+            return;
+        };
+        self.eq_seen = version;
+        self.eq = match settings.filter(|s| s.active()) {
+            None => None,
+            Some(s) => Some(match self.eq.take() {
+                Some(mut eq) => {
+                    eq.set(&s);
+                    eq
+                }
+                None => Equalizer::new(
+                    &s,
+                    self.format.sample_rate,
+                    usize::from(self.format.channels),
+                ),
+            }),
+        };
+    }
+
+    /// Silence for the device: zeros, or DoP idle for a DoP stream.
+    fn silence(&mut self, out: &mut [u8]) {
+        if self.controls.dop() {
+            dop::idle_into(out, self.format, &mut self.dop_marker);
+        } else {
+            out.fill(0);
         }
     }
 
@@ -77,11 +124,12 @@ impl RenderFeed {
             _ => {}
         }
 
+        self.refresh_eq();
         let ready = self.available_frames().min(frames);
         if fade == Fade::Out && (self.level == 0 || ready == 0) {
             // Silent (or nothing left to fade): hold, leaving the ring for the resume.
             self.level = 0;
-            out.fill(0);
+            self.silence(out);
             return Fill {
                 ring_frames: 0,
                 silent_from: Some(0),
@@ -95,7 +143,22 @@ impl RenderFeed {
         };
         let (taken, _) = self.source.pop_partial_slice(&mut out[..take * bpf]);
         let taken = taken.len();
+        if self.controls.dop() {
+            // DoP is DSD in disguise: nothing may touch it. Keep the marker sequence going.
+            if let Some(m) = dop::last_marker(&out[..taken], self.format) {
+                self.dop_marker = dop::next_marker(m);
+            }
+            let (_, rest) = out.split_at_mut(taken);
+            self.silence(rest);
+            return Fill {
+                ring_frames: taken / bpf,
+                silent_from: None,
+            };
+        }
         let audio = &mut out[..taken];
+        if let Some(eq) = &mut self.eq {
+            eq::apply(eq, audio, self.format, &mut self.scratch);
+        }
         if let Some(q16) = self.controls.gain_q16() {
             apply_q16_in_place(audio, self.format.sample, q16);
         }
@@ -293,6 +356,65 @@ mod tests {
         let s = samples(&out);
         assert!(s[0] < 8_000 && s[0] > 7_500);
         assert_eq!(s[18], 0);
+    }
+
+    #[test]
+    fn the_equaliser_changes_samples_only_while_active() {
+        use crate::eq::EqSettings;
+        let (mut feed, controls) = feed(1000, 10_000);
+        let mut out = vec![0u8; 100 * 4];
+        feed.fill(&mut out);
+        assert!(
+            samples(&out).iter().all(|&v| v == 10_000),
+            "no EQ: untouched"
+        );
+
+        let mut eq = EqSettings {
+            enabled: true,
+            ..EqSettings::default()
+        };
+        eq.gains_db[0] = -12.0; // cut the bass: DC-like samples drop
+        controls.set_eq(Some(eq.clone()));
+        feed.fill(&mut out);
+        let s = samples(&out);
+        assert!(
+            s[198] < 9_000,
+            "the low shelf of a 31 Hz cut pulls a constant down: {}",
+            s[198]
+        );
+
+        eq.enabled = false;
+        controls.set_eq(Some(eq));
+        feed.fill(&mut out);
+        assert!(
+            samples(&out).iter().all(|&v| v == 10_000),
+            "off again: untouched"
+        );
+    }
+
+    #[test]
+    fn dop_streams_pass_untouched_and_pad_with_idle() {
+        let format = OutputFormat {
+            sample_rate: 176_400,
+            channels: 2,
+            sample: crate::format::SampleFormat::S24_IN_32,
+        };
+        let (mut producer, consumer) = rtrb::RingBuffer::new(64);
+        let mut stream = Vec::new();
+        let mut packer = crate::dop::DopPacker::new(format);
+        packer.pack(&[1, 2, 3, 4, 5, 6, 7, 8], &mut stream); // two frames: markers A, B
+        assert_eq!(producer.push_partial_slice(&stream).0.len(), stream.len());
+        let controls = Arc::new(StreamControls::default());
+        controls.set_dop(true);
+        controls.set_gain(crate::SoftwareGain::new(-20.0)); // must be ignored
+        let mut feed = RenderFeed::new(consumer, controls, format);
+        let mut out = vec![0xAAu8; 4 * 8];
+        let fill = feed.fill(&mut out);
+        assert_eq!(fill.ring_frames, 2);
+        assert_eq!(&out[..16], &stream[..], "carried untouched");
+        // Padding: idle with the next markers (A, B).
+        assert_eq!(&out[16..24], &[0, 0x69, 0x69, 0x05, 0, 0x69, 0x69, 0x05]);
+        assert_eq!(&out[24..32], &[0, 0x69, 0x69, 0xFA, 0, 0x69, 0x69, 0xFA]);
     }
 
     #[test]

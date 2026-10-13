@@ -24,7 +24,9 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
 9. Turn off "Allow applications to take exclusive control" in the Sound control panel: a
    clear message, and playback continues in shared mode.
 10. One hour of playback: *Dropouts* stays at 0 in Audio output diagnostics.
-11. DSD64/128: DSD indicator on a DoP-capable DAC; PCM conversion elsewhere. *(M5)*
+11. DSD64/128 on a DoP-capable DAC with exclusive mode: the badge says *DSD64 over DoP •
+    Bit-perfect* and the DAC shows DSD; pause/resume keeps it in DSD mode without pops. With
+    *DSD over DoP* off, or on a DAC without DoP: *DSD→… • Converted* and the DSD plays as PCM.
 12. Queue: right-click a song → *Play next* / *Add to queue*; drag rows in the queue panel;
     quit mid-song and start the app again: same queue and track, paused at the same spot.
 13. Lyrics: a song with synced lyrics (LRCLIB, or an `.lrc` next to it) highlights the line
@@ -32,3 +34,10 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
 14. Playlists: import an M3U8 exported by another player (relative paths too), reorder by
     dragging, export it again; after a few songs, Home shows *Recently played* and the stats
     count them.
+15. Volume with sensitive earphones: the player bar's volume button turns the level down in
+    shared mode (on top of the Windows volume). In exclusive mode it moves the device's own
+    volume; if the quietest setting is still too loud, *Use the app's volume instead* in
+    Settings → Audio output takes over (starting at −30 dB; the badge then shows the level).
+16. Settings → Sound: the equaliser and ReplayGain change the sound at once and the badge
+    says *Converted* and names them; a 5 s crossfade in shared mode blends songs of different
+    albums but keeps an album gapless.

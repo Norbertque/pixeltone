@@ -350,3 +350,83 @@ fn reports_ffmpeg_version() {
     assert!(!ffmpeg_version().is_empty());
     assert!(ffmpeg_license().contains("GPL"));
 }
+
+/// 1.5 DSF blocks of known bytes per channel, as DSD64.
+fn dsf_fixture(dir: &Path) -> (PathBuf, Vec<Vec<u8>>) {
+    let path = dir.join("tone.dsf");
+    let left: Vec<u8> = (0..6000u32).map(|i| (i * 7 + 3) as u8).collect();
+    let right: Vec<u8> = (0..6000u32).map(|i| (i * 13 + 5) as u8).collect();
+    testing::write_dsf(&path, 2_822_400, &[left.clone(), right.clone()]).unwrap();
+    (path, vec![left, right])
+}
+
+fn interleave(channels: &[Vec<u8>], from: usize) -> Vec<u8> {
+    (from..channels[0].len())
+        .flat_map(|i| channels.iter().map(move |c| c[i]))
+        .collect()
+}
+
+#[test]
+fn raw_dsd_comes_out_untouched_and_without_block_padding() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, channels) = dsf_fixture(dir.path());
+    let mut dec = Decoder::open(&path).unwrap();
+    assert!(dec.info().dsd);
+    assert_eq!(dec.dsd_bit_rate(), Some(2_822_400));
+    // FFmpeg reports whole DSF blocks as the length but trims the last block's padding.
+    assert!(dec.info().total_frames.is_some_and(|t| t >= 6000));
+    let mut out = Vec::new();
+    while dec.next_dsd(&mut out).unwrap() {}
+    assert_eq!(out.len(), 12_000);
+    assert!(
+        out == interleave(&channels, 0),
+        "MSB-first, interleaved, padding dropped"
+    );
+}
+
+#[test]
+fn raw_dsd_seeks_to_the_byte() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, channels) = dsf_fixture(dir.path());
+    let mut dec = Decoder::open(&path).unwrap();
+    dec.seek_dsd(5000).unwrap();
+    let mut out = Vec::new();
+    while dec.next_dsd(&mut out).unwrap() {}
+    assert!(out == interleave(&channels, 5000));
+}
+
+#[test]
+fn dsd_still_decodes_to_pcm() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, _) = dsf_fixture(dir.path());
+    let (dec, blocks) = decode_all(&path);
+    assert_eq!(dec.info().source.sample_rate, 352_800);
+    assert!(!blocks.is_empty());
+    assert!(matches!(blocks[0].samples, Samples::Float(_)));
+}
+
+#[test]
+fn reads_replaygain_tags() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = encode(
+        dir.path(),
+        "rg.flac",
+        44_100,
+        "0.2",
+        &[
+            "-metadata",
+            "REPLAYGAIN_TRACK_GAIN=-6.50 dB",
+            "-metadata",
+            "REPLAYGAIN_TRACK_PEAK=0.950000",
+            "-metadata",
+            "REPLAYGAIN_ALBUM_GAIN=-7.25 dB",
+        ],
+    );
+    let rg = Decoder::open(&path).unwrap().tags().replay_gain;
+    assert_eq!(rg.track_gain_db, Some(-6.5));
+    assert_eq!(rg.track_peak, Some(0.95));
+    assert_eq!(rg.album_gain_db, Some(-7.25));
+    assert_eq!(rg.album_peak, None);
+    assert_eq!(leading_number("+2.10 dB"), Some(2.1));
+    assert_eq!(leading_number("garbage"), None);
+}

@@ -11,6 +11,7 @@
   import AudioOutput from './settings/AudioOutput.svelte';
   import LibrarySettings from './settings/LibrarySettings.svelte';
   import OnlineSettings from './settings/OnlineSettings.svelte';
+  import SoundSettings from './settings/SoundSettings.svelte';
 
   const MODES = [
     { value: 'system', label: 'System', icon: 'brightness_auto' },
@@ -121,6 +122,11 @@
   <section class="section" aria-labelledby="output">
     <h2 id="output" class="title-large rounded emphasized"><Icon name="speaker" /> Audio output</h2>
     <AudioOutput />
+  </section>
+
+  <section class="section" aria-labelledby="sound">
+    <h2 id="sound" class="title-large rounded emphasized"><Icon name="graphic_eq" /> Sound</h2>
+    <SoundSettings />
   </section>
 
   <section class="section" aria-labelledby="library">

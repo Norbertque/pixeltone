@@ -4,6 +4,7 @@
   import Artwork from './Artwork.svelte';
   import IconButton from './IconButton.svelte';
   import OutputBadge from './OutputBadge.svelte';
+  import VolumeButton from './VolumeButton.svelte';
   import WavyProgress from './WavyProgress.svelte';
 
   const track = $derived(player.track);
@@ -58,6 +59,7 @@
     {/if}
 
     <div class="end">
+      <VolumeButton />
       <IconButton icon="lyrics" label="Show the lyrics" onclick={() => router.togglePanel('lyrics')} />
       <IconButton icon="queue_music" label="Show the queue" onclick={() => router.togglePanel('queue')} />
       <IconButton icon="expand_less" label="Open Now Playing" onclick={() => router.setNowPlaying(true)} />
@@ -119,7 +121,7 @@
 
   .progress {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
     min-width: 0;
@@ -133,6 +135,7 @@
 
   .badge {
     min-width: 0;
+    max-width: 300px;
   }
 
   .end {

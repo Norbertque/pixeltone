@@ -7,6 +7,15 @@ use pp_core::gain;
 use pp_engine::OutputSettings;
 use serde::{Deserialize, Serialize};
 
+/// ReplayGain pre-amp range, dB either way.
+pub const MAX_PREAMP_DB: f32 = 15.0;
+/// Longest crossfade, ms.
+pub const MAX_CROSSFADE_MS: u32 = 12_000;
+
+fn finite(v: f32) -> f32 {
+    if v.is_finite() { v } else { 0.0 }
+}
+
 /// Per-device volume policy for exclusive mode without hardware volume.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -14,6 +23,8 @@ pub struct DevicePrefs {
     pub software_gain_db: f32,
     /// Full-scale output, for DACs feeding an external amplifier.
     pub line_level: bool,
+    /// Attenuate in the app although the device has its own volume control.
+    pub software_volume: bool,
     /// The user accepted the loudness warning, unlocking levels above −10 dB.
     pub loudness_acknowledged: bool,
 }
@@ -23,6 +34,7 @@ impl Default for DevicePrefs {
         Self {
             software_gain_db: gain::DEFAULT_DB,
             line_level: false,
+            software_volume: false,
             loudness_acknowledged: false,
         }
     }
@@ -77,7 +89,13 @@ impl AppSettings {
                 prefs.loudness_acknowledged,
             ),
             line_level: prefs.line_level,
+            software_volume: prefs.software_volume,
+            shared_gain_db: finite(self.output.shared_gain_db).clamp(gain::FLOOR_DB, 0.0),
             buffer_ms: self.output.buffer_ms.clamp(10, 500),
+            eq: self.output.eq.clone().normalized(),
+            replay_gain_preamp_db: finite(self.output.replay_gain_preamp_db)
+                .clamp(-MAX_PREAMP_DB, MAX_PREAMP_DB),
+            crossfade_ms: self.output.crossfade_ms.min(MAX_CROSSFADE_MS),
             ..self.output.clone()
         }
     }
@@ -120,6 +138,19 @@ mod tests {
         assert_eq!(s.effective_output().software_gain_db, gain::LOCKED_MAX_DB);
         s.devices.get_mut("").unwrap().loudness_acknowledged = true;
         assert_eq!(s.effective_output().software_gain_db, -3.0);
+    }
+
+    #[test]
+    fn hand_edited_values_are_brought_back_in_range() {
+        let mut s = AppSettings::default();
+        s.output.eq.gains_db = vec![99.0];
+        s.output.replay_gain_preamp_db = f32::INFINITY;
+        s.output.crossfade_ms = 60_000;
+        let out = s.effective_output();
+        assert_eq!(out.eq.gains_db.len(), 10);
+        assert_eq!(out.eq.gains_db[0], 12.0);
+        assert_eq!(out.replay_gain_preamp_db, 0.0);
+        assert_eq!(out.crossfade_ms, MAX_CROSSFADE_MS);
     }
 
     #[test]

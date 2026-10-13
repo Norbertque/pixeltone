@@ -1,16 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  import {
-    api,
-    type AppSettings,
-    type DeviceCapabilities,
-    type DeviceInfo,
-    type DevicePrefs,
-    type HardwareVolumeInfo,
-    type OutputSettings,
-    type SampleFormat,
-  } from '../../api';
+  import { api, type DeviceInfo, type SampleFormat } from '../../api';
   import Button from '../../components/Button.svelte';
   import Icon from '../../components/Icon.svelte';
   import IconButton from '../../components/IconButton.svelte';
@@ -18,12 +9,11 @@
   import SegmentedButtons from '../../components/SegmentedButtons.svelte';
   import Slider from '../../components/Slider.svelte';
   import Switch from '../../components/Switch.svelte';
+  import { output as store } from '../../output.svelte';
   import { player } from '../../player.svelte';
   import { toasts } from '../../toasts.svelte';
+  import { formatDb, volumeIcon } from '../../volume';
 
-  const DEFAULT_PREFS: DevicePrefs = { softwareGainDb: -30, lineLevel: false, loudnessAcknowledged: false };
-  const LOCKED_MAX_DB = -10;
-  const FLOOR_DB = -60;
   const RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000, 352_800, 384_000, 705_600, 768_000];
   const CONTAINERS: { label: string; sample: SampleFormat }[] = [
     { label: '16-bit', sample: { kind: 'int', containerBits: 16, validBits: 16 } },
@@ -33,19 +23,15 @@
     { label: '32-bit float', sample: { kind: 'float', containerBits: 32, validBits: 32 } },
   ];
 
-  let settings = $state<AppSettings | null>(null);
   let devices = $state<DeviceInfo[]>([]);
-  let caps = $state<DeviceCapabilities | null>(null);
-  let capsLoading = $state(false);
-  let hardware = $state<HardwareVolumeInfo | null>(null);
-  let gainDraft = $state<number | null>(null);
   let dialog: HTMLDialogElement | undefined = $state();
 
-  const output = $derived(settings?.output ?? null);
-  const deviceId = $derived(output?.deviceId ?? null);
-  const prefs = $derived<DevicePrefs>(settings?.devices[deviceId ?? ''] ?? DEFAULT_PREFS);
-  const gainMax = $derived(prefs.loudnessAcknowledged ? 0 : LOCKED_MAX_DB);
-  const gain = $derived(gainDraft ?? Math.min(prefs.softwareGainDb, gainMax));
+  const output = $derived(store.settings?.output ?? null);
+  const prefs = $derived(store.prefs);
+  const caps = $derived(store.caps);
+  const volume = $derived(store.volume);
+  const volumeDb = $derived(store.draft ?? volume?.db ?? 0);
+  const hasDeviceVolume = $derived(store.hardware !== null);
   const live = $derived(player.snapshot?.output ?? null);
 
   onMount(() => {
@@ -53,13 +39,13 @@
     let unlisten: (() => void) | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     void (async () => {
+      await store.start();
       try {
-        settings = await api.getSettings();
         devices = await api.outputDevices();
       } catch (e) {
         toasts.show(`Can't list audio devices: ${e}`, 'error');
       }
-      await probe();
+      await store.probe();
     })();
     // Device notifications come in bursts (one per role and state): let them settle.
     void api
@@ -82,28 +68,7 @@
       return;
     }
     // "Windows default" may mean a different device now.
-    if (deviceId === null) await probe();
-  }
-
-  async function probe(): Promise<void> {
-    capsLoading = true;
-    try {
-      caps = await api.outputCapabilities(deviceId);
-      hardware = await api.hardwareVolume(deviceId);
-    } catch (e) {
-      caps = null;
-      toasts.show(`Can't read the device's capabilities: ${e}`, 'error');
-    } finally {
-      capsLoading = false;
-    }
-  }
-
-  async function update(patch: Partial<OutputSettings>, prefsPatch: Partial<DevicePrefs> = {}): Promise<void> {
-    if (!settings) return;
-    const next = { ...settings.output, ...patch };
-    const nextPrefs = { ...(settings.devices[next.deviceId ?? ''] ?? DEFAULT_PREFS), ...prefsPatch };
-    settings = await api.setOutputSettings(next, nextPrefs);
-    if ('deviceId' in patch) await probe();
+    if (store.deviceId === null) await store.probe();
   }
 
   function supported(sample: SampleFormat, rate: number): boolean {
@@ -123,24 +88,12 @@
     return String(Number((rate / 1000).toFixed(1)));
   }
 
-  let hwTimer: ReturnType<typeof setTimeout> | undefined;
-  function setHardwareDb(db: number): void {
-    if (hardware) hardware = { ...hardware, db };
-    clearTimeout(hwTimer);
-    hwTimer = setTimeout(() => void api.setHardwareVolume(deviceId, db), 60);
-  }
-
-  function formatDb(db: number): string {
-    if (db <= FLOOR_DB) return 'Muted';
-    return `${db > 0 ? '+' : db < 0 ? '−' : ''}${Math.abs(db).toFixed(1)} dB`;
-  }
-
   function ms(frames: number, rate: number): string {
     return rate > 0 ? `${((frames / rate) * 1000).toFixed(1)} ms` : '–';
   }
 </script>
 
-{#if settings && output}
+{#if output && prefs}
   <div class="row">
     <div class="row-text">
       <span class="title-medium">Output device</span>
@@ -148,8 +101,8 @@
     </div>
     <select
       class="select body-large"
-      value={deviceId ?? ''}
-      onchange={(e) => update({ deviceId: e.currentTarget.value || null })}
+      value={store.deviceId ?? ''}
+      onchange={(e) => store.update({ deviceId: e.currentTarget.value || null })}
       aria-label="Output device"
     >
       <option value="">Windows default{devices.find((d) => d.isDefault) ? ` (${devices.find((d) => d.isDefault)?.name})` : ''}</option>
@@ -167,7 +120,7 @@
         can't play through it meanwhile.
       </span>
     </div>
-    <Switch label="Exclusive mode" checked={output.exclusive} onchange={(v) => update({ exclusive: v })} />
+    <Switch label="Exclusive mode" checked={output.exclusive} onchange={(v) => store.update({ exclusive: v })} />
   </div>
 
   {#if output.exclusive}
@@ -183,8 +136,19 @@
           { value: 'events', label: 'Event-driven' },
         ]}
         value={output.eventDriven ? 'events' : 'polling'}
-        onchange={(v) => update({ eventDriven: v === 'events' })}
+        onchange={(v) => store.update({ eventDriven: v === 'events' })}
       />
+    </div>
+
+    <div class="row">
+      <div class="row-text">
+        <span class="title-medium">DSD over DoP</span>
+        <span class="body-medium">
+          DSD files reach DACs that understand DoP untouched. Only used where the device has its own volume control
+          (or at line level), because DoP can't be attenuated; otherwise DSD is converted to PCM.
+        </span>
+      </div>
+      <Switch label="DSD over DoP" checked={output.dop} onchange={(v) => store.update({ dop: v })} />
     </div>
   {/if}
 
@@ -197,7 +161,7 @@
       label="Device buffer"
       options={[20, 50, 100, 200].map((v) => ({ value: v, label: `${v} ms` }))}
       value={output.bufferMs}
-      onchange={(v) => update({ bufferMs: v })}
+      onchange={(v) => store.update({ bufferMs: v })}
     />
   </div>
 
@@ -209,71 +173,85 @@
         untouched (bit-perfect).
       </span>
     </div>
-    <Switch label="Smooth pause and seek" checked={output.fades} onchange={(v) => update({ fades: v })} />
+    <Switch label="Smooth pause and seek" checked={output.fades} onchange={(v) => store.update({ fades: v })} />
   </div>
+
   <div class="row column">
     <div class="row-text">
       <span class="title-medium">Volume</span>
-      {#if capsLoading}
+      {#if !volume}
         <span class="body-medium">Checking the device…</span>
-      {:else if caps?.hardwareVolume && hardware}
-        <span class="body-medium">This device has a hardware volume control: volume never touches the samples.</span>
-      {:else if output.exclusive}
+      {:else if volume.kind === 'app'}
         <span class="body-medium">
-          This device has no hardware volume, so in exclusive mode the app attenuates in 32-bit before the DAC. Only
-          0 dB is bit-perfect.
+          The app's own level, applied before Windows mixes. The Windows volume applies on top.
+        </span>
+      {:else if volume.kind === 'device'}
+        <span class="body-medium">
+          This device has its own volume control (the same one as the Windows volume), so the music stays
+          bit-perfect.
+        </span>
+      {:else if volume.kind === 'software'}
+        <span class="body-medium">
+          {hasDeviceVolume
+            ? 'The app attenuates in 32-bit before the device; its own volume stays where it is.'
+            : "This device has no volume control of its own, so the app attenuates in 32-bit before the DAC."}
+          Only 0 dB is bit-perfect.
         </span>
       {:else}
-        <span class="body-medium">In shared mode the Windows volume applies.</span>
+        <span class="body-medium">Full scale, for a DAC feeding an amplifier with its own volume.</span>
       {/if}
     </div>
 
-    {#if !capsLoading && caps?.hardwareVolume && hardware}
+    {#if volume && volume.kind !== 'fixed'}
       <div class="volume">
-        <Icon name="volume_up" />
-        <Slider
-          label="Device volume"
-          min={hardware.minDb}
-          max={hardware.maxDb}
-          step={hardware.stepDb || 0.5}
-          value={hardware.db}
-          valueText={formatDb(hardware.db)}
-          oninput={setHardwareDb}
+        <IconButton
+          icon={volumeIcon({ ...volume, db: volumeDb })}
+          label={volume.muted ? 'Unmute' : 'Mute'}
+          selected={volume.muted}
+          onclick={() => store.toggleMute()}
         />
-        <span class="db label-large">{formatDb(hardware.db)}</span>
+        <Slider
+          label={volume.label}
+          min={volume.min}
+          max={volume.max}
+          step={volume.step}
+          value={volumeDb}
+          valueText={formatDb(volumeDb, volume.kind)}
+          oninput={(v) => store.setVolume(v)}
+          onchange={(v) => store.setVolume(v)}
+        />
+        <span class="db label-large">{volume.muted ? 'Muted' : formatDb(volumeDb, volume.kind)}</span>
       </div>
-    {:else if !capsLoading && output.exclusive}
+    {/if}
+
+    {#if output.exclusive && hasDeviceVolume}
+      <div class="inline-row">
+        <div class="row-text">
+          <span class="title-small">Use the app's volume instead</span>
+          <span class="body-medium">
+            For earphones that are still too loud at the device's lowest setting. Not bit-perfect below 0 dB.
+          </span>
+        </div>
+        <Switch
+          label="Use the app's volume instead"
+          checked={prefs.softwareVolume}
+          onchange={(v) => store.update({}, { softwareVolume: v })}
+        />
+      </div>
+    {/if}
+    {#if output.exclusive && (!hasDeviceVolume || prefs.softwareVolume)}
       <div class="inline-row">
         <div class="row-text">
           <span class="title-small">Fixed line-level output</span>
           <span class="body-medium">Full scale, for a DAC feeding an amplifier with its own volume.</span>
         </div>
-        <Switch label="Fixed line-level output" checked={prefs.lineLevel} onchange={(v) => update({}, { lineLevel: v })} />
+        <Switch label="Fixed line-level output" checked={prefs.lineLevel} onchange={(v) => store.update({}, { lineLevel: v })} />
       </div>
-      {#if !prefs.lineLevel}
-        <div class="volume">
-          <Icon name="volume_down" />
-          <Slider
-            label="Software volume"
-            min={FLOOR_DB}
-            max={gainMax}
-            step={0.5}
-            value={gain}
-            valueText={formatDb(gain)}
-            oninput={(v) => (gainDraft = v)}
-            onchange={(v) => {
-              gainDraft = null;
-              void update({}, { softwareGainDb: v });
-            }}
-          />
-          <span class="db label-large">{formatDb(gain)}</span>
-        </div>
-        {#if !prefs.loudnessAcknowledged}
-          <div>
-            <Button variant="text" icon="lock_open" onclick={() => dialog?.showModal()}>Unlock levels above −10 dB</Button>
-          </div>
-        {/if}
-      {/if}
+    {/if}
+    {#if volume?.kind === 'software' && !prefs.loudnessAcknowledged}
+      <div>
+        <Button variant="text" icon="lock_open" onclick={() => dialog?.showModal()}>Unlock levels above −10 dB</Button>
+      </div>
     {/if}
   </div>
 
@@ -283,7 +261,7 @@
         <span class="title-medium">Exclusive-mode formats</span>
         <span class="body-medium">What {caps?.device.name ?? 'the device'} accepts directly, stereo.</span>
       </div>
-      <IconButton icon="refresh" label="Check again" onclick={probe} disabled={capsLoading} />
+      <IconButton icon="refresh" label="Check again" onclick={() => void store.probe()} disabled={store.capsLoading} />
     </div>
     {#if caps?.exclusiveError}
       <p class="banner body-medium" role="alert"><Icon name="warning" size={20} /> {caps.exclusiveError}</p>
@@ -347,8 +325,8 @@
     <Icon name="hearing" size={24} />
     <h3 id="loud-title" class="headline-small">Unlock loud levels?</h3>
     <p class="body-medium">
-      Without a hardware volume control, the DAC plays exactly what the app sends. Above −10 dB, sensitive headphones
-      and in-ear monitors can get dangerously loud. Only continue if you know your setup.
+      In exclusive mode the DAC plays exactly what the app sends. Above −10 dB, sensitive headphones and in-ear
+      monitors can get dangerously loud. Only continue if you know your setup.
     </p>
     <div class="actions">
       <Button variant="text" onclick={() => dialog?.close()}>Cancel</Button>
@@ -356,7 +334,7 @@
         variant="filled"
         onclick={() => {
           dialog?.close();
-          void update({}, { loudnessAcknowledged: true });
+          void store.update({}, { loudnessAcknowledged: true });
         }}>Unlock</Button
       >
     </div>
@@ -410,6 +388,7 @@
   .volume {
     display: grid;
     grid-template-columns: auto 1fr 5.5em;
+    --slider-surface: var(--md-sys-color-surface-container-low);
     align-items: center;
     gap: 16px;
     color: var(--md-sys-color-on-surface-variant);

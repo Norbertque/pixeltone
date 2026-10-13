@@ -196,6 +196,7 @@
   .wavy {
     position: relative;
     width: 100%;
+    min-width: 0;
     cursor: pointer;
     touch-action: none;
     border-radius: var(--shape-sm);
@@ -204,7 +205,10 @@
     cursor: default;
     opacity: 0.38;
   }
+  /* Out of the layout: its width follows the box, so it must never hold the box open. */
   svg {
+    position: absolute;
+    inset: 0;
     display: block;
     overflow: visible;
   }

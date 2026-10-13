@@ -11,14 +11,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use parking_lot::{Mutex, RwLock};
 use pp_core::{
-    DeviceCapabilities, DeviceChange, Fade, OpenRequest, OutputBackend, OutputBadge, OutputError,
-    OutputFormat, OutputStream, ShareMode, SoftwareGain, StreamControls, StreamStats,
+    DeviceCapabilities, DeviceChange, Effects, EqSettings, Fade, OpenRequest, OutputBackend,
+    OutputBadge, OutputError, OutputFormat, OutputStream, ShareMode, SoftwareGain, StreamControls,
+    StreamStats,
 };
 use pp_decode::CoverArt;
 use rtrb::{Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::effects::ReplayGainMode;
 use crate::pipeline::OutputPlan;
 use crate::queue::{Queue, QueueEntry, QueueItem, QueueSnapshot, RepeatMode};
 use crate::track::{LoadedTrack, StartedTrack, TrackMeta, load, read_meta};
@@ -46,8 +48,25 @@ pub struct OutputSettings {
     pub software_gain_db: f32,
     /// Full-scale output, bypassing the software gain stage (for an external amplifier).
     pub line_level: bool,
+    /// Exclusive mode: attenuate in the app (`software_gain_db`) even though the device has
+    /// a volume control of its own, e.g. when its quietest setting is still too loud.
+    pub software_volume: bool,
+    /// The app's own volume in shared mode (dB, ≤ 0), applied before Windows mixes.
+    pub shared_gain_db: f32,
     /// Short fades on pause, resume, seek and skip, so they don't click.
     pub fades: bool,
+    /// Send DSD as DoP (exclusive mode; DACs that take the rate and have their own volume).
+    pub dop: bool,
+    /// The 10-band equaliser (any mode; the badge then says "Converted").
+    pub eq: EqSettings,
+    /// Levels tracks by their ReplayGain tags (any mode; the badge then says "Converted").
+    pub replay_gain: ReplayGainMode,
+    /// Added to ReplayGain values, dB.
+    pub replay_gain_preamp_db: f32,
+    /// Crossfade between tracks in shared mode (0 = off, gapless).
+    pub crossfade_ms: u32,
+    /// Crossfade between tracks of the same album too.
+    pub crossfade_albums: bool,
 }
 
 impl Default for OutputSettings {
@@ -59,7 +78,15 @@ impl Default for OutputSettings {
             buffer_ms: 50,
             software_gain_db: pp_core::gain::DEFAULT_DB,
             line_level: false,
+            software_volume: false,
+            shared_gain_db: 0.0,
             fades: true,
+            dop: true,
+            eq: EqSettings::default(),
+            replay_gain: ReplayGainMode::Off,
+            replay_gain_preamp_db: 0.0,
+            crossfade_ms: 0,
+            crossfade_albums: false,
         }
     }
 }
@@ -410,6 +437,22 @@ impl Session {
             .unwrap_or(SoftwareGain::UNITY)
     }
 
+    /// The badge for a track in this stream, including the user's sound processing.
+    fn badge(&self, track: &StartedTrack, eq: &EqSettings) -> OutputBadge {
+        let dop = track.negotiated.conversion.dop;
+        OutputBadge::new(
+            self.plan.mode,
+            track.meta.source,
+            track.negotiated.format,
+            track.negotiated.conversion,
+            self.gain(),
+        )
+        .with_effects(Effects {
+            eq: !dop && eq.active(),
+            replay_gain_db: track.replay_gain_db,
+        })
+    }
+
     fn stop_worker(&mut self) -> Option<Producer<u8>> {
         self.worker.take().and_then(WorkerHandle::stop)
     }
@@ -610,8 +653,9 @@ impl Control {
     }
 
     fn play(&mut self) {
-        let fades = self.settings.fades;
         if let Some(s) = &mut self.session {
+            // DoP can't be faded: it would stop being DSD.
+            let fades = self.settings.fades && !s.controls.dop();
             s.controls
                 .set_fade_frames(fade_frames(s.format, PAUSE_FADE_MS, fades));
             s.controls
@@ -657,7 +701,11 @@ impl Control {
     /// Fades the playing stream out and waits until the device has played the silence.
     fn fade_out(&self, ms: u32) {
         let Some(s) = &self.session else { return };
-        if self.status != PlaybackStatus::Playing || !self.settings.fades || ms == 0 {
+        if self.status != PlaybackStatus::Playing
+            || !self.settings.fades
+            || ms == 0
+            || s.controls.dop()
+        {
             return;
         }
         s.controls.set_fade_frames(fade_frames(s.format, ms, true));
@@ -678,28 +726,34 @@ impl Control {
         if previous.device_id != self.settings.device_id {
             self.caps.clear();
         }
-        // Gain and fades apply to the open stream as they are.
+        // Volume, fades and the equaliser apply to the open stream as they are.
         let live = OutputSettings {
             software_gain_db: self.settings.software_gain_db,
+            shared_gain_db: self.settings.shared_gain_db,
             fades: self.settings.fades,
+            eq: self.settings.eq.clone(),
             ..previous.clone()
         } == self.settings;
         if let Some(s) = &mut self.session {
             if live {
                 if s.software_gain_db.is_some() {
-                    s.software_gain_db = Some(self.settings.software_gain_db);
-                    s.controls
-                        .set_gain(SoftwareGain::new(self.settings.software_gain_db));
-                    let gain = s.gain();
-                    for b in &mut s.boundaries {
-                        b.badge = OutputBadge::new(
-                            s.plan.mode,
-                            b.track.meta.source,
-                            b.track.negotiated.format,
-                            b.track.negotiated.conversion,
-                            gain,
-                        );
-                    }
+                    let db = match s.plan.mode {
+                        ShareMode::Shared => self.settings.shared_gain_db,
+                        ShareMode::Exclusive => self.settings.software_gain_db,
+                    };
+                    s.software_gain_db = Some(db);
+                    s.controls.set_gain(SoftwareGain::new(db));
+                }
+                if !s.controls.dop() {
+                    s.controls.set_eq(Some(self.settings.eq.clone()));
+                }
+                let badges: Vec<OutputBadge> = s
+                    .boundaries
+                    .iter()
+                    .map(|b| s.badge(&b.track, &self.settings.eq))
+                    .collect();
+                for (b, badge) in s.boundaries.iter_mut().zip(badges) {
+                    b.badge = badge;
                 }
                 return;
             }
@@ -773,8 +827,16 @@ impl Control {
         } else {
             ShareMode::Exclusive
         };
-        let gain_stage =
-            mode == ShareMode::Exclusive && !caps.hardware_volume && !self.settings.line_level;
+        let s = &self.settings;
+        // Exclusive mode attenuates in the app only where the device can't (or the user
+        // prefers it); shared mode always has the app's own volume.
+        let software_gain_db = match mode {
+            ShareMode::Shared => Some(s.shared_gain_db),
+            ShareMode::Exclusive if s.line_level => None,
+            ShareMode::Exclusive if caps.hardware_volume && !s.software_volume => None,
+            ShareMode::Exclusive => Some(s.software_gain_db),
+        };
+        let gain_stage = mode == ShareMode::Exclusive && software_gain_db.is_some();
         Ok(PlanChoice {
             plan: OutputPlan {
                 mode,
@@ -784,12 +846,23 @@ impl Control {
                     Vec::new()
                 },
                 mix_format: caps.mix_format,
-                prefer_deepest: gain_stage,
+                prefer_deepest: gain_stage || s.replay_gain != ReplayGainMode::Off,
+                // DoP can't be attenuated: only where the DAC has its own volume (or is fed
+                // to an amplifier at line level).
+                dop: s.dop && mode == ShareMode::Exclusive && !gain_stage,
+                replay_gain: s.replay_gain,
+                replay_gain_preamp_db: s.replay_gain_preamp_db,
+                crossfade_ms: if mode == ShareMode::Shared {
+                    s.crossfade_ms.min(12_000)
+                } else {
+                    0
+                },
+                crossfade_albums: s.crossfade_albums,
             },
             device_id: caps.device.id.clone(),
             device_name: caps.device.name.clone(),
             fallback_reason,
-            software_gain_db: gain_stage.then_some(self.settings.software_gain_db),
+            software_gain_db,
         })
     }
 
@@ -846,8 +919,8 @@ impl Control {
             .is_some_and(|s| s.plan == choice.plan && s.format == track.negotiated.format);
         if reusable {
             self.fade_out(SEEK_FADE_MS);
-            let fades = self.settings.fades;
             let s = self.session.as_mut().expect("checked");
+            let fades = self.settings.fades && !s.controls.dop();
             if let Some(producer) = s.stop_worker() {
                 let flushed = s.stream.pause().and_then(|()| s.stream.flush());
                 if flushed.is_ok() {
@@ -899,7 +972,11 @@ impl Control {
         if let Some(db) = choice.software_gain_db {
             controls.set_gain(SoftwareGain::new(db));
         }
-        let fades = self.settings.fades;
+        // DoP is DSD in disguise: no gain, EQ or fades may touch it.
+        let dop = track.negotiated.conversion.dop;
+        controls.set_dop(dop);
+        controls.set_eq((!dop).then(|| self.settings.eq.clone()));
+        let fades = self.settings.fades && !dop;
         controls.set_fade_frames(fade_frames(format, PAUSE_FADE_MS, fades));
         controls.set_fade(if fades && track.start_ms > 0 {
             Fade::In
@@ -922,13 +999,15 @@ impl Control {
                     plan: OutputPlan {
                         mode: ShareMode::Shared,
                         exclusive: Vec::new(),
-                        mix_format: choice.plan.mix_format,
                         prefer_deepest: false,
+                        dop: false,
+                        crossfade_ms: self.settings.crossfade_ms.min(12_000),
+                        ..choice.plan.clone()
                     },
                     device_id: choice.device_id,
                     device_name: choice.device_name,
                     fallback_reason: Some(e.to_string()),
-                    software_gain_db: None,
+                    software_gain_db: Some(self.settings.shared_gain_db),
                 };
                 match shared.plan.negotiate(&track.meta.source, track.meta.dsd) {
                     Some(n) => {
@@ -1113,13 +1192,7 @@ impl Control {
                         self.covers.insert(key, cover);
                     }
                     if let Some(s) = &mut self.session {
-                        let badge = OutputBadge::new(
-                            s.plan.mode,
-                            track.meta.source,
-                            track.negotiated.format,
-                            track.negotiated.conversion,
-                            s.gain(),
-                        );
+                        let badge = s.badge(&track, &self.settings.eq);
                         s.boundaries.push(Boundary {
                             at_frame,
                             track: *track,

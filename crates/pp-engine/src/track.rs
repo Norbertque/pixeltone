@@ -7,6 +7,7 @@ use pp_decode::{CoverArt, Decoder};
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::effects::replay_gain_db;
 use crate::pipeline::OutputPlan;
 use crate::queue::QueueItem;
 
@@ -37,6 +38,8 @@ pub struct LoadedTrack {
     pub start_ms: u64,
     pub meta: TrackMeta,
     pub cover: Option<CoverArt>,
+    /// ReplayGain for this track, in dB (applied while decoding).
+    pub replay_gain_db: Option<f32>,
 }
 
 /// What the engine needs to know when a track becomes the one being decoded.
@@ -47,6 +50,7 @@ pub struct StartedTrack {
     pub start_ms: u64,
     pub meta: TrackMeta,
     pub cover: Option<CoverArt>,
+    pub replay_gain_db: Option<f32>,
 }
 
 impl LoadedTrack {
@@ -58,7 +62,13 @@ impl LoadedTrack {
             start_ms: self.start_ms,
             meta: self.meta.clone(),
             cover: self.cover.take(),
+            replay_gain_db: self.replay_gain_db,
         }
+    }
+
+    /// The ReplayGain factor to multiply decoded samples by.
+    pub fn gain(&self) -> Option<f32> {
+        self.replay_gain_db.map(|db| 10f32.powf(db / 20.0))
     }
 }
 
@@ -77,8 +87,23 @@ pub fn load(
         .ok_or_else(|| format!("no output format for {}", path.display()))?;
     if start_ms > 0 {
         let frame = start_ms * u64::from(info.source.sample_rate) / 1000;
-        decoder.seek(frame).map_err(|e| e.to_string())?;
+        if negotiated.conversion.dop {
+            // Raw DSD: FFmpeg's DSD rate counts bytes per channel, so the frame is the byte.
+            decoder.seek_dsd(frame).map_err(|e| e.to_string())?;
+        } else {
+            decoder.seek(frame).map_err(|e| e.to_string())?;
+        }
     }
+    // DoP carries DSD untouched: no ReplayGain there.
+    let replay_gain_db = if negotiated.conversion.dop {
+        None
+    } else {
+        replay_gain_db(
+            plan.replay_gain,
+            plan.replay_gain_preamp_db,
+            &decoder.tags().replay_gain,
+        )
+    };
     let (meta, cover) = describe(&mut decoder, item);
     Ok(LoadedTrack {
         id,
@@ -87,6 +112,7 @@ pub fn load(
         start_ms,
         meta,
         cover,
+        replay_gain_db,
     })
 }
 

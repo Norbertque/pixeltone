@@ -77,8 +77,9 @@ const BADGE: OutputBadge = {
   mode: 'exclusive',
   source: DEMO_TRACK.source,
   output: { sampleRate: 96_000, channels: 2, sample: S24_32 },
-  conversion: { resampled: false, depthReduced: false, downmixed: false, dsdToPcm: false },
+  conversion: { resampled: false, depthReduced: false, downmixed: false, dsdToPcm: false, dop: false },
   gainDb: null,
+  effects: { eq: false, replayGainDb: null },
   bitPerfect: true,
   label: 'Exclusive • 24-bit/96 kHz • Bit-perfect',
 };
@@ -92,10 +93,26 @@ let settings: AppSettings = {
     bufferMs: 50,
     softwareGainDb: -30,
     lineLevel: false,
+    softwareVolume: false,
+    sharedGainDb: 0,
     fades: true,
+    dop: true,
+    eq: { enabled: false, preset: 'Flat', gainsDb: Array<number>(10).fill(0) },
+    replayGain: 'off',
+    replayGainPreampDb: 0,
+    crossfadeMs: 0,
+    crossfadeAlbums: false,
   },
-  devices: { 'mock-dac': { softwareGainDb: -24, lineLevel: false, loudnessAcknowledged: false } },
+  devices: {
+    'mock-dac': { softwareGainDb: -24, lineLevel: false, softwareVolume: false, loudnessAcknowledged: false },
+  },
 };
+const settingsListeners = new Set<(s: AppSettings) => void>();
+
+function settingsChanged(): AppSettings {
+  for (const cb of settingsListeners) cb(structuredClone(settings));
+  return structuredClone(settings);
+}
 
 const queue = new MockQueue<TrackMeta>();
 
@@ -327,16 +344,20 @@ export const mockBackend: Backend = {
   getSettings: async () => structuredClone(settings),
   async setOutputSettings(output, prefs) {
     settings = { ...settings, output, devices: { ...settings.devices, [output.deviceId ?? '']: prefs } };
-    return structuredClone(settings);
+    return settingsChanged();
   },
   async setPreferences(preferences) {
     settings = { ...settings, preferences };
-    return structuredClone(settings);
+    return settingsChanged();
   },
   hardwareVolume: async (deviceId) => (deviceId === 'mock-dac' ? null : speakersVolume),
   setHardwareVolume: async (_deviceId, db) => {
     speakersVolume = { ...speakersVolume, db };
   },
+  setHardwareMute: async (_deviceId, muted) => {
+    speakersVolume = { ...speakersVolume, muted };
+  },
+  onSettingsChanged: (cb) => subscribe(settingsListeners, cb),
 
   onPlayerState: (cb) => subscribe(stateListeners, cb),
   onPosition: (cb) => subscribe(positionListeners, cb),

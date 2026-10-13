@@ -268,6 +268,7 @@ pub fn run() {
             commands::set_output_settings,
             commands::hardware_volume,
             commands::set_hardware_volume,
+            commands::set_hardware_mute,
             library::library_overview,
             library::library_folders,
             library::library_add_folder,

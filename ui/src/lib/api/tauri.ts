@@ -70,6 +70,8 @@ export const tauriBackend: Backend = {
   setOutputSettings: (output, prefs) => invoke<AppSettings>('set_output_settings', { output, prefs }),
   hardwareVolume: (deviceId) => invoke<HardwareVolumeInfo | null>('hardware_volume', { deviceId }),
   setHardwareVolume: (deviceId, db) => invoke('set_hardware_volume', { deviceId, db }),
+  setHardwareMute: (deviceId, muted) => invoke('set_hardware_mute', { deviceId, muted }),
+  onSettingsChanged: (cb) => listen<AppSettings>('settings://changed', (e) => cb(e.payload)),
 
   onPlayerState: (cb) => listen<PlayerSnapshot>('player://state', (e) => cb(e.payload)),
   onPosition: (cb) => listen<{ positionMs: number }>('player://position', (e) => cb(e.payload.positionMs)),

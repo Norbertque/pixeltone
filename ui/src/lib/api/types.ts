@@ -7,6 +7,8 @@ export type { Conversion } from './bindings/Conversion';
 export type { DeviceCapabilities } from './bindings/DeviceCapabilities';
 export type { DeviceChange } from './bindings/DeviceChange';
 export type { DeviceInfo } from './bindings/DeviceInfo';
+export type { Effects } from './bindings/Effects';
+export type { EqSettings } from './bindings/EqSettings';
 export type { FormatCandidate } from './bindings/FormatCandidate';
 export type { OutputBadge } from './bindings/OutputBadge';
 export type { OutputFormat } from './bindings/OutputFormat';
@@ -16,6 +18,7 @@ export type { PlaybackStatus } from './bindings/PlaybackStatus';
 export type { PlayerSnapshot } from './bindings/PlayerSnapshot';
 export type { QueueEntry } from './bindings/QueueEntry';
 export type { RepeatMode } from './bindings/RepeatMode';
+export type { ReplayGainMode } from './bindings/ReplayGainMode';
 export type { SampleFormat } from './bindings/SampleFormat';
 export type { SampleKind } from './bindings/SampleKind';
 export type { ShareMode } from './bindings/ShareMode';
@@ -85,6 +88,8 @@ export type PlayerAction = 'play' | 'pause' | 'toggle' | 'stop' | 'next' | 'prev
 export interface DevicePrefs {
   softwareGainDb: number;
   lineLevel: boolean;
+  /** Attenuate in the app although the device has its own volume control. */
+  softwareVolume: boolean;
   loudnessAcknowledged: boolean;
 }
 export interface Preferences {
@@ -167,6 +172,9 @@ export interface Backend {
   setOutputSettings(output: OutputSettings, prefs: DevicePrefs): Promise<AppSettings>;
   hardwareVolume(deviceId: string | null): Promise<HardwareVolumeInfo | null>;
   setHardwareVolume(deviceId: string | null, db: number): Promise<void>;
+  setHardwareMute(deviceId: string | null, muted: boolean): Promise<void>;
+  /** Settings changed (from any window or command). */
+  onSettingsChanged(cb: (s: AppSettings) => void): Promise<Unlisten>;
 
   onPlayerState(cb: (s: PlayerSnapshot) => void): Promise<Unlisten>;
   onPosition(cb: (positionMs: number) => void): Promise<Unlisten>;

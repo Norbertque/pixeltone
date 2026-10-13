@@ -27,6 +27,8 @@ pub struct Conversion {
     pub downmixed: bool,
     /// DSD decoded to PCM (as opposed to DoP, which carries DSD untouched).
     pub dsd_to_pcm: bool,
+    /// DSD carried untouched inside PCM frames (DoP); not a conversion of the signal.
+    pub dop: bool,
 }
 
 impl Conversion {
@@ -35,6 +37,7 @@ impl Conversion {
         depth_reduced: false,
         downmixed: false,
         dsd_to_pcm: false,
+        dop: false,
     };
 
     pub const fn is_bit_perfect(&self) -> bool {
@@ -68,7 +71,7 @@ pub fn negotiate(
                 resampled,
                 depth_reduced: source.effective_bits() > c.sample.resolution(),
                 downmixed: source.channels > c.channels,
-                dsd_to_pcm: false,
+                ..Conversion::BIT_PERFECT
             };
             let format = OutputFormat {
                 sample_rate: rate,

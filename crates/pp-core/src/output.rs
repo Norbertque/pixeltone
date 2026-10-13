@@ -1,11 +1,12 @@
 //! The contract between the engine and an audio output backend.
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::eq::EqSettings;
 use crate::format::OutputFormat;
 use crate::gain::SoftwareGain;
 use crate::negotiate::FormatCandidate;
@@ -85,6 +86,11 @@ pub struct StreamControls {
     fade_step: AtomicU32,
     /// Set by the render side once a fade-out has reached the listener as silence.
     faded_out: AtomicBool,
+    /// Equaliser settings, picked up by the render side when `eq_version` moves.
+    eq: Mutex<Option<EqSettings>>,
+    eq_version: AtomicU64,
+    /// The stream carries DoP: silence must be DoP idle, and nothing may touch the samples.
+    dop: AtomicBool,
 }
 
 impl Default for StreamControls {
@@ -95,6 +101,9 @@ impl Default for StreamControls {
             fade: AtomicU8::new(Fade::Audible as u8),
             fade_step: AtomicU32::new(0),
             faded_out: AtomicBool::new(false),
+            eq: Mutex::new(None),
+            eq_version: AtomicU64::new(0),
+            dop: AtomicBool::new(false),
         }
     }
 }
@@ -156,6 +165,30 @@ impl StreamControls {
     /// The last fade-out has been played to the end (the device is now playing silence).
     pub fn faded_out(&self) -> bool {
         self.faded_out.load(Ordering::Acquire)
+    }
+
+    /// New equaliser settings (`None` or inactive settings: off).
+    pub fn set_eq(&self, eq: Option<EqSettings>) {
+        *self.eq.lock().unwrap_or_else(|e| e.into_inner()) = eq;
+        self.eq_version.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub fn eq_version(&self) -> u64 {
+        self.eq_version.load(Ordering::Acquire)
+    }
+
+    /// The equaliser settings, unless the engine is changing them right now (the render
+    /// thread never waits; it tries again on its next buffer).
+    pub fn try_eq(&self) -> Option<Option<EqSettings>> {
+        self.eq.try_lock().ok().map(|eq| eq.clone())
+    }
+
+    pub fn set_dop(&self, dop: bool) {
+        self.dop.store(dop, Ordering::Release);
+    }
+
+    pub fn dop(&self) -> bool {
+        self.dop.load(Ordering::Acquire)
     }
 }
 

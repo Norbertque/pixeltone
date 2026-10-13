@@ -17,6 +17,8 @@ use rsmpeg::avutil::{AVFrame, av_rescale_q};
 use rsmpeg::error::RsmpegError;
 use rsmpeg::ffi;
 
+pub mod testing;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DecodeError {
     #[error("cannot open {path}: {reason}")]
@@ -48,7 +50,7 @@ pub struct TrackInfo {
 
 /// Tags as FFmpeg exposes them (stream tags win over container tags, which is where Ogg
 /// and Opus keep theirs).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tags {
     pub title: Option<String>,
     pub artist: Option<String>,
@@ -58,6 +60,26 @@ pub struct Tags {
     pub date: Option<String>,
     pub track: Option<String>,
     pub disc: Option<String>,
+    pub replay_gain: ReplayGainTags,
+}
+
+/// ReplayGain values from the file's tags.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ReplayGainTags {
+    pub track_gain_db: Option<f32>,
+    pub track_peak: Option<f32>,
+    pub album_gain_db: Option<f32>,
+    pub album_peak: Option<f32>,
+}
+
+/// "-6.20 dB" → -6.2; "0.988" → 0.988.
+fn leading_number(s: &str) -> Option<f32> {
+    let token = s.split_whitespace().next()?;
+    token
+        .trim_end_matches(|c: char| c.is_ascii_alphabetic())
+        .parse()
+        .ok()
+        .filter(|v: &f32| v.is_finite())
 }
 
 /// An embedded picture (front cover).
@@ -118,6 +140,11 @@ pub struct Decoder {
     codec: AVCodecContext,
     stream_index: usize,
     time_base: ffi::AVRational,
+    codec_id: ffi::AVCodecID,
+    /// Raw DSD read so far, in bytes per channel (DoP mode).
+    dsd_position: u64,
+    /// After a raw DSD seek, bytes per channel before this position are dropped.
+    dsd_target: Option<u64>,
     info: TrackInfo,
     sent_eof: bool,
     finished: bool,
@@ -220,6 +247,9 @@ impl Decoder {
             codec,
             stream_index,
             time_base,
+            codec_id,
+            dsd_position: 0,
+            dsd_target: None,
             info: TrackInfo {
                 codec: codec_name,
                 container,
@@ -265,6 +295,7 @@ impl Decoder {
                 .map(|e| e.value().to_string_lossy().trim().to_string())
                 .filter(|v| !v.is_empty())
         };
+        let number = |key: &CStr| get(key).as_deref().and_then(leading_number);
         Tags {
             title: get(c"title"),
             artist: get(c"artist"),
@@ -274,7 +305,101 @@ impl Decoder {
             date: get(c"date"),
             track: get(c"track"),
             disc: get(c"disc"),
+            replay_gain: ReplayGainTags {
+                track_gain_db: number(c"replaygain_track_gain"),
+                track_peak: number(c"replaygain_track_peak"),
+                album_gain_db: number(c"replaygain_album_gain"),
+                album_peak: number(c"replaygain_album_peak"),
+            },
         }
+    }
+
+    /// DSD bit rate per channel (2,822,400 for DSD64), when the track is DSD.
+    pub fn dsd_bit_rate(&self) -> Option<u32> {
+        self.info.dsd.then(|| self.info.source.sample_rate * 8)
+    }
+
+    /// The next raw DSD, bypassing the DSD→PCM decoder (for DoP): appended to `out` as
+    /// interleaved bytes, one per channel per step, oldest bit first. False at the end.
+    /// Block padding at the end of DSF files is left out.
+    pub fn next_dsd(&mut self, out: &mut Vec<u8>) -> Result<bool, DecodeError> {
+        let channels = usize::from(self.info.source.channels.max(1));
+        let lsb_first = matches!(
+            self.codec_id,
+            ffi::AV_CODEC_ID_DSD_LSBF | ffi::AV_CODEC_ID_DSD_LSBF_PLANAR
+        );
+        let planar = matches!(
+            self.codec_id,
+            ffi::AV_CODEC_ID_DSD_LSBF_PLANAR | ffi::AV_CODEC_ID_DSD_MSBF_PLANAR
+        );
+        let rate = ffi::AVRational {
+            num: 1,
+            den: self.info.source.sample_rate.max(1) as i32,
+        };
+        loop {
+            let Some(packet) = self
+                .input
+                .read_packet()
+                .map_err(|e| DecodeError::Decode(e.to_string()))?
+            else {
+                return Ok(false);
+            };
+            if packet.stream_index as usize != self.stream_index || packet.size <= 0 {
+                continue;
+            }
+            let data = unsafe { std::slice::from_raw_parts(packet.data, packet.size as usize) };
+            let per_channel = data.len() / channels;
+            let start = if packet.pts != ffi::AV_NOPTS_VALUE {
+                av_rescale_q(packet.pts, self.time_base, rate).max(0) as u64
+            } else {
+                self.dsd_position
+            };
+            let skip = self.dsd_target.map_or(0, |t| t.saturating_sub(start)) as usize;
+            if skip >= per_channel {
+                continue;
+            }
+            self.dsd_target = None;
+            let mut end = per_channel;
+            if let Some(total) = self.info.total_frames {
+                end = end.min(total.saturating_sub(start) as usize);
+            }
+            if end <= skip {
+                return Ok(false);
+            }
+            out.reserve((end - skip) * channels);
+            for i in skip..end {
+                for c in 0..channels {
+                    let b = if planar {
+                        data[c * per_channel + i]
+                    } else {
+                        data[i * channels + c]
+                    };
+                    out.push(if lsb_first { b.reverse_bits() } else { b });
+                }
+            }
+            self.dsd_position = start + end as u64;
+            return Ok(true);
+        }
+    }
+
+    /// Seeks raw DSD (DoP mode) to `byte` (per channel; 8 DSD bits each).
+    pub fn seek_dsd(&mut self, byte: u64) -> Result<(), DecodeError> {
+        let rate = self.info.source.sample_rate.max(1) as i32;
+        let ts = av_rescale_q(
+            byte as i64,
+            ffi::AVRational { num: 1, den: rate },
+            self.time_base,
+        );
+        self.input
+            .seek(
+                self.stream_index as i32,
+                ts,
+                ffi::AVSEEK_FLAG_BACKWARD as i32,
+            )
+            .map_err(|e| DecodeError::Seek(e.to_string()))?;
+        self.dsd_target = Some(byte);
+        self.dsd_position = byte;
+        Ok(())
     }
 
     /// The first embedded picture, if any (FFmpeg exposes covers as attached-picture streams).

@@ -6,6 +6,8 @@
 //! backend (WASAPI on Windows, capture/null in tests) implements.
 
 pub mod badge;
+pub mod dop;
+pub mod eq;
 pub mod format;
 pub mod gain;
 pub mod negotiate;
@@ -13,7 +15,8 @@ pub mod output;
 pub mod pcm;
 pub mod render;
 
-pub use badge::OutputBadge;
+pub use badge::{Effects, OutputBadge};
+pub use eq::EqSettings;
 pub use format::{OutputFormat, SampleFormat, SampleKind, SourceFormat};
 pub use gain::SoftwareGain;
 pub use negotiate::{Conversion, FormatCandidate, Negotiated, negotiate};

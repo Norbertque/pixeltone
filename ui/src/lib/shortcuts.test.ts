@@ -21,6 +21,9 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(key('S', { ctrl: true }), FREE)).toBe('shuffle');
     expect(shortcutFor(key('r', { ctrl: true }), FREE)).toBe('repeat');
     expect(shortcutFor(key('q', { ctrl: true }), FREE)).toBe('queue');
+    expect(shortcutFor(key('ArrowUp', { ctrl: true }), FREE)).toBe('volumeUp');
+    expect(shortcutFor(key('ArrowDown', { ctrl: true }), FREE)).toBe('volumeDown');
+    expect(shortcutFor(key('m', { ctrl: true }), FREE)).toBe('mute');
     expect(shortcutFor(key('?', { shift: true }), FREE)).toBe('help');
     expect(shortcutFor(key('ArrowLeft', { alt: true }), FREE)).toBe('back');
   });
@@ -37,6 +40,8 @@ describe('keyboard shortcuts', () => {
     expect(shortcutFor(key(' '), { ...FREE, activates: true })).toBeNull();
     expect(shortcutFor(key('ArrowRight', { shift: true }), { ...FREE, slider: true })).toBeNull();
     expect(shortcutFor(key('ArrowRight', { ctrl: true }), { ...FREE, slider: true })).toBeNull();
+    expect(shortcutFor(key('ArrowUp', { ctrl: true }), { ...FREE, slider: true })).toBeNull();
+    expect(shortcutFor(key('ArrowDown', { ctrl: true }), typing)).toBeNull();
   });
 
   it('ignores unknown and doubly modified keys', () => {

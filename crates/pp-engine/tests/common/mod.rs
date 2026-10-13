@@ -7,7 +7,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-pub use pp_core::{DeviceChange, OutputError, SampleFormat, ShareMode};
+pub use pp_core::{DeviceChange, OutputError, SampleFormat, ShareMode, SoftwareGain};
 pub use pp_engine::testing::{CaptureBackend, Opened};
 pub use pp_engine::{
     Engine, EngineConfig, EngineEvent, OutputSettings, PlaybackStatus, PlayerSnapshot, QueueItem,

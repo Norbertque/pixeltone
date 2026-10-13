@@ -7,4 +7,8 @@ export type Conversion = { resampled: boolean, depthReduced: boolean, downmixed:
 /**
  * DSD decoded to PCM (as opposed to DoP, which carries DSD untouched).
  */
-dsdToPcm: boolean, };
+dsdToPcm: boolean, 
+/**
+ * DSD carried untouched inside PCM frames (DoP); not a conversion of the signal.
+ */
+dop: boolean, };

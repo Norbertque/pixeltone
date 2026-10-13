@@ -18,7 +18,7 @@
   );
 </script>
 
-<span class={['badge', { perfect: badge.bitPerfect, compact }]} title={tooltip}>
+<span class={['badge', { perfect: badge.bitPerfect, compact }]} title="{badge.label}&#10;{tooltip}">
   <Icon name={icon} size={compact ? 16 : 18} fill={badge.bitPerfect} />
   <span class="text">{badge.label}</span>
 </span>

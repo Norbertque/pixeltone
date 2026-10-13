@@ -217,6 +217,21 @@ pub async fn hardware_volume(
 }
 
 #[tauri::command]
+pub async fn set_hardware_mute(
+    state: State<'_, AppState>,
+    device_id: Option<String>,
+    muted: bool,
+) -> Result<(), String> {
+    blocking(state.backend.clone(), move |b| {
+        match b.hardware_volume(device_id.as_deref())? {
+            Some(v) => v.set_mute(muted),
+            None => Ok(()),
+        }
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn set_hardware_volume(
     state: State<'_, AppState>,
     device_id: Option<String>,
