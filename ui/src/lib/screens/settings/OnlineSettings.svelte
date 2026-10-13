@@ -32,6 +32,21 @@
     </div>
     <Switch label="Find lyrics online" checked={prefs.lyricsOnline} onchange={(v) => update({ lyricsOnline: v })} />
   </div>
+
+  <div class="row">
+    <div class="row-text">
+      <span class="title-medium">Artist pictures</span>
+      <span class="body-medium">
+        Show pictures of the artists in your library, from Deezer (deezer.com). Only artist names are sent; the
+        pictures are kept on this PC. Turning this off removes them again.
+      </span>
+    </div>
+    <Switch
+      label="Artist pictures"
+      checked={prefs.artistImagesOnline}
+      onchange={(v) => update({ artistImagesOnline: v })}
+    />
+  </div>
 {:else}
   <p class="body-medium muted">Loading…</p>
 {/if}
@@ -44,6 +59,9 @@
     justify-content: space-between;
     gap: 12px 24px;
     padding: 12px 0;
+  }
+  .row + .row {
+    border-top: 1px solid var(--md-sys-color-outline-variant);
   }
   .row-text {
     display: grid;

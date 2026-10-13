@@ -32,6 +32,8 @@ import {
   type Lyrics,
   type PlaylistDetail,
   type PlaylistRow,
+  type TagFields,
+  type TagWriteReport,
 } from './types';
 
 export const tauriBackend: Backend = {
@@ -150,4 +152,9 @@ export const tauriBackend: Backend = {
 
   lyricsFind: (track) => invoke<Lyrics | null>('lyrics_find', { track }),
   lyricsSave: (track, text) => invoke<Lyrics>('lyrics_save', { track, text }),
+
+  openMiniPlayer: () => invoke('open_mini_player'),
+  showMainWindow: () => invoke('show_main_window'),
+  tagsRead: (paths) => invoke<TagFields[]>('tags_read', { paths }),
+  tagsWrite: (paths, change) => invoke<TagWriteReport>('tags_write', { paths, change }),
 };

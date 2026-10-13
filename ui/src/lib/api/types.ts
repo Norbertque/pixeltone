@@ -23,6 +23,7 @@ export type { SampleFormat } from './bindings/SampleFormat';
 export type { SampleKind } from './bindings/SampleKind';
 export type { ShareMode } from './bindings/ShareMode';
 export type { SourceFormat } from './bindings/SourceFormat';
+export type { TagFields } from './bindings/TagFields';
 export type { StreamStats } from './bindings/StreamStats';
 export type { TrackMeta } from './bindings/TrackMeta';
 export type { AlbumDetail } from './bindings/AlbumDetail';
@@ -80,6 +81,7 @@ import type { ListeningStats } from './bindings/ListeningStats';
 import type { Lyrics } from './bindings/Lyrics';
 import type { PlaylistDetail } from './bindings/PlaylistDetail';
 import type { PlaylistRow } from './bindings/PlaylistRow';
+import type { TagFields } from './bindings/TagFields';
 
 // ── App layer (src-tauri/src/commands.rs, settings.rs) ──────────────────────────────
 
@@ -97,6 +99,8 @@ export interface Preferences {
   lyricsOnline: boolean;
   /** Download artist pictures from Deezer. */
   artistImagesOnline: boolean;
+  /** Closing the main window hides it; playback goes on, controlled from the tray. */
+  closeToTray: boolean;
 }
 export interface AppSettings {
   output: OutputSettings;
@@ -118,6 +122,13 @@ export interface HardwareVolumeInfo {
   maxDb: number;
   stepDb: number;
   muted: boolean;
+}
+
+/** What writing tags did (src-tauri/src/tags.rs). */
+export interface TagWriteReport {
+  written: number;
+  /** "file name: reason" for each file that couldn't be written. */
+  failed: string[];
 }
 
 export interface AppInfo {
@@ -253,6 +264,18 @@ export interface Backend {
   lyricsFind(track: LyricsRequest): Promise<Lyrics | null>;
   /** Saves lyrics (LRC or plain text) next to the track, or inside the app. */
   lyricsSave(track: LyricsRequest, text: string): Promise<Lyrics>;
+
+  // Windows
+  /** Swaps the main window for the small always-on-top player. */
+  openMiniPlayer(): Promise<void>;
+  /** Brings the main window back (and closes the mini player). */
+  showMainWindow(): Promise<void>;
+
+  // Tag editor
+  /** The editable fields of each file, in order. */
+  tagsRead(paths: string[]): Promise<TagFields[]>;
+  /** Writes `change` (null fields untouched, "" removes) into every file, then rescans. */
+  tagsWrite(paths: string[], change: TagFields): Promise<TagWriteReport>;
 }
 
 /** File extensions offered in the open dialog (anything FFmpeg decodes also works). */

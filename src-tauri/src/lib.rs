@@ -1,5 +1,6 @@
 //! PixelPlayer PC desktop app: wires the Rust core to the Svelte UI through Tauri.
 
+mod artist_images;
 mod commands;
 mod history;
 mod library;
@@ -9,6 +10,8 @@ mod media;
 mod power;
 mod queue;
 mod settings;
+mod tags;
+mod tray;
 mod userdata;
 #[cfg(windows)]
 mod window_theme;
@@ -23,9 +26,10 @@ use pp_library::Library;
 use pp_lyrics::LyricsService;
 use serde::Serialize;
 use tauri::http::Response;
-use tauri::{AppHandle, Emitter, Manager, RunEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tracing_subscriber::EnvFilter;
 
+use crate::artist_images::ArtistImages;
 use crate::history::History;
 use crate::queue::QueueStore;
 use crate::settings::AppSettings;
@@ -39,6 +43,9 @@ pub struct AppState {
     pub queue_store: QueueStore,
     pub history: History,
     pub lyrics: Arc<LyricsService>,
+    pub artist_images: ArtistImages,
+    /// The notification-area icon; `None` where the system has no tray.
+    pub tray: Option<tray::Tray>,
     /// Device notifications stay on while this is held.
     pub device_watch: Mutex<Option<DeviceWatch>>,
     #[cfg(windows)]
@@ -144,6 +151,9 @@ fn forward(app: &AppHandle, event: EngineEvent) {
             if let Some(state) = &state {
                 state.queue_store.on_state(&snapshot);
                 state.history.on_state(&snapshot);
+                if let Some(tray) = &state.tray {
+                    tray.update(&snapshot);
+                }
                 #[cfg(windows)]
                 if let Some(m) = &*state.media.lock() {
                     m.send(media::Update::State(snapshot.clone()));
@@ -197,10 +207,7 @@ pub fn run() {
     tauri::Builder::default()
         // A second launch focuses the running window instead of opening another player.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            tray::reveal_main(app);
         }))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -230,12 +237,25 @@ pub fn run() {
                 app.path().app_cache_dir()?.join("lyrics"),
             ));
             lyrics.set_online(settings.preferences.lyrics_online);
+            let handle = app.handle().clone();
+            let artist_images = ArtistImages::start(
+                library.clone(),
+                settings.preferences.artist_images_online,
+                move || {
+                    let _ = handle.emit("library://changed", ());
+                },
+            );
+            let tray = tray::Tray::create(app.handle())
+                .inspect_err(|e| tracing::warn!("no tray icon: {e}"))
+                .ok();
             app.manage(AppState {
                 engine,
                 backend,
                 history: History::new(library.clone()),
                 library,
                 lyrics,
+                artist_images,
+                tray,
                 settings: Mutex::new(settings),
                 settings_path,
                 queue_store,
@@ -254,6 +274,24 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| match event {
+            // With "keep playing in the tray", closing the main window only hides it.
+            WindowEvent::CloseRequested { api, .. }
+                if window.label() == "main"
+                    && window
+                        .app_handle()
+                        .try_state::<AppState>()
+                        .is_some_and(|s| s.settings.lock().preferences.close_to_tray) =>
+            {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            // The mini player closed some other way (Alt+F4): the main window comes back.
+            WindowEvent::Destroyed if window.label() == tray::MINI => {
+                tray::reveal_main(window.app_handle());
+            }
+            _ => {}
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             commands::set_window_theme,
@@ -269,6 +307,10 @@ pub fn run() {
             commands::hardware_volume,
             commands::set_hardware_volume,
             commands::set_hardware_mute,
+            tags::tags_read,
+            tags::tags_write,
+            tray::open_mini_player,
+            tray::show_main_window,
             library::library_overview,
             library::library_folders,
             library::library_add_folder,

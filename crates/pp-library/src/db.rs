@@ -13,6 +13,7 @@ use crate::model::{
 };
 use crate::tags::ScannedTrack;
 
+mod images;
 mod user;
 
 const SCHEMA: &str = r#"
@@ -91,10 +92,12 @@ const ALBUM_SELECT: &str = "SELECT a.id, a.title, a.artist, a.year, COUNT(t.id),
     COALESCE(SUM(t.duration_ms), 0), a.cover, a.added_at \
     FROM albums a JOIN tracks t ON t.album_id = a.id";
 
+/// An artist's picture: one found online, else the cover of one of their albums.
 const ARTIST_SELECT: &str = "SELECT ar.id, ar.name, COUNT(DISTINCT t.album_id), COUNT(DISTINCT t.id), \
+    COALESCE((SELECT ai.image FROM artist_images ai WHERE ai.norm = ar.norm), \
     (SELECT COALESCE(t2.cover, a2.cover) FROM track_artists ta2 \
         JOIN tracks t2 ON t2.id = ta2.track_id JOIN albums a2 ON a2.id = t2.album_id \
-        WHERE ta2.artist_id = ar.id AND COALESCE(t2.cover, a2.cover) IS NOT NULL LIMIT 1) \
+        WHERE ta2.artist_id = ar.id AND COALESCE(t2.cover, a2.cover) IS NOT NULL LIMIT 1)) \
     FROM artists ar JOIN track_artists ta ON ta.artist_id = ar.id JOIN tracks t ON t.id = ta.track_id";
 
 const GENRE_SELECT: &str = "SELECT g.id, g.name, COUNT(tg.track_id), \
@@ -268,6 +271,12 @@ impl Db {
             let tx = self.conn.transaction()?;
             tx.execute_batch(user::SCHEMA_V2)?;
             tx.execute_batch("PRAGMA user_version = 2")?;
+            tx.commit()?;
+        }
+        if version < 3 {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(images::SCHEMA_V3)?;
+            tx.execute_batch("PRAGMA user_version = 3")?;
             tx.commit()?;
         }
         Ok(())
@@ -826,7 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn version_1_databases_gain_the_user_tables() {
+    fn version_1_databases_gain_the_newer_tables() {
         let dir = std::env::temp_dir().join(format!("pp-db-migrate-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("v1.db");
@@ -840,9 +849,10 @@ mod tests {
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
         db.set_favorite("/a.flac", true, 1).unwrap();
         assert!(db.is_favorite("/a.flac").unwrap());
+        db.set_artist_image("björk", Some("abc"), 1).unwrap();
         drop(db);
         let _ = std::fs::remove_dir_all(dir);
     }

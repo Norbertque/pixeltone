@@ -516,6 +516,65 @@ fn playlists_keep_their_order_and_survive_rescans() {
 }
 
 #[test]
+fn artist_pictures_found_online_replace_album_covers() {
+    let fx = fixture();
+    let lib = open(&fx.data);
+    lib.add_folder(&fx.music).unwrap();
+    scan(&lib);
+
+    let todo = lib.artists_without_images(now(), 100).unwrap();
+    // Most tracks first: Aurora Lane has three (plus an album artist role), Kestrel four.
+    assert_eq!(todo[0].0, "Kestrel");
+    assert!(
+        todo.iter()
+            .any(|(name, key)| name == "Björk" && key == "björk")
+    );
+
+    let kestrel = |lib: &Library| {
+        lib.artists(0, 100)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.name == "Kestrel")
+            .unwrap()
+    };
+    let album_cover = kestrel(&lib).cover.clone();
+    assert!(album_cover.is_some(), "the folder image stands in");
+
+    let picture_file = fx.data.join("kestrel.png");
+    png(&picture_file, "0x00aa55");
+    let picture = std::fs::read(picture_file).unwrap();
+    lib.set_artist_image("kestrel", Some(&picture)).unwrap();
+    let pictured = kestrel(&lib).cover.clone().unwrap();
+    assert_ne!(Some(&pictured), album_cover.as_ref());
+    assert!(
+        lib.art().existing(&pictured, 300).is_some(),
+        "thumbnails written"
+    );
+    assert!(lib.artist(kestrel(&lib).id).unwrap().unwrap().artist.cover == Some(pictured));
+
+    // Nothing found: not asked again until the retry time passes.
+    lib.set_artist_image("björk", None).unwrap();
+    let todo = lib.artists_without_images(0, 100).unwrap();
+    assert!(
+        !todo
+            .iter()
+            .any(|(_, key)| key == "kestrel" || key == "björk")
+    );
+    assert!(
+        lib.artists_without_images(now() + 1, 100)
+            .unwrap()
+            .iter()
+            .any(|(_, key)| key == "björk")
+    );
+
+    // Rescans keep them; forgetting brings the album covers back.
+    scan(&lib);
+    assert_ne!(kestrel(&lib).cover, album_cover);
+    lib.forget_artist_images().unwrap();
+    assert_eq!(kestrel(&lib).cover, album_cover);
+}
+
+#[test]
 fn favourites_show_up_in_track_lists() {
     let f = fixture();
     let lib = open(&f.data);

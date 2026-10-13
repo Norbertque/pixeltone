@@ -41,3 +41,13 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
 16. Settings → Sound: the equaliser and ReplayGain change the sound at once and the badge
     says *Converted* and names them; a 5 s crossfade in shared mode blends songs of different
     albums but keeps an album gapless.
+17. Artist pictures: with Settings → Online → *Artist pictures* on, the Artists tab and Home
+    fill in with photos over a minute or two; "Various Artists" keeps an album cover. Turning
+    it off brings the album covers back.
+18. Tag editor: right-click a song → *Edit tags…*, change the title and genre, *Save*: the
+    library shows the change; another player (or Explorer's details pane) sees it too.
+    Edit the song that is playing: playback carries on and Now Playing shows the new title.
+19. Tray and mini player: the tray icon's tooltip shows the song and its menu plays, pauses
+    and skips; *Mini player* swaps the window for the small one (drag it around, it stays on
+    top), and its expand button brings the main window back. With *Keep playing in the tray*
+    on, closing the window keeps the music going; *Quit* in the tray menu ends it.

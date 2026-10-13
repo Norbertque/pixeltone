@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { api } from '../api';
   import { formatTime, player } from '../player.svelte';
   import { router } from '../router.svelte';
   import Artwork from './Artwork.svelte';
@@ -60,6 +61,7 @@
 
     <div class="end">
       <VolumeButton />
+      <IconButton icon="picture_in_picture_alt" label="Mini player" onclick={() => void api.openMiniPlayer()} />
       <IconButton icon="lyrics" label="Show the lyrics" onclick={() => router.togglePanel('lyrics')} />
       <IconButton icon="queue_music" label="Show the queue" onclick={() => router.togglePanel('queue')} />
       <IconButton icon="expand_less" label="Open Now Playing" onclick={() => router.setNowPlaying(true)} />

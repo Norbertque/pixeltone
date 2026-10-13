@@ -9,7 +9,7 @@ use pp_library::{
     TrackRow, TrackSort,
 };
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::AppState;
 use crate::queue::item_from_row;
@@ -37,6 +37,9 @@ pub fn scan(app: &AppHandle, library: &Arc<Library>) {
         let _ = handle.emit("library://scan", p);
         if p.phase == ScanPhase::Done {
             let _ = handle.emit("library://changed", ());
+            if let Some(state) = handle.try_state::<AppState>() {
+                state.artist_images.kick();
+            }
         }
     });
     library.scan(progress);

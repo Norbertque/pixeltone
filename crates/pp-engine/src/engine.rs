@@ -221,6 +221,8 @@ enum Command {
     DeviceChanged(DeviceChange),
     /// Forget probed device capabilities (devices changed).
     RefreshDevices,
+    /// Reopen the current track where it is.
+    Reload,
     Shutdown,
 }
 
@@ -392,6 +394,11 @@ impl Engine {
     }
     pub fn refresh_devices(&self) {
         self.send(Command::RefreshDevices);
+    }
+    /// Reopens the current track at the same spot, e.g. after its tags were rewritten (which
+    /// can move the audio inside the file and changes what Now Playing shows).
+    pub fn reload(&self) {
+        self.send(Command::Reload);
     }
 }
 
@@ -648,6 +655,11 @@ impl Control {
             Command::SetOutput(settings) => self.set_output(settings),
             Command::DeviceChanged(change) => self.device_changed(change),
             Command::RefreshDevices => self.caps.clear(),
+            Command::Reload => {
+                if self.session.is_some() {
+                    self.reopen();
+                }
+            }
             Command::Shutdown => {}
         }
     }

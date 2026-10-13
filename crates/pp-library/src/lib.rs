@@ -7,6 +7,7 @@
 pub mod artists;
 pub mod artwork;
 mod db;
+pub mod edit;
 pub mod m3u;
 pub mod model;
 pub mod scan;
@@ -365,6 +366,38 @@ fn playlist_name(name: &str) -> Result<String> {
         return Err(LibraryError::Other("a playlist needs a name".into()));
     }
     Ok(name.chars().take(200).collect())
+}
+
+// ── Artist pictures (found online by the app) ────────────────────────────────────
+
+impl Library {
+    /// (name, key) of artists still without a picture: never looked up, or last found
+    /// nothing before `retry_before` (Unix seconds). Most tracks first.
+    pub fn artists_without_images(
+        &self,
+        retry_before: i64,
+        limit: u32,
+    ) -> Result<Vec<(String, String)>> {
+        Ok(self.db.lock().artists_without_images(retry_before, limit)?)
+    }
+
+    /// Records a lookup for the artist `key`: the picture's bytes, or `None` for "nothing
+    /// found". The picture becomes the artist's cover everywhere.
+    pub fn set_artist_image(&self, key: &str, image: Option<&[u8]>) -> Result<()> {
+        let hash = match image {
+            Some(bytes) => Some(self.art.store(bytes).map_err(LibraryError::Other)?),
+            None => None,
+        };
+        Ok(self
+            .db
+            .lock()
+            .set_artist_image(key, hash.as_deref(), scan::now_secs())?)
+    }
+
+    /// Drops every picture found online; artists show album covers again.
+    pub fn forget_artist_images(&self) -> Result<()> {
+        Ok(self.db.lock().forget_artist_images()?)
+    }
 }
 
 /// A library track as a playlist entry.

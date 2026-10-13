@@ -27,9 +27,9 @@ export function trackMenu(track: TrackRow): MenuEntry[] {
       ? { icon: 'heart_minus', label: 'Remove from favourites', action: () => setFavorite(track, false) }
       : { icon: 'favorite', label: 'Add to favourites', action: () => setFavorite(track, true) },
   );
+  entries.push('divider', { icon: 'edit_note', label: 'Edit tags…', action: () => dialogs.editTags([track]) });
   if (inLibrary) {
     entries.push(
-      'divider',
       { icon: 'album', label: 'Go to album', action: () => router.go({ screen: 'album', id: track.albumId }) },
       { icon: 'folder_open', label: 'Show in folder', action: () => router.go({ screen: 'folder', path: parentDir(track.path) }) },
     );
@@ -43,6 +43,8 @@ export function rowsMenu(rows: () => readonly TrackRow[], label: string): MenuEn
     { icon: 'queue_play_next', label: 'Play next', action: () => queueRows(rows(), true, label) },
     { icon: 'add_to_queue', label: 'Add to queue', action: () => queueRows(rows(), false, label) },
     { icon: 'playlist_add', label: 'Add to playlist…', action: () => dialogs.addToPlaylist(libraryIds(rows()), label) },
+    'divider',
+    { icon: 'edit_note', label: 'Edit tags…', action: () => dialogs.editTags(rows()) },
   ];
 }
 
@@ -60,6 +62,7 @@ export function albumMenu(album: AlbumRow): MenuEntry[] {
     { icon: 'add_to_queue', label: 'Add to queue', action: withTracks((t) => queueRows(t, false, title)) },
     { icon: 'playlist_add', label: 'Add to playlist…', action: withTracks((t) => dialogs.addToPlaylist(libraryIds(t), title)) },
     'divider',
+    { icon: 'edit_note', label: 'Edit tags…', action: withTracks((t) => dialogs.editTags(t)) },
     { icon: 'album', label: 'Go to album', action: () => router.go({ screen: 'album', id: album.id }) },
   ];
 }

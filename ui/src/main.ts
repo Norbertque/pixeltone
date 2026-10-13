@@ -5,6 +5,7 @@ import './app.css';
 import { mount } from 'svelte';
 
 import App from './App.svelte';
+import MiniWindow from './MiniWindow.svelte';
 import { api } from './lib/api';
 import { initLibrary } from './lib/library.svelte';
 import { output } from './lib/output.svelte';
@@ -23,11 +24,16 @@ initTheme((surface, dark) => {
   }, 120);
 });
 
+// The mini player is the same page in a small window of its own.
+const mini = location.hash === '#mini';
+
 void initPlayer();
-void initLibrary();
-void output.start();
+if (!mini) {
+  void initLibrary();
+  void output.start();
+}
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app missing');
 
-export default mount(App, { target });
+export default mount(mini ? MiniWindow : App, { target });

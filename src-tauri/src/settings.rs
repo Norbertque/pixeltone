@@ -48,6 +48,8 @@ pub struct Preferences {
     pub lyrics_online: bool,
     /// Download artist pictures from Deezer.
     pub artist_images_online: bool,
+    /// Closing the main window hides it; playback goes on, controlled from the tray.
+    pub close_to_tray: bool,
 }
 
 impl Default for Preferences {
@@ -55,6 +57,7 @@ impl Default for Preferences {
         Self {
             lyrics_online: true,
             artist_images_online: true,
+            close_to_tray: false,
         }
     }
 }

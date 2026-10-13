@@ -12,6 +12,7 @@
   import LibrarySettings from './settings/LibrarySettings.svelte';
   import OnlineSettings from './settings/OnlineSettings.svelte';
   import SoundSettings from './settings/SoundSettings.svelte';
+  import WindowSettings from './settings/WindowSettings.svelte';
 
   const MODES = [
     { value: 'system', label: 'System', icon: 'brightness_auto' },
@@ -132,6 +133,11 @@
   <section class="section" aria-labelledby="library">
     <h2 id="library" class="title-large rounded emphasized"><Icon name="library_music" /> Library</h2>
     <LibrarySettings />
+  </section>
+
+  <section class="section" aria-labelledby="window">
+    <h2 id="window" class="title-large rounded emphasized"><Icon name="web_asset" /> Window</h2>
+    <WindowSettings />
   </section>
 
   <section class="section" aria-labelledby="online">

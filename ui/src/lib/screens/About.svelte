@@ -22,6 +22,8 @@
     { name: 'Material Color Utilities', license: 'Apache-2.0', use: 'Dynamic colour' },
     { name: 'Google Sans Flex', license: 'SIL OFL 1.1', use: 'Typeface' },
     { name: 'Material Symbols', license: 'Apache-2.0', use: 'Icons' },
+    { name: 'LRCLIB', license: 'Online service', use: 'Synced lyrics' },
+    { name: 'Deezer', license: 'Online service', use: 'Artist pictures' },
   ];
 </script>
 

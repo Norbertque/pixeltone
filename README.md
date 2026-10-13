@@ -21,6 +21,10 @@ sample rate and bit depth.
   `.lrc` file next to the song, the file's tags or LRCLIB; edit and sync them yourself.
 - **Playlists & favourites:** playlists with drag-to-reorder and M3U/M3U8 import/export, a
   heart for favourites, play history with listening stats and a daily mix on Home.
+- **Tags & pictures:** edit tags of a song, an album or a whole artist (written into the
+  files); artist pictures from Deezer.
+- **Desktop:** a mini player that stays on top, a tray icon with playback controls, and
+  optionally keep playing in the tray when the window is closed.
 - **UI (Svelte 5 in WebView2 via Tauri 2):** Material You colours from the album art, M3
   Expressive shapes and spring motion, Google Sans Flex.
 
@@ -34,7 +38,9 @@ Everything works offline. Two lookups use the internet, and both can be turned o
 
 - **Lyrics (LRCLIB):** for songs without lyrics of their own, the title, artist, album and
   length are sent to [lrclib.net](https://lrclib.net). Answers (and "not found") are cached.
-- **Artist pictures (Deezer):** *(coming with M6)*
+- **Artist pictures (Deezer):** the names of the artists in your library are looked up on
+  [Deezer](https://www.deezer.com); pictures of exact matches are kept in the app's cache.
+  Turning it off removes them.
 
 ## Getting builds
 

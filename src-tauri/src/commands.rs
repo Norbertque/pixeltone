@@ -180,6 +180,9 @@ pub fn set_preferences(
         .save(&state.settings_path)
         .map_err(|e| e.to_string())?;
     state.lyrics.set_online(updated.preferences.lyrics_online);
+    state
+        .artist_images
+        .set_enabled(updated.preferences.artist_images_online);
     crate::emit_settings(&app, &updated);
     Ok(updated)
 }

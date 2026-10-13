@@ -79,6 +79,18 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - The UI's output settings live in one store (`output.svelte.ts`) that saves changes one
   after another; send `$state.snapshot` copies, never the reactive objects themselves.
 
+## Desktop and tags (M6)
+
+- Artist pictures: `pp-deezer` (search by name, exact matches only) + `src-tauri/src/artist_images.rs`
+  (background worker, ~4 lookups/s, misses retried after 30 days). Stored in the art store and
+  `artist_images` (schema v3, keyed by `artists.norm`); `ARTIST_SELECT` prefers them to album
+  covers. Turning the setting off deletes the rows.
+- Tag editor: `pp-library` edit.rs writes only the file's primary tag through lofty (covers and
+  other fields survive; tests compare every untouched item). `tags_write` reloads the engine
+  if the playing file was edited (`Engine::reload`) and rescans.
+- Tray and mini player: `src-tauri/src/tray.rs`. The mini player is the same UI at `#mini`
+  (`ui/src/MiniWindow.svelte`); its window label `mini` is in the capability file.
+
 ## Rules
 
 - **Bit-perfect policy** (`docs/exclusive-mode.md`) is a product promise: never add

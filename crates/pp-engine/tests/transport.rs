@@ -378,3 +378,20 @@ fn skipping_before_play_leaves_the_device_closed() {
         "b from its start"
     );
 }
+
+#[test]
+fn reload_reopens_the_current_track_where_it_was() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = s16(dir.path(), "a.flac", "2");
+    let h = harness(realtime(), true);
+    h.engine.play_files(vec![f.clone()], 0);
+    h.wait_for("playing", |s| s.position_ms >= 300.0);
+    h.engine.reload();
+    h.wait_until_stopped();
+    assert_eq!(h.backend.opened.lock().len(), 2, "reopened once");
+    // It carried on from where it was: the end arrives as it was.
+    let captured = frames(&h.backend.take_captured());
+    let reference = frames(&reference(&f, "s16le"));
+    let last_second = ms_to_frame(1000.0);
+    assert!(captured[captured.len() - last_second..] == reference[reference.len() - last_second..]);
+}

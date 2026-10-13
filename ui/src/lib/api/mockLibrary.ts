@@ -24,6 +24,7 @@ import type {
   TopAlbum,
   TopArtist,
   TopTrack,
+  TagFields,
   TrackRow,
   TrackSort,
 } from './types';
@@ -400,6 +401,35 @@ function lyricsFromText(text: string, source: Lyrics['source']): Lyrics {
   const synced = lines.some((l) => l.timeMs !== null);
   return { source, synced, instrumental: false, lines: synced ? lines.filter((l) => l.timeMs !== null) : lines, text };
 }
+
+/** The mock's tag editor: reads from and writes into the generated rows. */
+export const mockTags = {
+  read(path: string): TagFields {
+    const t = trackByPath.get(path);
+    return {
+      title: t?.title ?? '',
+      artist: t?.artist ?? '',
+      album: t?.album ?? '',
+      albumArtist: '',
+      genre: '',
+      year: t?.year ? String(t.year) : '',
+      trackNo: t?.trackNo ? String(t.trackNo) : '',
+      discNo: t?.discNo ? String(t.discNo) : '',
+    };
+  },
+  write(path: string, change: TagFields): boolean {
+    const t = trackByPath.get(path);
+    if (!t) return false;
+    const num = (v: string) => (Number.parseInt(v, 10) > 0 ? Number.parseInt(v, 10) : null);
+    if (change.title !== null) t.title = change.title || path.split(/[\\/]/).pop()!;
+    if (change.artist !== null) t.artist = change.artist;
+    if (change.album !== null) t.album = change.album;
+    if (change.year !== null) t.year = num(change.year);
+    if (change.trackNo !== null) t.trackNo = num(change.trackNo);
+    if (change.discNo !== null) t.discNo = num(change.discNo);
+    return true;
+  },
+};
 
 export const mockUserData = {
   isFavorite(path: string): boolean {

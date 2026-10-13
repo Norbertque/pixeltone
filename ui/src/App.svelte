@@ -10,6 +10,7 @@
   import NowPlaying from './lib/components/NowPlaying.svelte';
   import ShortcutsDialog from './lib/components/ShortcutsDialog.svelte';
   import Snackbar from './lib/components/Snackbar.svelte';
+  import TagEditor from './lib/components/TagEditor.svelte';
   import { help } from './lib/help.svelte';
   import { output } from './lib/output.svelte';
   import { player } from './lib/player.svelte';
@@ -157,6 +158,7 @@
   <ShortcutsDialog />
   <PromptDialog />
   <PlaylistPicker />
+  <TagEditor />
 </div>
 
 <style>

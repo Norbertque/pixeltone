@@ -3,7 +3,7 @@
  * so the UI can be developed (and screenshotted) without Windows.
  */
 import { scallopPath } from '../shapes';
-import { mockArt, mockLibrary, mockUserData } from './mockLibrary';
+import { mockArt, mockLibrary, mockTags, mockUserData } from './mockLibrary';
 import { MockQueue, type Slot } from './mockQueue';
 import type {
   AppSettings,
@@ -85,7 +85,7 @@ const BADGE: OutputBadge = {
 };
 
 let settings: AppSettings = {
-  preferences: { lyricsOnline: true, artistImagesOnline: true },
+  preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false },
   output: {
     deviceId: 'mock-dac',
     exclusive: true,
@@ -456,6 +456,20 @@ export const mockBackend: Backend = {
     return mockUserData.lyrics(track.path, track.title);
   },
   lyricsSave: async (track, text) => mockUserData.saveLyrics(track.path, text),
+
+  async openMiniPlayer() {
+    window.open(`${location.pathname}#mini`, 'pp-mini', 'popup,width=420,height=128');
+  },
+  async showMainWindow() {
+    window.opener?.focus();
+    if (location.hash === '#mini') window.close();
+  },
+  tagsRead: async (paths) => paths.map((p) => mockTags.read(p)),
+  async tagsWrite(paths, change) {
+    const written = paths.filter((p) => mockTags.write(p, change)).length;
+    if (written) userDataChanged();
+    return { written, failed: paths.length > written ? ['some files: not in the demo library'] : [] };
+  },
 };
 
 function userDataChanged(): void {
