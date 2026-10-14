@@ -13,6 +13,10 @@ CREATE TABLE artist_images(
 );
 "#;
 
+/// Pictures found by name alone could show someone else of the same name: look them all up
+/// again, checked against the artist's own titles.
+pub(super) const SCHEMA_V4: &str = "DELETE FROM artist_images;";
+
 impl Db {
     /// (name, normalised name) of artists never looked up, or whose last lookup found
     /// nothing before `retry_before` (seconds); the ones with the most tracks first.
@@ -44,6 +48,39 @@ impl Db {
             params![norm, image, now],
         )?;
         Ok(())
+    }
+
+    /// Up to `n` album titles (their own albums before compilations, larger first) and
+    /// `n` song titles by the artist `norm`: what an online lookup checks a match against.
+    pub fn artist_titles(
+        &self,
+        norm: &str,
+        n: u32,
+    ) -> rusqlite::Result<(Vec<String>, Vec<String>)> {
+        let mut albums = self.conn.prepare_cached(
+            "SELECT a.title FROM albums a \
+             JOIN tracks t ON t.album_id = a.id \
+             JOIN track_artists ta ON ta.track_id = t.id \
+             JOIN artists ar ON ar.id = ta.artist_id \
+             WHERE ar.norm = ?1 AND a.title <> '' \
+             GROUP BY a.id \
+             ORDER BY lower(a.artist) = ar.norm DESC, COUNT(DISTINCT t.id) DESC, a.title \
+             LIMIT ?2",
+        )?;
+        let albums = albums
+            .query_map(params![norm, n], |r| r.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        let mut tracks = self.conn.prepare_cached(
+            "SELECT t.title FROM tracks t \
+             JOIN track_artists ta ON ta.track_id = t.id AND ta.role = 0 \
+             JOIN artists ar ON ar.id = ta.artist_id \
+             WHERE ar.norm = ?1 AND t.title <> '' \
+             GROUP BY lower(t.title) ORDER BY MIN(t.id) LIMIT ?2",
+        )?;
+        let tracks = tracks
+            .query_map(params![norm, n], |r| r.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok((albums, tracks))
     }
 
     pub fn forget_artist_images(&self) -> rusqlite::Result<()> {

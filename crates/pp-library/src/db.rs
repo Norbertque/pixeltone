@@ -279,6 +279,12 @@ impl Db {
             tx.execute_batch("PRAGMA user_version = 3")?;
             tx.commit()?;
         }
+        if version < 4 {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(images::SCHEMA_V4)?;
+            tx.execute_batch("PRAGMA user_version = 4")?;
+            tx.commit()?;
+        }
         Ok(())
     }
 
@@ -849,7 +855,7 @@ mod tests {
             .conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         db.set_favorite("/a.flac", true, 1).unwrap();
         assert!(db.is_favorite("/a.flac").unwrap());
         db.set_artist_image("björk", Some("abc"), 1).unwrap();

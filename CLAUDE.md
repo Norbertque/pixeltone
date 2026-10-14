@@ -84,10 +84,12 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 
 ## Desktop and tags (M6)
 
-- Artist pictures: `pp-deezer` (search by name, exact matches only) + `src-tauri/src/artist_images.rs`
-  (background worker, ~4 lookups/s, misses retried after 30 days). Stored in the art store and
-  `artist_images` (schema v3, keyed by `artists.norm`); `ARTIST_SELECT` prefers them to album
-  covers. Turning the setting off deletes the rows.
+- Artist pictures: `pp-deezer` searches Deezer's albums, then songs, by artist + title and
+  only accepts an artist with one of the library's titles (names alone picked namesakes);
+  `src-tauri/src/artist_images.rs` runs it in the background, misses retried after 30 days.
+  Stored in the art store and `artist_images` (schema v3, keyed by `artists.norm`; v4 cleared
+  the name-only matches); `ARTIST_SELECT` prefers them to album covers. Turning the setting
+  off deletes the rows.
 - Tag editor: `pp-library` edit.rs writes only the file's primary tag through lofty (covers and
   other fields survive; tests compare every untouched item). `tags_write` reloads the engine
   if the playing file was edited (`Engine::reload`) and rescans.

@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
-use pp_deezer::{Deezer, DeezerError, worth_looking_up};
+use pp_deezer::{Clues, Deezer, DeezerError, worth_looking_up};
 use pp_library::Library;
 
 const PAUSE: Duration = Duration::from_millis(250);
@@ -131,7 +131,7 @@ impl Worker<'_> {
                     return;
                 }
                 let found = if worth_looking_up(&name) {
-                    match self.lookup(&name) {
+                    match self.lookup(&name, &key) {
                         Ok(found) => found,
                         Err(DeezerError::Quota) => {
                             thread::sleep(QUOTA_PAUSE);
@@ -177,8 +177,10 @@ impl Worker<'_> {
         }
     }
 
-    fn lookup(&self, name: &str) -> Result<Option<Vec<u8>>, DeezerError> {
-        match self.deezer.find(name)? {
+    /// The picture of the artist `name` (library key `key`), checked against their titles.
+    fn lookup(&self, name: &str, key: &str) -> Result<Option<Vec<u8>>, DeezerError> {
+        let (albums, tracks) = self.library.artist_titles(key, 3).unwrap_or_default();
+        match self.deezer.find(name, &Clues { albums, tracks })? {
             Some(picture) => self.deezer.download(&picture.url).map(Some),
             None => Ok(None),
         }

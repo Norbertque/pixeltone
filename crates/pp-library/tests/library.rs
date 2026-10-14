@@ -567,6 +567,13 @@ fn artist_pictures_found_online_replace_album_covers() {
             .any(|(_, key)| key == "björk")
     );
 
+    // What a lookup checks Kestrel against: their own album, and their songs.
+    let (albums, tracks) = lib.artist_titles("kestrel", 3).unwrap();
+    assert_eq!(albums, ["Double"]);
+    assert_eq!(tracks.len(), 3);
+    let (albums, _) = lib.artist_titles("sol", 3).unwrap();
+    assert_eq!(albums, ["Summer Mix"], "a compilation is all Sol has");
+
     // Rescans keep them; forgetting brings the album covers back.
     scan(&lib);
     assert_ne!(kestrel(&lib).cover, album_cover);

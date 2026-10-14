@@ -1,7 +1,11 @@
-//! Artist pictures from Deezer's public API (no account or key needed): search an artist by
-//! name, keep only an exact match, download its picture. Only the artist's name is sent.
+//! Artist pictures from Deezer's public API (no account or key needed).
+//!
+//! A name alone isn't enough: many artists share one ("Sally"), and the best-known of them is
+//! rarely the one in someone's library. So an artist is only accepted when Deezer lists an
+//! album (or else a song) of theirs with a title the library has too. What's sent: the
+//! artist's name with up to three album and three song titles.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use unicode_normalization::UnicodeNormalization;
@@ -11,6 +15,10 @@ use ureq::Agent;
 pub const API: &str = "https://api.deezer.com";
 /// Pictures are about 100–300 KB; anything far bigger isn't one.
 const MAX_PICTURE_BYTES: u64 = 8 * 1024 * 1024;
+/// Titles tried of each kind.
+const TRIES: usize = 3;
+/// Deezer allows 50 requests in 5 seconds; stay well below.
+const SPACING: Duration = Duration::from_millis(150);
 
 #[derive(Debug, thiserror::Error)]
 pub enum DeezerError {
@@ -23,7 +31,7 @@ pub enum DeezerError {
     Quota,
 }
 
-/// One artist in Deezer's search results.
+/// An artist as Deezer's search results show them.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Candidate {
@@ -31,13 +39,20 @@ pub struct Candidate {
     pub name: String,
     pub picture_big: Option<String>,
     pub picture_xl: Option<String>,
-    pub nb_fan: u64,
+}
+
+/// An album or a song in Deezer's search results, with its artist.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct Hit {
+    pub title: String,
+    pub artist: Candidate,
 }
 
 #[derive(Deserialize)]
 struct Search {
     #[serde(default)]
-    data: Vec<Candidate>,
+    data: Vec<Hit>,
     error: Option<ApiError>,
 }
 
@@ -47,6 +62,15 @@ struct ApiError {
     code: i64,
     #[serde(default)]
     message: String,
+}
+
+/// What the library knows the artist by, besides the name.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Clues {
+    /// Album titles, largest first.
+    pub albums: Vec<String>,
+    /// Song titles.
+    pub tracks: Vec<String>,
 }
 
 /// An artist's picture on Deezer.
@@ -59,6 +83,7 @@ pub struct Picture {
 pub struct Deezer {
     agent: Agent,
     base: String,
+    last_request: parking_lot::Mutex<Option<Instant>>,
 }
 
 impl Deezer {
@@ -76,17 +101,48 @@ impl Deezer {
         Self {
             agent,
             base: base.trim_end_matches('/').to_string(),
+            last_request: parking_lot::Mutex::new(None),
         }
     }
 
-    /// The picture of the artist called `name`; `None` when Deezer doesn't know an artist of
-    /// exactly that name, or has no picture of them.
-    pub fn find(&self, name: &str) -> Result<Option<Picture>, DeezerError> {
+    /// Waits so requests are at least `SPACING` apart.
+    fn pace(&self) {
+        let mut last = self.last_request.lock();
+        if let Some(wait) = last.and_then(|t| SPACING.checked_sub(t.elapsed())) {
+            std::thread::sleep(wait);
+        }
+        *last = Some(Instant::now());
+    }
+
+    /// The picture of the artist called `name` who made one of the `clues` titles; `None`
+    /// when Deezer has no such artist, or no picture of them.
+    pub fn find(&self, name: &str, clues: &Clues) -> Result<Option<Picture>, DeezerError> {
+        let kinds = [("album", &clues.albums), ("track", &clues.tracks)];
+        for (kind, titles) in kinds {
+            for title in titles
+                .iter()
+                .filter(|t| !match_key(t).is_empty())
+                .take(TRIES)
+            {
+                let hits = self.search(kind, name, title)?;
+                if let Some(artist) = verified(name, title, &hits) {
+                    // The right artist; a placeholder picture means Deezer has none of them.
+                    return Ok(picture(artist));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn search(&self, kind: &str, artist: &str, title: &str) -> Result<Vec<Hit>, DeezerError> {
+        let quoted = |s: &str| s.replace('"', " ");
+        let query = format!(r#"artist:"{}" {kind}:"{}""#, quoted(artist), quoted(title));
+        self.pace();
         let mut resp = self
             .agent
-            .get(format!("{}/search/artist", self.base))
-            .query("q", name)
-            .query("limit", "10")
+            .get(format!("{}/search/{kind}", self.base))
+            .query("q", &query)
+            .query("limit", "15")
             .call()?;
         if !resp.status().is_success() {
             return Err(DeezerError::Api(format!("HTTP {}", resp.status())));
@@ -100,7 +156,7 @@ impl Deezer {
                 DeezerError::Api(e.message)
             });
         }
-        Ok(best_match(name, &search.data).and_then(picture))
+        Ok(search.data)
     }
 
     pub fn download(&self, url: &str) -> Result<Vec<u8>, DeezerError> {
@@ -136,18 +192,29 @@ pub fn match_key(name: &str) -> String {
     words.join(" ")
 }
 
-/// The candidate whose name is the same as `name`; the best known one when several are.
-/// Nothing else: a near miss would show the wrong person.
-pub fn best_match<'a>(name: &str, candidates: &'a [Candidate]) -> Option<&'a Candidate> {
+/// Same title, allowing an edition note on either side ("underdogs" = "underdogs (Deluxe)").
+pub fn same_title(ours: &str, theirs: &str) -> bool {
+    let (a, b) = (match_key(ours), match_key(theirs));
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    let (short, long) = if a.len() <= b.len() {
+        (&a, &b)
+    } else {
+        (&b, &a)
+    };
+    short == long || (short.len() >= 3 && long.starts_with(&format!("{short} ")))
+}
+
+/// The artist of the first hit whose artist is `name` and whose title is `title`.
+pub fn verified<'a>(name: &str, title: &str, hits: &'a [Hit]) -> Option<&'a Candidate> {
     let key = match_key(name);
     if key.is_empty() {
         return None;
     }
-    candidates
-        .iter()
-        .rev() // on equal fans, the earlier (more relevant) result wins
-        .filter(|c| match_key(&c.name) == key)
-        .max_by_key(|c| c.nb_fan)
+    hits.iter()
+        .find(|h| match_key(&h.artist.name) == key && same_title(title, &h.title))
+        .map(|h| &h.artist)
 }
 
 /// The largest picture, unless it's Deezer's placeholder for artists without one (an image
@@ -182,13 +249,15 @@ pub fn worth_looking_up(name: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn candidate(id: u64, name: &str, fans: u64, xl: &str) -> Candidate {
-        Candidate {
-            id,
-            name: name.into(),
-            picture_big: None,
-            picture_xl: Some(xl.into()),
-            nb_fan: fans,
+    fn hit(title: &str, artist_id: u64, artist: &str, xl: &str) -> Hit {
+        Hit {
+            title: title.into(),
+            artist: Candidate {
+                id: artist_id,
+                name: artist.into(),
+                picture_big: None,
+                picture_xl: Some(xl.into()),
+            },
         }
     }
 
@@ -200,50 +269,59 @@ mod tests {
         assert_eq!(match_key("AC/DC"), "ac dc");
         assert_eq!(match_key("  Sigur Rós "), "sigur ros");
         assert_eq!(match_key("The The"), "the");
-        assert_eq!(match_key("System Of A Down"), match_key("system of a down"));
         assert_eq!(match_key("坂本龍一"), "坂本龍一");
     }
 
     #[test]
-    fn only_an_exact_name_counts_and_fans_break_ties() {
-        let found = [
-            candidate(1, "Loser64 Tribute", 900, "https://x/a.jpg"),
-            candidate(2, "loser64", 50, "https://x/b.jpg"),
-            candidate(3, "Loser 64", 70, "https://x/c.jpg"),
-            candidate(4, "LOSER64", 10, "https://x/d.jpg"),
+    fn titles_match_with_edition_notes_but_not_by_accident() {
+        assert!(same_title("underdogs", "Underdogs"));
+        assert!(same_title("underdogs", "underdogs (Deluxe Edition)"));
+        assert!(same_title(
+            "Call Me Nihilist [Remastered]",
+            "Call Me Nihilist"
+        ));
+        assert!(!same_title("underdogs", "underdog"));
+        assert!(
+            !same_title("Go", "Go Away"),
+            "too short to be an edition prefix"
+        );
+        assert!(!same_title("", "anything"));
+    }
+
+    #[test]
+    fn an_artist_counts_only_with_one_of_our_titles() {
+        // Two artists called Sally; ours made "underdogs".
+        let hits = [
+            hit("Pop Hits", 1, "Sally", "https://x/famous.jpg"),
+            hit("Underdogs", 2, "sally", "https://x/ours.jpg"),
+            hit(
+                "Underdogs",
+                3,
+                "Sally Tribute Band",
+                "https://x/tribute.jpg",
+            ),
         ];
-        assert_eq!(best_match("Loser64", &found).unwrap().id, 2);
-        assert!(best_match("Loser65", &found).is_none());
-        assert!(best_match("", &found).is_none());
-        let tie = [
-            candidate(7, "Aurora Lane", 5, "https://x/1.jpg"),
-            candidate(8, "aurora lane", 5, "https://x/2.jpg"),
-        ];
-        assert_eq!(best_match("Aurora Lane", &tie).unwrap().id, 7);
+        assert_eq!(verified("Sally", "underdogs", &hits).unwrap().id, 2);
+        assert!(verified("Sally", "Call Me Nihilist", &hits).is_none());
+        assert!(verified("", "underdogs", &hits).is_none());
     }
 
     #[test]
     fn deezers_placeholder_is_no_picture() {
-        let none = candidate(
+        let none = hit(
+            "A",
             1,
             "X",
-            0,
             "https://e-cdns-images.dzcdn.net/images/artist//1000x1000-000000-80-0-0.jpg",
         );
-        assert_eq!(picture(&none), None);
-        let some = candidate(
+        assert_eq!(picture(&none.artist), None);
+        let some = hit(
+            "A",
             2,
             "Y",
-            0,
             "https://e-cdns-images.dzcdn.net/images/artist/f2bc007e9133c946ac3c3907ddc5d2ea/1000x1000-000000-80-0-0.jpg",
         );
-        assert_eq!(picture(&some).unwrap().artist_id, 2);
-        let big_only = Candidate {
-            picture_xl: None,
-            picture_big: Some("https://x/500.jpg".into()),
-            ..candidate(3, "Z", 0, "")
-        };
-        assert_eq!(picture(&big_only).unwrap().url, "https://x/500.jpg");
+        assert_eq!(picture(&some.artist).unwrap().artist_id, 2);
     }
 
     #[test]

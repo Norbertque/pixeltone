@@ -1,5 +1,7 @@
 # Pixeltone
 
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-norbertque-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/norbertque)
+
 A Material 3 Expressive music player for Windows, inspired by PixelPlayer for Android, with
 **bit-perfect WASAPI exclusive output**: your files reach the DAC untouched, at their own
 sample rate and bit depth.
@@ -38,8 +40,9 @@ Everything works offline. Two lookups use the internet, and both can be turned o
 
 - **Lyrics (LRCLIB):** for songs without lyrics of their own, the title, artist, album and
   length are sent to [lrclib.net](https://lrclib.net). Answers (and "not found") are cached.
-- **Artist pictures (Deezer):** the names of the artists in your library are looked up on
-  [Deezer](https://www.deezer.com); pictures of exact matches are kept in the app's cache.
+- **Artist pictures (Deezer):** artists in your library are looked up on
+  [Deezer](https://www.deezer.com) by name together with a few of their album and song
+  titles, so a namesake isn't taken for them; pictures are kept in the app's cache.
   Turning it off removes them.
 - **AI playlists (optional, your own Anthropic API key):** describe a playlist and Claude
   picks it from your library. The titles, artists, albums, years and genres of your songs
@@ -89,6 +92,11 @@ FFmpeg's Windows headers, a C compiler for the target and a resource-compiler st
 | `crates/pp-output-wasapi` | WASAPI backend and device notifications (Windows) |
 | `src-tauri` | The app: commands, events, cover protocol, settings, library glue |
 | `ui` | Svelte 5 UI |
+
+## Support
+
+Pixeltone is free. If it's become your player, you can
+[buy me a coffee](https://buymeacoffee.com/norbertque).
 
 ## Licence and credits
 

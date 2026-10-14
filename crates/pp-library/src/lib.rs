@@ -413,6 +413,12 @@ impl Library {
             .set_artist_image(key, hash.as_deref(), scan::now_secs())?)
     }
 
+    /// Album and song titles by the artist `key` (up to `n` of each), to check an online
+    /// match against: see `Db::artist_titles`.
+    pub fn artist_titles(&self, key: &str, n: u32) -> Result<(Vec<String>, Vec<String>)> {
+        Ok(self.db.lock().artist_titles(key, n)?)
+    }
+
     /// Drops every picture found online; artists show album covers again.
     pub fn forget_artist_images(&self) -> Result<()> {
         Ok(self.db.lock().forget_artist_images()?)

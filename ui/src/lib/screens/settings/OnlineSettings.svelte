@@ -37,8 +37,9 @@
     <div class="row-text">
       <span class="title-medium">Artist pictures</span>
       <span class="body-medium">
-        Show pictures of the artists in your library, from Deezer (deezer.com). Only artist names are sent; the
-        pictures are kept on this PC. Turning this off removes them again.
+        Show pictures of the artists in your library, from Deezer (deezer.com). An artist's name is sent with a
+        few of their album and song titles, so a namesake isn't mistaken for them; the pictures are kept on this
+        PC. Turning this off removes them again.
       </span>
     </div>
     <Switch
