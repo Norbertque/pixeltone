@@ -78,3 +78,9 @@ queue it restores after a restart.
 
 To take playback back: read `positionMs` and the current item from the last `state`, send
 `pause`, and continue on the phone.
+
+## Trying a client without Windows
+
+`cargo run -p pp-remote --example dev_server [port]` runs the same server on any OS, playing
+into a simulated device in real time. It prints its port, the certificate fingerprint, a
+pairing code (a fresh one after each pairing) and the player's state as it changes.
