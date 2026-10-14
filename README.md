@@ -51,6 +51,8 @@ Everything works offline. Two lookups use the internet, and both can be turned o
 Every push to `main` builds a Windows installer and a portable zip on GitHub Actions and
 publishes them as the rolling **Development build** release; tags `v*` publish versioned
 releases. Builds are unsigned, so Windows SmartScreen asks first: *More info → Run anyway*.
+Once installed, Pixeltone looks for newer builds at start-up and offers to install them
+(Settings → Online can turn that off).
 
 ## Development
 
@@ -90,6 +92,8 @@ FFmpeg's Windows headers, a C compiler for the target and a resource-compiler st
 
 ## Licence and credits
 
-Pixeltone is an independent project; it shares no code or assets with Pixeltone for
-Android. It bundles FFmpeg (LGPL-2.1-or-later, dynamically linked), Google Sans Flex
+© 2026 Norbertque. All rights reserved: the code is public to read, not licensed for
+reuse. Pixeltone (called PixelPlayer PC until October 2026) is an independent project; it
+shares no code or assets with PixelPlayer for Android. It bundles FFmpeg (LGPL-2.1-or-later,
+dynamically linked, built audio-only by `scripts/build-ffmpeg-slim.sh`), Google Sans Flex
 (SIL OFL 1.1) and Material Symbols (Apache-2.0).
