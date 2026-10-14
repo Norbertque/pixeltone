@@ -18,6 +18,7 @@ pp-library = { path = "crates/pp-library" }
 pp-lyrics = { path = "crates/pp-lyrics" }
 pp-media-controls = { path = "crates/pp-media-controls" }
 pp-output-wasapi = { path = "crates/pp-output-wasapi" }
+pp-remote = { path = "crates/pp-remote" }
 
 anyhow = "1"
 crossbeam-channel = "0.5"

@@ -83,6 +83,10 @@ impl History {
 
     fn start(s: &PlayerSnapshot) -> Option<Listen> {
         let t = s.track.as_ref()?;
+        // A phone's track (remote control) isn't part of this library's history.
+        if t.path.starts_with("http://") {
+            return None;
+        }
         Some(Listen {
             path: t.path.clone(),
             title: t.title.clone(),

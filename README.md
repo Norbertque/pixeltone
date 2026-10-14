@@ -27,6 +27,9 @@ sample rate and bit depth.
   files); artist pictures from Deezer.
 - **Desktop:** a mini player that stays on top, a tray icon with playback controls, and
   optionally keep playing in the tray when the window is closed.
+- **Remote control (opt-in):** a phone on the same Wi-Fi pairs once with a code and then
+  follows and controls the player, or hands its own queue over so the music continues on
+  the PC, bit-perfect (TLS with a pinned certificate; [protocol](docs/remote-protocol.md)).
 - **UI (Svelte 5 in WebView2 via Tauri 2):** Material You colours from the album art, M3
   Expressive shapes and spring motion, Google Sans Flex.
 

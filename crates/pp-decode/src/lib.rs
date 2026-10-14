@@ -13,7 +13,7 @@ use std::sync::Once;
 use pp_core::{PcmBlock, SampleKind, Samples, SourceFormat};
 use rsmpeg::avcodec::AVCodecContext;
 use rsmpeg::avformat::AVFormatContextInput;
-use rsmpeg::avutil::{AVFrame, av_rescale_q};
+use rsmpeg::avutil::{AVDictionary, AVFrame, av_rescale_q};
 use rsmpeg::error::RsmpegError;
 use rsmpeg::ffi;
 
@@ -155,6 +155,8 @@ pub struct Decoder {
 }
 
 impl Decoder {
+    /// Opens a local file. The path always goes through FFmpeg's `file` protocol, so a
+    /// path can never turn into a network address.
     pub fn open(path: &Path) -> Result<Self, DecodeError> {
         init();
         let display = path.display().to_string();
@@ -171,7 +173,39 @@ impl Decoder {
             path: display.clone(),
             reason: e.to_string(),
         })?;
+        Self::from_input(input, display)
+    }
 
+    /// Opens a file a phone serves over plain HTTP (remote control). FFmpeg may use only
+    /// the `http` and `tcp` protocols for it (no redirects elsewhere) and gives up on a
+    /// silent connection after 10 s.
+    pub fn open_http(url: &str) -> Result<Self, DecodeError> {
+        init();
+        let display = url.split('?').next().unwrap_or(url).to_string();
+        let fail = |reason: String| DecodeError::Open {
+            path: display.clone(),
+            reason,
+        };
+        if !url.starts_with("http://") {
+            return Err(fail("not an http:// address".into()));
+        }
+        let c_url = CString::new(url).map_err(|_| fail("not a valid address".into()))?;
+        let mut options = Some(
+            AVDictionary::new(c"protocol_whitelist", c"http,tcp", 0).set(
+                c"rw_timeout",
+                c"10000000",
+                0,
+            ),
+        );
+        let input = AVFormatContextInput::builder()
+            .url(&c_url)
+            .options(&mut options)
+            .open()
+            .map_err(|e| fail(e.to_string()))?;
+        Self::from_input(input, display)
+    }
+
+    fn from_input(input: AVFormatContextInput, display: String) -> Result<Self, DecodeError> {
         let (stream_index, decoder) = input
             .find_best_stream(ffi::AVMEDIA_TYPE_AUDIO)
             .map_err(|e| DecodeError::Open {

@@ -4,7 +4,8 @@
 #
 # The player only decodes audio, so this build keeps the seven libraries the Rust bindings
 # link (avcodec, avformat, avutil, swresample, avfilter, avdevice, swscale) but none of the
-# video, network, encoding or device code: about a tenth of the size of a full build.
+# video, encoding or device code: about a tenth of the size of a full build. The network
+# part is plain HTTP over TCP only, for files a paired phone serves (remote control).
 #
 #   scripts/build-ffmpeg-slim.sh            # mingw-w64 cross toolchain (CI: Ubuntu)
 #   FFMPEG_CC=... FFMPEG_EXTRA_CONFIGURE=... scripts/build-ffmpeg-slim.sh   # other compilers
@@ -74,10 +75,10 @@ fi
   --disable-doc \
   --disable-debug \
   --disable-autodetect \
-  --disable-network \
   --disable-everything \
+  --enable-network \
   --enable-w32threads \
-  --enable-protocol=file \
+  --enable-protocol=file,http,tcp \
   --enable-decoder="$(join "${DECODERS[@]}")" \
   --enable-demuxer="$(join "${DEMUXERS[@]}")" \
   --enable-parser="$(join "${PARSERS[@]}")" \

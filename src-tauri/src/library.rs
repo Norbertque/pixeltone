@@ -40,6 +40,7 @@ pub fn scan(app: &AppHandle, library: &Arc<Library>) {
             if let Some(state) = handle.try_state::<AppState>() {
                 state.artist_images.kick();
             }
+            crate::remote::library_changed(&handle);
         }
     });
     library.scan(progress);

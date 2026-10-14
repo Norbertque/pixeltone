@@ -54,3 +54,8 @@ These need a real PC with a DAC; a DAC with a sample-rate display is the ground 
 20. AI playlists (needs an Anthropic API key): Settings → AI playlists → save the key;
     Library → Playlists → *Create with AI*, describe a mood: a playlist of your own songs
     appears and opens. A wrong key says so instead of hanging.
+21. Remote control: Settings → Remote control on (allow Pixeltone on private networks when
+    Windows asks), *Pair a phone*, enter the code in PixelPlayer: the phone lists the PC,
+    shows what it plays, and play/pause/seek/volume act at once. Hand the phone's queue over:
+    the song continues on the PC at the same spot, and with exclusive mode the badge still
+    says Bit-perfect.

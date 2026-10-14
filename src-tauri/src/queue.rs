@@ -26,6 +26,7 @@ pub fn item_from_row(row: TrackRow) -> QueueItem {
         album: (!row.album.is_empty()).then_some(row.album),
         duration_ms: Some(f64::from(row.duration_ms)),
         track_id: (row.id != 0).then_some(row.id),
+        remote: false,
     }
 }
 
@@ -201,6 +202,11 @@ pub fn load(path: &Path) -> Option<QueueSnapshot> {
 
 fn save(path: &Path, engine: &Engine) {
     let snapshot = sanitize(engine.queue_snapshot());
+    // A phone's queue (remote control) only plays while the phone serves it: keep the last
+    // queue of the PC's own instead.
+    if snapshot.items.iter().any(|i| i.remote) {
+        return;
+    }
     let result = serde_json::to_vec(&snapshot)
         .map_err(std::io::Error::other)
         .and_then(|bytes| {

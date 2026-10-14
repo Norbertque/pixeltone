@@ -10,6 +10,7 @@ mod media;
 #[cfg(windows)]
 mod power;
 mod queue;
+mod remote;
 mod secret;
 mod settings;
 mod tags;
@@ -49,6 +50,8 @@ pub struct AppState {
     pub artist_images: ArtistImages,
     /// The notification-area icon; `None` where the system has no tray.
     pub tray: Option<tray::Tray>,
+    /// Remote control from phones, while it's turned on.
+    pub remote: Mutex<Option<Arc<pp_remote::RemoteServer>>>,
     /// Device notifications stay on while this is held.
     pub device_watch: Mutex<Option<DeviceWatch>>,
     #[cfg(windows)]
@@ -146,6 +149,9 @@ pub(crate) fn emit_settings(app: &AppHandle, settings: &AppSettings) {
 }
 
 fn forward(app: &AppHandle, event: EngineEvent) {
+    if let Some(remote) = remote::server(app) {
+        remote.publish(&event);
+    }
     let state = app.try_state::<AppState>();
     match event {
         EngineEvent::State(snapshot) => {
@@ -290,6 +296,7 @@ pub fn run() {
                 lyrics,
                 artist_images,
                 tray,
+                remote: Mutex::new(None),
                 settings: Mutex::new(settings),
                 settings_path,
                 queue_store,
@@ -298,6 +305,13 @@ pub fn run() {
                 media: Mutex::new(None),
             });
             watch_devices(app.handle());
+            let remote_on = app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .preferences
+                .remote_enabled;
+            remote::apply(app.handle(), remote_on);
             #[cfg(windows)]
             {
                 let state = app.state::<AppState>();
@@ -349,6 +363,10 @@ pub fn run() {
             ai::ai_set_key,
             ai::ai_remove_key,
             ai::ai_playlist,
+            remote::remote_status,
+            remote::remote_pair,
+            remote::remote_stop_pairing,
+            remote::remote_forget,
             library::library_overview,
             library::library_folders,
             library::library_add_folder,
@@ -404,6 +422,8 @@ pub fn run() {
             {
                 state.queue_store.save_now(&state.engine);
                 state.history.flush();
+                // Withdraws the network announcement before the process goes.
+                state.remote.lock().take();
             }
         });
 }

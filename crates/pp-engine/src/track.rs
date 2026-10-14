@@ -80,7 +80,7 @@ pub fn load(
     plan: &OutputPlan,
 ) -> Result<LoadedTrack, String> {
     let path = item.path.as_path();
-    let mut decoder = Decoder::open(path).map_err(|e| e.to_string())?;
+    let mut decoder = open(item)?;
     let info = decoder.info().clone();
     let negotiated = plan
         .negotiate(&info.source, info.dsd)
@@ -118,8 +118,18 @@ pub fn load(
 
 /// Reads what Now Playing shows for an item (and its embedded cover) without playing it.
 pub fn read_meta(item: &QueueItem) -> Result<(TrackMeta, Option<CoverArt>), String> {
-    let mut decoder = Decoder::open(&item.path).map_err(|e| e.to_string())?;
+    let mut decoder = open(item)?;
     Ok(describe(&mut decoder, item))
+}
+
+/// A local file, or a file a paired phone serves (remote control).
+fn open(item: &QueueItem) -> Result<Decoder, String> {
+    if item.remote {
+        Decoder::open_http(&item.path.to_string_lossy())
+    } else {
+        Decoder::open(&item.path)
+    }
+    .map_err(|e| e.to_string())
 }
 
 fn describe(decoder: &mut Decoder, item: &QueueItem) -> (TrackMeta, Option<CoverArt>) {

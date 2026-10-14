@@ -52,6 +52,8 @@ pub struct Preferences {
     pub close_to_tray: bool,
     /// Look for a new version at start-up.
     pub check_updates: bool,
+    /// Phones on the same network can find, pair with and control the player.
+    pub remote_enabled: bool,
 }
 
 impl Default for Preferences {
@@ -61,6 +63,7 @@ impl Default for Preferences {
             artist_images_online: true,
             close_to_tray: false,
             check_updates: true,
+            remote_enabled: false,
         }
     }
 }

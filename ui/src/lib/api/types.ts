@@ -103,6 +103,28 @@ export interface Preferences {
   closeToTray: boolean;
   /** Look for a new version at start-up. */
   checkUpdates: boolean;
+  /** Phones on the same network can find, pair with and control the player. */
+  remoteEnabled: boolean;
+}
+/** Remote control (src-tauri/src/remote.rs). */
+export interface RemoteDevice {
+  id: string;
+  name: string;
+  /** Unix seconds. */
+  pairedAt: number;
+  lastSeen: number;
+}
+export interface RemoteStatus {
+  enabled: boolean;
+  running: boolean;
+  /** How phones list this PC. */
+  name: string;
+  /** `ip:port`, for phones that can't find the PC by themselves. */
+  address: string | null;
+  /** The pairing code on show, and for how many more seconds. */
+  code: string | null;
+  codeSeconds: number;
+  devices: RemoteDevice[];
 }
 /** A newer version, from the update feed. */
 export interface UpdateInfo {
@@ -288,6 +310,13 @@ export interface Backend {
   lyricsFind(track: LyricsRequest): Promise<Lyrics | null>;
   /** Saves lyrics (LRC or plain text) next to the track, or inside the app. */
   lyricsSave(track: LyricsRequest, text: string): Promise<Lyrics>;
+
+  // Remote control
+  remoteStatus(): Promise<RemoteStatus>;
+  /** Shows a new pairing code. */
+  remotePair(): Promise<RemoteStatus>;
+  remoteStopPairing(): Promise<RemoteStatus>;
+  remoteForget(id: string): Promise<RemoteStatus>;
 
   // Updates
   /** A newer version than this one, or null. */

@@ -102,6 +102,20 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Tray and mini player: `src-tauri/src/tray.rs`. The mini player is the same UI at `#mini`
   (`ui/src/MiniWindow.svelte`); its window label `mini` is in the capability file.
 
+## Remote control
+
+- `crates/pp-remote` (no Tauri): HTTPS + WebSocket on the LAN (axum, rustls with ring), a
+  self-signed certificate phones pin at pairing, six-digit single-use codes, tokens stored
+  hashed; mDNS through Windows' own DNS-SD (`DnsServiceRegister`). Protocol:
+  `docs/remote-protocol.md`; keep it in step with `protocol.rs`.
+- `src-tauri/src/remote.rs` lends the engine and the volume rules (same as `volume.ts`);
+  engine events reach phones through `forward()`. Off unless `preferences.remote_enabled`.
+- A phone's tracks are `QueueItem { remote: true }` with an `http://` path on the phone's
+  own address: only `Decoder::open_http` opens those (FFmpeg limited to http/tcp); local
+  paths always go through `file:`. They stay out of history and the saved queue.
+- The fork's client (PixelPlayer) is private: its licence forbids publishing modified
+  versions, so nothing of it goes into this repo, and nothing of this repo's code into it.
+
 ## Releases and updates
 
 - Every CI build has its own version (dev: workspace major.minor + run number; tags: the tag)

@@ -39,6 +39,7 @@ import {
   type AiStatus,
   type AiPlaylistResult,
   type UpdateInfo,
+  type RemoteStatus,
 } from './types';
 
 let pendingUpdate: Update | null = null;
@@ -160,6 +161,10 @@ export const tauriBackend: Backend = {
   lyricsFind: (track) => invoke<Lyrics | null>('lyrics_find', { track }),
   lyricsSave: (track, text) => invoke<Lyrics>('lyrics_save', { track, text }),
 
+  remoteStatus: () => invoke<RemoteStatus>('remote_status'),
+  remotePair: () => invoke<RemoteStatus>('remote_pair'),
+  remoteStopPairing: () => invoke<RemoteStatus>('remote_stop_pairing'),
+  remoteForget: (id) => invoke<RemoteStatus>('remote_forget', { id }),
   async checkForUpdate(): Promise<UpdateInfo | null> {
     pendingUpdate = await check();
     return pendingUpdate ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? null } : null;

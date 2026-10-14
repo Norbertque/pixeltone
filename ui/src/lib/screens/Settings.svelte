@@ -12,6 +12,7 @@
   import AudioOutput from './settings/AudioOutput.svelte';
   import LibrarySettings from './settings/LibrarySettings.svelte';
   import OnlineSettings from './settings/OnlineSettings.svelte';
+  import RemoteSettings from './settings/RemoteSettings.svelte';
   import SoundSettings from './settings/SoundSettings.svelte';
   import WindowSettings from './settings/WindowSettings.svelte';
 
@@ -139,6 +140,11 @@
   <section class="section" aria-labelledby="ai">
     <h2 id="ai" class="title-large rounded emphasized"><Icon name="auto_awesome" /> AI playlists</h2>
     <AiSettings />
+  </section>
+
+  <section class="section" aria-labelledby="remote">
+    <h2 id="remote" class="title-large rounded emphasized"><Icon name="phonelink_ring" /> Remote control</h2>
+    <RemoteSettings />
   </section>
 
   <section class="section" aria-labelledby="window">

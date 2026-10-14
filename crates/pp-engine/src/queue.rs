@@ -32,6 +32,8 @@ pub struct QueueItem {
     pub duration_ms: Option<f64>,
     /// Library track id, when the item came from the library.
     pub track_id: Option<u32>,
+    /// `path` is an `http://` address a paired phone serves (remote control), not a file.
+    pub remote: bool,
 }
 
 impl From<PathBuf> for QueueItem {

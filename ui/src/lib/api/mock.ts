@@ -85,7 +85,7 @@ const BADGE: OutputBadge = {
 };
 
 let settings: AppSettings = {
-  preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false, checkUpdates: true },
+  preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false, checkUpdates: true, remoteEnabled: false },
   output: {
     deviceId: 'mock-dac',
     exclusive: true,
@@ -109,6 +109,24 @@ let settings: AppSettings = {
 };
 const settingsListeners = new Set<(s: AppSettings) => void>();
 let mockAiKey = false;
+let remoteCode: { code: string; until: number } | null = null;
+let remoteDevices = [
+  { id: 'pixel-8', name: 'Pixel 8 Pro', pairedAt: Date.now() / 1000 - 86_400 * 3, lastSeen: Date.now() / 1000 - 600 },
+];
+
+function mockRemote() {
+  const enabled = settings.preferences.remoteEnabled;
+  const left = remoteCode ? Math.max(0, Math.round((remoteCode.until - Date.now()) / 1000)) : 0;
+  return {
+    enabled,
+    running: enabled,
+    name: 'DESKTOP-DEMO',
+    address: enabled ? '192.168.1.20:47821' : null,
+    code: left > 0 ? remoteCode!.code : null,
+    codeSeconds: left,
+    devices: enabled ? remoteDevices : [],
+  };
+}
 
 function settingsChanged(): AppSettings {
   for (const cb of settingsListeners) cb(structuredClone(settings));
@@ -458,6 +476,19 @@ export const mockBackend: Backend = {
   },
   lyricsSave: async (track, text) => mockUserData.saveLyrics(track.path, text),
 
+  remoteStatus: async () => mockRemote(),
+  async remotePair() {
+    remoteCode = { code: String(100000 + Math.floor(Math.random() * 900000)), until: Date.now() + 600_000 };
+    return mockRemote();
+  },
+  async remoteStopPairing() {
+    remoteCode = null;
+    return mockRemote();
+  },
+  async remoteForget(id) {
+    remoteDevices = remoteDevices.filter((d) => d.id !== id);
+    return mockRemote();
+  },
   checkForUpdate: async () => null,
   installUpdate: async () => {},
   aiStatus: async () => ({ hasKey: mockAiKey, songs: 1863, sentSongs: 1863, estimateUsd: 0.21 }),

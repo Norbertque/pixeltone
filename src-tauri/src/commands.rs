@@ -161,6 +161,7 @@ pub fn set_output_settings(
         .map_err(|e| e.to_string())?;
     state.engine.set_output(updated.effective_output());
     crate::emit_settings(&app, &updated);
+    crate::remote::volume_changed(&app);
     Ok(updated)
 }
 
@@ -183,6 +184,7 @@ pub fn set_preferences(
     state
         .artist_images
         .set_enabled(updated.preferences.artist_images_online);
+    crate::remote::apply(&app, updated.preferences.remote_enabled);
     crate::emit_settings(&app, &updated);
     Ok(updated)
 }
@@ -221,30 +223,36 @@ pub async fn hardware_volume(
 
 #[tauri::command]
 pub async fn set_hardware_mute(
+    app: AppHandle,
     state: State<'_, AppState>,
     device_id: Option<String>,
     muted: bool,
 ) -> Result<(), String> {
-    blocking(state.backend.clone(), move |b| {
+    let result = blocking(state.backend.clone(), move |b| {
         match b.hardware_volume(device_id.as_deref())? {
             Some(v) => v.set_mute(muted),
             None => Ok(()),
         }
     })
-    .await
+    .await;
+    crate::remote::volume_changed(&app);
+    result
 }
 
 #[tauri::command]
 pub async fn set_hardware_volume(
+    app: AppHandle,
     state: State<'_, AppState>,
     device_id: Option<String>,
     db: f32,
 ) -> Result<(), String> {
-    blocking(state.backend.clone(), move |b| {
+    let result = blocking(state.backend.clone(), move |b| {
         match b.hardware_volume(device_id.as_deref())? {
             Some(v) => v.set_db(db),
             None => Ok(()),
         }
     })
-    .await
+    .await;
+    crate::remote::volume_changed(&app);
+    result
 }
