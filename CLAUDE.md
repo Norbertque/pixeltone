@@ -7,6 +7,9 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 
 - `scripts/fetch-ffmpeg.sh linux64` once per checkout (FFmpeg 8.1 shared → `third_party/`;
   `.cargo/config.toml` points the build and tests at it).
+- Windows builds ship an audio-only FFmpeg (~6 MB instead of ~160 MB) cross-compiled by
+  `scripts/build-ffmpeg-slim.sh` in CI's `ffmpeg` job (cached until the script changes). A
+  format the player should read needs its decoder, demuxer and parser listed there.
 - `cargo test --workspace` — also regenerates `ui/src/lib/api/bindings/` (ts-rs); commit them.
 - `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all`.
 - `npm run check`, `npm test`, `npm run build` (UI), `npm run dev` (UI with mock backend).

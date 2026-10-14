@@ -67,9 +67,39 @@ jobs:
             exit 1
           fi
 
+  ffmpeg:
+    name: FFmpeg (audio-only, Windows)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # Rebuilt only when the build script (version, components, flags) changes.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/ffmpeg/win64
+          key: ffmpeg-win64-slim-${{ hashFiles('scripts/build-ffmpeg-slim.sh') }}
+
+      - name: Cross toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mingw-w64 nasm make
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: scripts/build-ffmpeg-slim.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ffmpeg-win64
+          path: third_party/ffmpeg/win64
+          retention-days: 3
+
   windows:
     name: Build (Windows)
-    needs: test
+    needs: [test, ffmpeg]
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
@@ -84,9 +114,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Fetch FFmpeg
-        shell: bash
-        run: scripts/fetch-ffmpeg.sh win64
+      - name: FFmpeg
+        uses: actions/download-artifact@v5
+        with:
+          name: ffmpeg-win64
+          path: third_party/ffmpeg/win64
 
       - name: Configure build
         shell: pwsh
