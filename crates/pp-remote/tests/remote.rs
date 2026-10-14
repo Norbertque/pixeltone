@@ -56,7 +56,8 @@ struct Rig {
 
 fn rig() -> Rig {
     let dir = tempfile::tempdir().unwrap();
-    let backend = Arc::new(CaptureBackend::new(CaptureBackend::typical_dac()));
+    // In real time: unpaced, a short track can start and finish between two looks.
+    let backend = Arc::new(CaptureBackend::new(CaptureBackend::typical_dac()).paced(1.0));
     let (tx, rx) = mpsc::channel();
     let engine = Engine::with_config(
         backend.clone(),
@@ -442,8 +443,10 @@ async fn a_phone_hands_its_queue_over_and_it_plays_bit_perfect() {
         }
         assert!(
             Instant::now() < deadline,
-            "playback didn't finish: {:?}",
-            s.status
+            "playback didn't finish: {:?}, streams opened {}, requests {:?}",
+            s.status,
+            rig.backend.opened.lock().len(),
+            requests.lock().unwrap()
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
