@@ -9,7 +9,7 @@
   const outline = scallopPath(100, 9, 0.07);
 </script>
 
-<svg class="logo" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="PixelPlayer PC">
+<svg class="logo" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label="Pixeltone">
   <path d={outline} class="shape" />
   <g class="bars">
     <rect x="29" y="40" width="10" height="20" rx="5" />

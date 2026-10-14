@@ -1,6 +1,6 @@
 [package]
 name = "pp-library"
-description = "Music library for PixelPlayer PC: scanning, tags, artwork, SQLite + FTS5 search"
+description = "Music library for Pixeltone: scanning, tags, artwork, SQLite + FTS5 search"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

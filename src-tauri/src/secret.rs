@@ -2,7 +2,8 @@
 //! the signed-in user), never in the settings file. The UI can store or remove it, and ask
 //! whether one is stored; it never gets the key back.
 
-const TARGET: &str = "PixelPlayer PC/anthropic-api-key";
+const TARGET: &str = "Pixeltone/anthropic-api-key";
+const OLD_TARGET: &str = "PixelPlayer PC/anthropic-api-key";
 
 #[cfg(windows)]
 mod imp {
@@ -19,7 +20,7 @@ mod imp {
 
     pub fn store(target: &str, secret: &str) -> Result<(), String> {
         let mut name = wide(target);
-        let mut user = wide("PixelPlayer PC");
+        let mut user = wide("Pixeltone");
         let mut blob = secret.as_bytes().to_vec();
         let credential = CREDENTIALW {
             Type: CRED_TYPE_GENERIC,
@@ -96,9 +97,19 @@ pub fn store_api_key(key: &str) -> Result<(), String> {
 }
 
 pub fn api_key() -> Result<Option<String>, String> {
-    Ok(imp::load(TARGET)?.filter(|k| !k.trim().is_empty()))
+    if let Some(key) = imp::load(TARGET)?.filter(|k| !k.trim().is_empty()) {
+        return Ok(Some(key));
+    }
+    // Saved while the app was called PixelPlayer PC: move it to the new name.
+    let old = imp::load(OLD_TARGET)?.filter(|k| !k.trim().is_empty());
+    if let Some(key) = &old {
+        imp::store(TARGET, key)?;
+        imp::delete(OLD_TARGET)?;
+    }
+    Ok(old)
 }
 
 pub fn delete_api_key() -> Result<(), String> {
+    imp::delete(OLD_TARGET)?;
     imp::delete(TARGET)
 }

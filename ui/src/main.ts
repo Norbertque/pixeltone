@@ -10,6 +10,7 @@ import { api } from './lib/api';
 import { initLibrary } from './lib/library.svelte';
 import { output } from './lib/output.svelte';
 import { initPlayer } from './lib/player.svelte';
+import { initUpdates } from './lib/updates.svelte';
 import { installMotionTokens } from './lib/theme/motion';
 import { initTheme } from './lib/theme/theme.svelte';
 
@@ -31,6 +32,7 @@ void initPlayer();
 if (!mini) {
   void initLibrary();
   void output.start();
+  initUpdates();
 }
 
 const target = document.getElementById('app');

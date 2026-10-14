@@ -1,6 +1,6 @@
 [package]
 name = "pp-ai"
-description = "AI playlists for PixelPlayer PC: Claude picks songs from the user's own library"
+description = "AI playlists for Pixeltone: Claude picks songs from the user's own library"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

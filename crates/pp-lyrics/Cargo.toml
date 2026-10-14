@@ -1,6 +1,6 @@
 [package]
 name = "pp-lyrics"
-description = "Lyrics for PixelPlayer PC: LRC parsing, .lrc files, embedded tags and LRCLIB"
+description = "Lyrics for Pixeltone: LRC parsing, .lrc files, embedded tags and LRCLIB"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -1,6 +1,6 @@
 [package]
 name = "pp-engine"
-description = "Playback engine for PixelPlayer PC: queue, gapless decode pipeline, output sessions"
+description = "Playback engine for Pixeltone: queue, gapless decode pipeline, output sessions"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

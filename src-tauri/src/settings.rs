@@ -50,6 +50,8 @@ pub struct Preferences {
     pub artist_images_online: bool,
     /// Closing the main window hides it; playback goes on, controlled from the tray.
     pub close_to_tray: bool,
+    /// Look for a new version at start-up.
+    pub check_updates: bool,
 }
 
 impl Default for Preferences {
@@ -58,6 +60,7 @@ impl Default for Preferences {
             lyrics_online: true,
             artist_images_online: true,
             close_to_tray: false,
+            check_updates: true,
         }
     }
 }

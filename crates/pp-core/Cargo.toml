@@ -1,6 +1,6 @@
 [package]
 name = "pp-core"
-description = "Formats, exclusive-mode negotiation, PCM packing and output traits for PixelPlayer PC"
+description = "Formats, exclusive-mode negotiation, PCM packing and output traits for Pixeltone"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

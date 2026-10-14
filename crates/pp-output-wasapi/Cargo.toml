@@ -1,6 +1,6 @@
 [package]
 name = "pp-output-wasapi"
-description = "WASAPI shared and exclusive output for PixelPlayer PC (Windows only; empty elsewhere)"
+description = "WASAPI shared and exclusive output for Pixeltone (Windows only; empty elsewhere)"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

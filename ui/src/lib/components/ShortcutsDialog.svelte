@@ -31,7 +31,7 @@
     </tbody>
   </table>
   <p class="note body-medium">
-    <Icon name="info" size={18} /> Your keyboard's media keys (play/pause, next, previous) work even while PixelPlayer is
+    <Icon name="info" size={18} /> Your keyboard's media keys (play/pause, next, previous) work even while Pixeltone is
     in the background.
   </p>
   <div class="actions">

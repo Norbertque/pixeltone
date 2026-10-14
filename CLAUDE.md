@@ -1,4 +1,4 @@
-# PixelPlayer PC — notes for Claude
+# Pixeltone — notes for Claude
 
 Windows music player: Tauri 2 (Rust core + Svelte 5 UI in WebView2). Developed in a
 headless Debian container; Windows builds come from GitHub Actions (`.github/workflows/ci.yml`).
@@ -20,10 +20,10 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 
 - Run `. ~/.local/opt/pp-toolchain/env.sh` before any cargo command: Zig as `cc`/`c++`/`ar`,
   libclang for bindgen, FFmpeg on `LD_LIBRARY_PATH`.
-- WebKitGTK is missing, so the app crate (`pixelplayer-pc`) can't link here. Check it with
-  `PKG_CONFIG=~/.local/opt/pp-toolchain/bin/pkg-config-stub cargo clippy -p pixelplayer-pc
+- WebKitGTK is missing, so the app crate (`pixeltone`) can't link here. Check it with
+  `PKG_CONFIG=~/.local/opt/pp-toolchain/bin/pkg-config-stub cargo clippy -p pixeltone
   --all-targets -- -D warnings`; its tests run on CI. Test everything else with
-  `cargo test --workspace --exclude pixelplayer-pc`.
+  `cargo test --workspace --exclude pixeltone`.
 - Screenshots of the UI (mock backend): Playwright's headless shell is installed in
   `~/.cache/ms-playwright` with its libraries unpacked from Debian packages into
   `~/.local/opt/chromium-libs` (no root). Run it with
@@ -32,7 +32,7 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   Look at layout changes this way before shipping them.
 - Windows type-check of everything, including the app crate's `cfg(windows)` code:
   `. ~/.local/opt/pp-toolchain/env.sh && . ~/.local/opt/pp-toolchain/win-check.sh &&
-  cargo clippy --target x86_64-pc-windows-msvc -p pixelplayer-pc -p pp-media-controls
+  cargo clippy --target x86_64-pc-windows-msvc -p pixeltone -p pp-media-controls
   -p pp-output-wasapi --all-targets -- -D warnings` (needs `scripts/fetch-ffmpeg.sh win64`;
   type-checks only, nothing links). CI doesn't run clippy on Windows, so run this after
   touching Windows-only code.
@@ -99,6 +99,18 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   it deadlocks (Tauri documents it). `tray::open_mini` builds on its own thread.
 - Tray and mini player: `src-tauri/src/tray.rs`. The mini player is the same UI at `#mini`
   (`ui/src/MiniWindow.svelte`); its window label `mini` is in the capability file.
+
+## Releases and updates
+
+- Every CI build has its own version (dev: workspace major.minor + run number; tags: the tag)
+  and publishes `latest.json` next to the installer; the app's updater reads the dev feed
+  (`releases/download/dev/latest.json`) or, for tagged builds, `releases/latest/download/…`.
+- The updater signing key is in GitHub Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`,
+  `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); the only other copy is `~/.config/pixeltone/` on
+  claude-dev, outside the repo. `npx tauri build` needs them in the environment. Never commit
+  or print them; the public key in `tauri.conf.json` is the only part that belongs in git.
+- The app was called PixelPlayer PC until 2026-10-14: `adopt_old_data` (lib.rs) and
+  `secret.rs` move the old data folders and stored key over on first start.
 
 ## Rules
 

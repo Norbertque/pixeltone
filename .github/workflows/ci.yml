@@ -128,13 +128,28 @@ jobs:
           "FFMPEG_INCLUDE_DIR=$ff\include" >> $env:GITHUB_ENV
           "$ff\bin" >> $env:GITHUB_PATH
           $sha = '${{ github.sha }}'.Substring(0, 7)
+          $repo = 'https://github.com/${{ github.repository }}/releases'
+          # Every build gets its own version, so the updater can tell which is newer: tags
+          # use theirs, dev builds major.minor of the workspace plus the run number.
           if ('${{ github.ref_type }}' -eq 'tag') {
+            $version = '${{ github.ref_name }}'.TrimStart('v')
+            $channel = '${{ github.ref_name }}'
+            $feed = "$repo/latest/download/latest.json"
             "PP_BUILD_ID=" >> $env:GITHUB_ENV
-            "PP_CHANNEL=${{ github.ref_name }}" >> $env:GITHUB_ENV
           } else {
+            $base = (Select-String -Path Cargo.toml -Pattern '^version = "(\d+)\.(\d+)\.' |
+              Select-Object -First 1).Matches[0].Groups
+            $version = "$($base[1].Value).$($base[2].Value).${{ github.run_number }}"
+            $channel = 'dev'
+            $feed = "$repo/download/dev/latest.json"
             "PP_BUILD_ID=dev $sha" >> $env:GITHUB_ENV
-            "PP_CHANNEL=dev" >> $env:GITHUB_ENV
           }
+          "PP_CHANNEL=$channel" >> $env:GITHUB_ENV
+          "PP_VERSION=$version" >> $env:GITHUB_ENV
+          "PP_DOWNLOADS=$repo/download/$channel" >> $env:GITHUB_ENV
+          @{ version = $version; plugins = @{ updater = @{ endpoints = @($feed) } } } |
+            ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 ci-tauri.json
+          Get-Content ci-tauri.json
 
       - run: npm ci
 
@@ -142,24 +157,40 @@ jobs:
         run: cargo test -p pp-core -p pp-output-wasapi
 
       - name: Build installer
-        run: npx tauri build --bundles nsis
+        env:
+          # Signs the installer for the updater (generated with `tauri signer generate`).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles nsis --config ci-tauri.json
 
       - name: Package
         shell: pwsh
         run: |
           $out = New-Item -ItemType Directory -Force artifacts
-          $name = "PixelPlayerPC-$env:PP_CHANNEL"
+          $name = "Pixeltone-$env:PP_CHANNEL"
           $setup = Get-ChildItem target\release\bundle\nsis\*-setup.exe | Select-Object -First 1
           Copy-Item $setup.FullName "$out\$name-setup.exe"
-          $portable = New-Item -ItemType Directory -Force "$out\portable\PixelPlayerPC"
-          Copy-Item target\release\pixelplayer-pc.exe $portable
+          # The update feed: this version, its installer and the installer's signature.
+          @{
+            version = $env:PP_VERSION
+            notes = "Built from ${{ github.sha }}"
+            pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = @{
+              'windows-x86_64' = @{
+                signature = (Get-Content "$($setup.FullName).sig" -Raw).Trim()
+                url = "$env:PP_DOWNLOADS/$name-setup.exe"
+              }
+            }
+          } | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 "$out\latest.json"
+          $portable = New-Item -ItemType Directory -Force "$out\portable\Pixeltone"
+          Copy-Item target\release\pixeltone.exe $portable
           Copy-Item third_party\ffmpeg\win64\bin\*.dll $portable
           Compress-Archive -Path $portable -DestinationPath "$out\$name-portable.zip" -Force
           Get-ChildItem $out -File | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v7
         with:
-          name: PixelPlayerPC-${{ env.PP_CHANNEL }}
+          name: Pixeltone-${{ env.PP_CHANNEL }}
           path: artifacts/*.*
           retention-days: 14
 
@@ -168,13 +199,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files=(artifacts/*.exe artifacts/*.zip)
+          files=(artifacts/*.exe artifacts/*.zip artifacts/latest.json)
           if [[ "${{ github.ref_type }}" == "tag" ]]; then
             gh release create "${{ github.ref_name }}" "${files[@]}" \
-              --title "PixelPlayer PC ${{ github.ref_name }}" --generate-notes
+              --title "Pixeltone ${{ github.ref_name }}" --generate-notes
           else
             gh release delete dev --yes --cleanup-tag || true
             gh release create dev "${files[@]}" --prerelease --target "${{ github.sha }}" \
               --title "Development build" \
-              --notes "Built from ${{ github.sha }} on $(date -u +%Y-%m-%d). Unsigned: Windows SmartScreen will ask for confirmation (More info → Run anyway)."
+              --notes "Version $PP_VERSION, built from ${{ github.sha }} on $(date -u +%Y-%m-%d). Unsigned: Windows SmartScreen will ask for confirmation (More info → Run anyway). Installed copies update themselves."
           fi

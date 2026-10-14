@@ -1,4 +1,4 @@
-//! Platform-independent core of the PixelPlayer PC audio path.
+//! Platform-independent core of the Pixeltone audio path.
 //!
 //! Everything that decides *what* reaches the DAC lives here and is unit-tested on any
 //! host: the sample formats, the exclusive-mode format negotiator, PCM packing with the

@@ -1,14 +1,14 @@
 [package]
-name = "pixelplayer-pc"
-description = "PixelPlayer PC — a Material 3 Expressive music player with bit-perfect WASAPI exclusive output"
+name = "pixeltone"
+description = "Pixeltone — a Material 3 Expressive music player with bit-perfect WASAPI exclusive output"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 publish.workspace = true
-default-run = "pixelplayer-pc"
+default-run = "pixeltone"
 
 [lib]
-name = "pixelplayer_pc_lib"
+name = "pixeltone_lib"
 crate-type = ["rlib"]
 
 [build-dependencies]
@@ -28,7 +28,9 @@ serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.8"
+tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2.5"
+tauri-plugin-updater = "2"
 tauri-plugin-window-state = "2.5"
 tracing.workspace = true
 tracing-subscriber.workspace = true

@@ -26,7 +26,7 @@ function settings(output: Partial<OutputSettings> = {}, prefs: Partial<typeof DE
   return {
     output: { ...OUTPUT, ...output },
     devices: { dac: { ...DEFAULT_PREFS, ...prefs } },
-    preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false },
+    preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false, checkUpdates: true },
   };
 }
 

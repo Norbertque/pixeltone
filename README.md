@@ -1,4 +1,4 @@
-# PixelPlayer PC
+# Pixeltone
 
 A Material 3 Expressive music player for Windows, inspired by PixelPlayer for Android, with
 **bit-perfect WASAPI exclusive output**: your files reach the DAC untouched, at their own
@@ -90,6 +90,6 @@ FFmpeg's Windows headers, a C compiler for the target and a resource-compiler st
 
 ## Licence and credits
 
-PixelPlayer PC is an independent project; it shares no code or assets with PixelPlayer for
+Pixeltone is an independent project; it shares no code or assets with Pixeltone for
 Android. It bundles FFmpeg (LGPL-2.1-or-later, dynamically linked), Google Sans Flex
 (SIL OFL 1.1) and Material Symbols (Apache-2.0).

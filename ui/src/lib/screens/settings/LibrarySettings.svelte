@@ -62,7 +62,7 @@
 <div class="row column">
   <div class="row-text">
     <span class="title-medium">Music folders</span>
-    <span class="body-medium">PixelPlayer reads these folders and everything below them, and watches for changes.</span>
+    <span class="body-medium">Pixeltone reads these folders and everything below them, and watches for changes.</span>
   </div>
   {#if folders.length > 0}
     <ul class="folders">

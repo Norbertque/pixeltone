@@ -43,7 +43,7 @@
   const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
 </script>
 
-<ScreenHeader title="Listening stats" subtitle="What you've been playing in PixelPlayer" />
+<ScreenHeader title="Listening stats" subtitle="What you've been playing in Pixeltone" />
 
 <div class="filters">
   <SegmentedButtons label="Period" options={PERIODS} value={period} onchange={(v) => (period = v)} />

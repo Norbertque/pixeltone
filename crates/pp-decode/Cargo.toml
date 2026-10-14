@@ -1,6 +1,6 @@
 [package]
 name = "pp-decode"
-description = "FFmpeg-based decoding to PixelPlayer PC's PCM blocks"
+description = "FFmpeg-based decoding to Pixeltone's PCM blocks"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

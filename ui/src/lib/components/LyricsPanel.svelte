@@ -24,7 +24,7 @@
 
   const SOURCES: Record<Lyrics['source'], string> = {
     file: 'From an .lrc file next to the song',
-    saved: 'Saved in PixelPlayer',
+    saved: 'Saved in Pixeltone',
     embedded: "From the song's tags",
     online: 'From LRCLIB',
   };
@@ -145,7 +145,7 @@
       found.set(t.path, l);
       lyrics = l;
       editing = false;
-      toasts.show(l.source === 'saved' ? 'Saved the lyrics in PixelPlayer (the music folder is read-only)' : 'Saved the lyrics');
+      toasts.show(l.source === 'saved' ? 'Saved the lyrics in Pixeltone (the music folder is read-only)' : 'Saved the lyrics');
     } catch (e) {
       toasts.show(String(e), 'error');
     }

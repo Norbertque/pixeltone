@@ -157,7 +157,7 @@
   </button>
 
   <button class="section link" onclick={() => router.go('about')}>
-    <span class="title-large rounded emphasized"><Icon name="info" /> About PixelPlayer PC</span>
+    <span class="title-large rounded emphasized"><Icon name="info" /> About Pixeltone</span>
     <Icon name="chevron_right" />
   </button>
 </div>

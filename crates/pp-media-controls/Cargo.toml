@@ -1,6 +1,6 @@
 [package]
 name = "pp-media-controls"
-description = "Windows media transport controls (media keys and the media flyout) for PixelPlayer PC; empty elsewhere"
+description = "Windows media transport controls (media keys and the media flyout) for Pixeltone; empty elsewhere"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -47,6 +47,17 @@
       onchange={(v) => update({ artistImagesOnline: v })}
     />
   </div>
+
+  <div class="row">
+    <div class="row-text">
+      <span class="title-medium">Check for updates</span>
+      <span class="body-medium">
+        At start-up, look on GitHub for a newer version and offer to install it. Nothing about you or your music is
+        sent.
+      </span>
+    </div>
+    <Switch label="Check for updates" checked={prefs.checkUpdates} onchange={(v) => update({ checkUpdates: v })} />
+  </div>
 {:else}
   <p class="body-medium muted">Loading…</p>
 {/if}

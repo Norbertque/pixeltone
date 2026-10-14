@@ -147,7 +147,7 @@
       <EmptyState
         icon="library_music"
         title="Add your music"
-        body="Choose the folders where your music lives. PixelPlayer reads them once and keeps up with changes."
+        body="Choose the folders where your music lives. Pixeltone reads them once and keeps up with changes."
       >
         {#snippet action()}
           <Button variant="filled" icon="create_new_folder" onclick={addMusicFolder}>Add music folder</Button>
@@ -159,7 +159,7 @@
         title={library.scanning ? 'Reading your music…' : 'No music found'}
         body={library.scanning
           ? 'Your songs will appear here in a moment.'
-          : 'None of the library folders contain music files PixelPlayer can play.'}
+          : 'None of the library folders contain music files Pixeltone can play.'}
       />
     {/if}
   {:else if tab === 'songs'}

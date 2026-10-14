@@ -1,6 +1,6 @@
 [package]
 name = "pp-deezer"
-description = "Artist pictures for PixelPlayer PC from Deezer's public API"
+description = "Artist pictures for Pixeltone from Deezer's public API"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

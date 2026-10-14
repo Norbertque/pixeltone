@@ -29,13 +29,13 @@ impl Tray {
                 &MenuItem::with_id(app, "previous", "Previous", true, None::<&str>)?,
                 &PredefinedMenuItem::separator(app)?,
                 &MenuItem::with_id(app, "mini", "Mini player", true, None::<&str>)?,
-                &MenuItem::with_id(app, "show", "Show PixelPlayer", true, None::<&str>)?,
+                &MenuItem::with_id(app, "show", "Show Pixeltone", true, None::<&str>)?,
                 &PredefinedMenuItem::separator(app)?,
                 &MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?,
             ],
         )?;
         let mut builder = TrayIconBuilder::with_id("main")
-            .tooltip("PixelPlayer PC")
+            .tooltip("Pixeltone")
             .menu(&menu)
             .show_menu_on_left_click(false)
             .on_menu_event(
@@ -73,7 +73,7 @@ impl Tray {
                 Some(artist) => format!("{} – {artist}", t.title),
                 None => t.title.clone(),
             },
-            None => "PixelPlayer PC".to_string(),
+            None => "Pixeltone".to_string(),
         };
         // Windows cuts tooltips off at 127 characters.
         let tooltip: String = tooltip.chars().take(120).collect();
@@ -120,7 +120,7 @@ fn build_mini(app: &AppHandle) {
     let window = match app.get_webview_window(MINI) {
         Some(w) => Ok(w),
         None => WebviewWindowBuilder::new(app, MINI, WebviewUrl::App("index.html#mini".into()))
-            .title("PixelPlayer mini player")
+            .title("Pixeltone mini player")
             .inner_size(MINI_SIZE.0, MINI_SIZE.1)
             .resizable(false)
             .maximizable(false)

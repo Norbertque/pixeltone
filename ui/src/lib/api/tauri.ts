@@ -2,6 +2,8 @@ import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { audioDir, join } from '@tauri-apps/api/path';
 import { ask, open, save } from '@tauri-apps/plugin-dialog';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 
 import {
   AUDIO_EXTENSIONS,
@@ -36,7 +38,10 @@ import {
   type TagWriteReport,
   type AiStatus,
   type AiPlaylistResult,
+  type UpdateInfo,
 } from './types';
+
+let pendingUpdate: Update | null = null;
 
 export const tauriBackend: Backend = {
   appInfo: () => invoke<AppInfo>('app_info'),
@@ -155,6 +160,25 @@ export const tauriBackend: Backend = {
   lyricsFind: (track) => invoke<Lyrics | null>('lyrics_find', { track }),
   lyricsSave: (track, text) => invoke<Lyrics>('lyrics_save', { track, text }),
 
+  async checkForUpdate(): Promise<UpdateInfo | null> {
+    pendingUpdate = await check();
+    return pendingUpdate ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? null } : null;
+  },
+  async installUpdate(onProgress) {
+    const update = pendingUpdate ?? (await check());
+    if (!update) return;
+    let total = 0;
+    let done = 0;
+    await update.downloadAndInstall((e) => {
+      if (e.event === 'Started') total = e.data.contentLength ?? 0;
+      if (e.event === 'Progress') {
+        done += e.data.chunkLength;
+        onProgress(total ? done / total : null);
+      }
+    });
+    // The Windows installer usually closes the app itself; otherwise start the new version.
+    await relaunch();
+  },
   aiStatus: () => invoke<AiStatus>('ai_status'),
   aiSetKey: (key) => invoke('ai_set_key', { key }),
   aiRemoveKey: () => invoke('ai_remove_key'),

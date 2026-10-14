@@ -32,7 +32,7 @@
   title={greeting}
   subtitle={hasMusic && o
     ? `${o.trackCount.toLocaleString()} songs · ${o.albumCount.toLocaleString()} albums · ${o.artistCount.toLocaleString()} artists · ${formatDuration(o.durationMs)}`
-    : 'Welcome to PixelPlayer PC'}
+    : 'Welcome to Pixeltone'}
 >
   {#snippet actions()}
     {#if hasMusic}
@@ -48,7 +48,7 @@
     <div class="text">
       <h2 class="headline-small rounded emphasized">Add your music</h2>
       <p class="body-large">
-        Pick the folder where your music lives (usually your Music folder). PixelPlayer reads it once, keeps up
+        Pick the folder where your music lives (usually your Music folder). Pixeltone reads it once, keeps up
         with changes, and plays every file bit-perfect when exclusive mode is on.
       </p>
       <div class="buttons">

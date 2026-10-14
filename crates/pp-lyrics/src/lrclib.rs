@@ -44,9 +44,9 @@ impl Lrclib {
         let agent: Agent = Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(10)))
             .user_agent(concat!(
-                "PixelPlayer PC/",
+                "Pixeltone/",
                 env!("CARGO_PKG_VERSION"),
-                " (https://github.com/Norbertque/pixelplayer-pc)"
+                " (https://github.com/Norbertque/pixeltone)"
             ))
             .http_status_as_error(false)
             .build()

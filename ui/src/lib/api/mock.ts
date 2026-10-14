@@ -85,7 +85,7 @@ const BADGE: OutputBadge = {
 };
 
 let settings: AppSettings = {
-  preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false },
+  preferences: { lyricsOnline: true, artistImagesOnline: true, closeToTray: false, checkUpdates: true },
   output: {
     deviceId: 'mock-dac',
     exclusive: true,
@@ -458,6 +458,8 @@ export const mockBackend: Backend = {
   },
   lyricsSave: async (track, text) => mockUserData.saveLyrics(track.path, text),
 
+  checkForUpdate: async () => null,
+  installUpdate: async () => {},
   aiStatus: async () => ({ hasKey: mockAiKey, songs: 1863, sentSongs: 1863, estimateUsd: 0.21 }),
   async aiSetKey(key) {
     if (!key.trim()) throw new Error("That doesn't look like an API key.");

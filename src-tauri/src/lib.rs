@@ -1,4 +1,4 @@
-//! PixelPlayer PC desktop app: wires the Rust core to the Svelte UI through Tauri.
+//! Pixeltone desktop app: wires the Rust core to the Svelte UI through Tauri.
 
 mod ai;
 mod artist_images;
@@ -199,13 +199,36 @@ fn watch_devices(app: &AppHandle) {
     }
 }
 
+/// Pixeltone used to be called PixelPlayer PC. On the first start under the new name its
+/// folders (library, playlists, settings, queue, lyrics, covers, the WebView's storage)
+/// move over, before anything opens them.
+#[cfg(windows)]
+fn adopt_old_data() {
+    const OLD: &str = "com.norbertque.pixelplayerpc";
+    const NEW: &str = "com.norbertque.pixeltone";
+    for var in ["APPDATA", "LOCALAPPDATA"] {
+        let Some(base) = std::env::var_os(var).map(PathBuf::from) else {
+            continue;
+        };
+        let (old, new) = (base.join(OLD), base.join(NEW));
+        if old.is_dir() && !new.exists() {
+            match std::fs::rename(&old, &new) {
+                Ok(()) => tracing::info!("moved {} to {}", old.display(), new.display()),
+                Err(e) => tracing::warn!("can't move {}: {e}", old.display()),
+            }
+        }
+    }
+}
+
 pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_env("PP_LOG")
-                .unwrap_or_else(|_| EnvFilter::new("info,pixelplayer_pc_lib=debug")),
+                .unwrap_or_else(|_| EnvFilter::new("info,pixeltone_lib=debug")),
         )
         .init();
+    #[cfg(windows)]
+    adopt_old_data();
 
     tauri::Builder::default()
         // A second launch focuses the running window instead of opening another player.
@@ -220,6 +243,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .register_uri_scheme_protocol("cover", |ctx, request| {
             cover(ctx.app_handle(), request.uri().path())
         })
@@ -372,7 +397,7 @@ pub fn run() {
             userdata::lyrics_save,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building PixelPlayer PC")
+        .expect("error while building Pixeltone")
         .run(|app, event| {
             if let RunEvent::Exit = event
                 && let Some(state) = app.try_state::<AppState>()

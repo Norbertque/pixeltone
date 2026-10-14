@@ -101,6 +101,13 @@ export interface Preferences {
   artistImagesOnline: boolean;
   /** Closing the main window hides it; playback goes on, controlled from the tray. */
   closeToTray: boolean;
+  /** Look for a new version at start-up. */
+  checkUpdates: boolean;
+}
+/** A newer version, from the update feed. */
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
 }
 export interface AppSettings {
   output: OutputSettings;
@@ -281,6 +288,12 @@ export interface Backend {
   lyricsFind(track: LyricsRequest): Promise<Lyrics | null>;
   /** Saves lyrics (LRC or plain text) next to the track, or inside the app. */
   lyricsSave(track: LyricsRequest, text: string): Promise<Lyrics>;
+
+  // Updates
+  /** A newer version than this one, or null. */
+  checkForUpdate(): Promise<UpdateInfo | null>;
+  /** Downloads and installs the update found by `checkForUpdate`, then restarts. */
+  installUpdate(onProgress: (fraction: number | null) => void): Promise<void>;
 
   // Windows
   /** Swaps the main window for the small always-on-top player. */
