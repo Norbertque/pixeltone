@@ -139,3 +139,20 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   Chromium for development. Chromium-supported features may be used without fallbacks.
 - Secrets never go into git (updater key → GitHub Actions secrets; `.env` is ignored).
 - Keep `ui/src/lib/api/types.ts` in sync with the Rust types (serde camelCase).
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/`, git-ignored: the repo is public and the tracker stays on
+claude-dev. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
+`wontfix`), written as each issue file's `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.

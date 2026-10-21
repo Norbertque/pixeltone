@@ -19,6 +19,7 @@ node_modules/
 
 # Local build outputs and screenshots
 /artifacts/
+*.o
 
 # Secrets — never commit
 .env
@@ -33,3 +34,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Local issue tracker (docs/agents/issue-tracker.md): private, never commit
+/.scratch/
+/.out-of-scope/
