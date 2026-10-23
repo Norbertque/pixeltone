@@ -144,13 +144,15 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 
 ### Issue tracker
 
-Local markdown under `.scratch/`, git-ignored: the repo is public and the tracker stays on
-claude-dev. See `docs/agents/issue-tracker.md`.
+Local markdown under `.scratch/`, git-ignored: the repo is public and the tracker stays in the
+main checkout on claude-dev. Worktrees use that one; elsewhere (cloud sessions, fresh clones)
+never create it. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
 The five default roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
-`wontfix`), written as each issue file's `Status:` line. See `docs/agents/triage-labels.md`.
+`wontfix`), written as each issue file's `Status:` line; the only other value is `resolved`.
+See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
