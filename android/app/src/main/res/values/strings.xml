@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pixeltone</string>
+
+    <string name="tab_tracks">Tracks</string>
+    <string name="tab_albums">Albums</string>
+    <string name="tab_artists">Artists</string>
+
+    <string name="search">Search</string>
+    <string name="search_hint">Search your library</string>
+    <string name="close_search">Close search</string>
+    <string name="back">Back</string>
+
+    <string name="access_title">Your music</string>
+    <string name="access_text">Pixeltone needs access to the music on this phone to show and play it.</string>
+    <string name="access_allow">Allow access</string>
+    <string name="access_denied">Access to music is turned off. You can allow it in the app\'s settings.</string>
+    <string name="access_settings">Open settings</string>
+
+    <string name="empty_library">No music on this phone yet.</string>
+    <string name="no_results">Nothing matches “%1$s”.</string>
+    <string name="album_gone">This album is no longer on the phone.</string>
+    <string name="artist_gone">This artist is no longer on the phone.</string>
+
+    <string name="unknown_artist">Unknown artist</string>
+    <string name="various_artists">Various artists</string>
+
+    <plurals name="tracks_count">
+        <item quantity="one">%d track</item>
+        <item quantity="other">%d tracks</item>
+    </plurals>
+    <plurals name="albums_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+</resources>

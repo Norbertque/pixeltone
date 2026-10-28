@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The three bars of the Windows icon, in its 1024 grid, scaled so the icon's round shape
+     (964 units wide there) fills the 72dp an adaptive icon shows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.074689"
+        android:scaleY="0.074689"
+        android:translateX="15.759"
+        android:translateY="15.759">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M352,412a52,52 0 0 1 52,52v96a52,52 0 0 1 -104,0v-96a52,52 0 0 1 52,-52z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M512,282a52,52 0 0 1 52,52v356a52,52 0 0 1 -104,0v-356a52,52 0 0 1 52,-52z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M672,372a52,52 0 0 1 52,52v176a52,52 0 0 1 -104,0v-176a52,52 0 0 1 52,-52z" />
+    </group>
+</vector>

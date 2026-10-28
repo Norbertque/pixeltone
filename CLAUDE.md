@@ -119,6 +119,28 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   don't build on PixelPlayer (the USB output engine, the Pixeltone client) may move into
   `android/`, each checked for PixelPlayer code first.
 
+## Android app (`android/`)
+
+- Kotlin, Jetpack Compose, Media3 (ADR 0001); its own Gradle build. JDK and SDK live in
+  `~/.local/opt`: `export JAVA_HOME=~/.local/opt/jdk21 ANDROID_HOME=~/.local/opt/android-sdk
+  PATH=~/.local/opt/jdk21/bin:$PATH`, then in `android/`:
+  `./gradlew :app:testDebugUnitTest :app:assembleDebug` (APK in
+  `app/build/outputs/apk/debug/`) and `./gradlew :app:lintDebug`.
+- Screens without a phone: `./gradlew :app:recordRoborazziDebug` renders `ScreensTest`
+  (Robolectric on Android 15; its Espresso doesn't know Android 17's input manager) into
+  `app/build/outputs/roborazzi/*.png`. Look at them after changing a screen. Screens take
+  their state as parameters (`LibraryContent`, `AlbumContent`, …) so the test feeds sample
+  data; the `…Screen` wrappers connect the ViewModel.
+- Debug builds are `io.github.norbertque.pixeltone.debug`, beside a released app. To get one
+  onto the user's phone they run `sudo tailscale file cp <apk> pixel-10-pro:` (it lands in
+  Downloads; the phone must be online in Tailscale).
+- Library: MediaStore (`library/MediaStoreLibrary.kt`) → `LibraryIndex`, plain Kotlin and
+  unit-tested: albums by (title, album artist), else (title, folder), as on Windows; artists
+  by their folded name; search ignores case and accents.
+- `ui/theme/Color.kt` is generated from the Windows default seed (#7E57C2, tonal spot, 2025
+  spec) with @material/material-color-utilities 0.4.0; regenerate it the same way if the
+  seed changes. The launcher icon is the Windows SVG's gradient and bars as vector drawables.
+
 ## Releases and updates
 
 - Every CI build has its own version (dev: workspace major.minor + run number; tags: the tag)
