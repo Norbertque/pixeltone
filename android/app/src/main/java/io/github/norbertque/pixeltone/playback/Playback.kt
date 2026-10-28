@@ -29,6 +29,14 @@ data class PlaybackState(
     val current: QueueEntry? get() = queue.getOrNull(index)
 }
 
+/** Repeat goes off → all → one → off, as on Windows. */
+fun nextRepeatMode(mode: Int): Int =
+    when (mode) {
+        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+        else -> Player.REPEAT_MODE_OFF
+    }
+
 /** What the player screens may ask of the player. */
 interface PlayerControls {
     fun toggle()

@@ -98,13 +98,7 @@ class PlayerConnection(private val context: Context) : PlayerControls {
 
     override fun remove(index: Int) = command { removeMediaItem(index) }
 
-    override fun cycleRepeat() = command {
-        repeatMode = when (repeatMode) {
-            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
-            Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
-            else -> Player.REPEAT_MODE_OFF
-        }
-    }
+    override fun cycleRepeat() = command { repeatMode = nextRepeatMode(repeatMode) }
 
     override fun toggleShuffle() = command { shuffleModeEnabled = !shuffleModeEnabled }
 

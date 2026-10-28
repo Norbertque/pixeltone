@@ -1,12 +1,15 @@
 package io.github.norbertque.pixeltone.ui.player
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -23,12 +26,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,9 +52,11 @@ import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.playback.PlaybackState
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.playback.PlayerControls
+import io.github.norbertque.pixeltone.playback.nextRepeatMode
 import io.github.norbertque.pixeltone.ui.Message
 import io.github.norbertque.pixeltone.ui.formatDuration
 import io.github.norbertque.pixeltone.ui.library.Cover
+import kotlinx.coroutines.delay
 
 @Composable
 fun NowPlayingScreen(player: PlayerConnection, onBack: () -> Unit, onQueue: () -> Unit) {
@@ -109,7 +118,18 @@ fun NowPlayingContent(
                 )
             }
             SeekBar(positionMs, state.durationMs, controls::seekTo)
-            Controls(state, controls)
+            // What a toggle now does, shown for a moment under the controls.
+            var hint by remember { mutableStateOf<Hint?>(null) }
+            LaunchedEffect(hint) {
+                if (hint != null) {
+                    delay(2_500)
+                    hint = null
+                }
+            }
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Controls(state, controls, onHint = { hint = Hint(it, (hint?.id ?: 0) + 1) })
+                HintLine(hint)
+            }
         }
     }
 }
@@ -146,13 +166,22 @@ private fun SeekBar(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit) 
 }
 
 @Composable
-private fun Controls(state: PlaybackState, controls: PlayerControls) {
+private fun Controls(state: PlaybackState, controls: PlayerControls, onHint: (String) -> Unit) {
+    val shuffleHints = mapOf(true to stringResource(R.string.shuffle_on_hint), false to stringResource(R.string.shuffle_off_hint))
+    val repeatHints = mapOf(
+        Player.REPEAT_MODE_OFF to stringResource(R.string.repeat_off_hint),
+        Player.REPEAT_MODE_ALL to stringResource(R.string.repeat_all_hint),
+        Player.REPEAT_MODE_ONE to stringResource(R.string.repeat_one_hint),
+    )
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Toggle(Icons.Default.Shuffle, stringResource(R.string.shuffle), on = state.shuffle, onClick = controls::toggleShuffle)
+        Toggle(Icons.Default.Shuffle, stringResource(R.string.shuffle), on = state.shuffle) {
+            controls.toggleShuffle()
+            onHint(shuffleHints.getValue(!state.shuffle))
+        }
         IconButton(onClick = controls::previous, Modifier.size(56.dp)) {
             Icon(Icons.Default.SkipPrevious, stringResource(R.string.previous), Modifier.size(36.dp))
         }
@@ -171,13 +200,45 @@ private fun Controls(state: PlaybackState, controls: PlayerControls) {
             Player.REPEAT_MODE_ALL -> Icons.Default.Repeat to R.string.repeat_all
             else -> Icons.Default.Repeat to R.string.repeat_off
         }
-        Toggle(icon, stringResource(label), on = state.repeatMode != Player.REPEAT_MODE_OFF, onClick = controls::cycleRepeat)
+        Toggle(icon, stringResource(label), on = state.repeatMode != Player.REPEAT_MODE_OFF) {
+            controls.cycleRepeat()
+            onHint(repeatHints.getValue(nextRepeatMode(state.repeatMode)))
+        }
     }
 }
 
+/** Shuffle and repeat: a tinted circle behind the icon while they're on. */
 @Composable
 private fun Toggle(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(icon, label, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    IconToggleButton(
+        checked = on,
+        onCheckedChange = { onClick() },
+        colors = IconButtonDefaults.iconToggleButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    ) {
+        Icon(icon, label)
+    }
+}
+
+private data class Hint(val text: String, val id: Int)
+
+@Composable
+private fun HintLine(hint: Hint?) {
+    // The line keeps its room without a hint, so the controls never jump.
+    Box(Modifier.fillMaxWidth().height(40.dp), contentAlignment = Alignment.Center) {
+        Crossfade(targetState = hint, label = "hint") { shown ->
+            if (shown != null) {
+                Text(
+                    shown.text,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                )
+            }
+        }
     }
 }

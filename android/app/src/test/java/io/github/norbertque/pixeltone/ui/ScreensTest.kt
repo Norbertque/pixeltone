@@ -6,7 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.media3.common.Player
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -116,6 +118,15 @@ class ScreensTest {
     @Test
     fun nowPlayingDark() = shot("now-playing-dark", dark = true) {
         NowPlayingContent(playing.copy(isPlaying = false, shuffle = true, repeatMode = Player.REPEAT_MODE_ONE), 0, NoControls, {}, {})
+    }
+
+    @Test
+    fun repeatHint() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { PixeltoneTheme { NowPlayingContent(playing, 95_000, NoControls, onBack = {}, onQueue = {}) } }
+        compose.onNodeWithContentDescription("Repeat: all").performClick()
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/now-playing-repeat-hint.png")
     }
 
     @Test

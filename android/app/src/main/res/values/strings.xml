@@ -34,6 +34,11 @@
     <string name="repeat_off">Repeat: off</string>
     <string name="repeat_all">Repeat: all</string>
     <string name="repeat_one">Repeat: one</string>
+    <string name="repeat_off_hint">Repeat off: stops after the last track</string>
+    <string name="repeat_all_hint">Repeat all: starts the queue over at the end</string>
+    <string name="repeat_one_hint">Repeat one: plays this track again and again</string>
+    <string name="shuffle_on_hint">Shuffle on: random order</string>
+    <string name="shuffle_off_hint">Shuffle off: queue order</string>
     <string name="move">Move</string>
     <string name="remove_from_queue">Remove from queue</string>
 
