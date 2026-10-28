@@ -62,7 +62,7 @@ fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-fn random<const N: usize>() -> [u8; N] {
+pub(crate) fn random<const N: usize>() -> [u8; N] {
     let mut bytes = [0u8; N];
     getrandom::fill(&mut bytes).expect("the system's random source");
     bytes
@@ -74,7 +74,7 @@ pub fn hash_token(token: &str) -> String {
 }
 
 /// Comparison that takes as long whether the strings differ early or late.
-fn same(a: &str, b: &str) -> bool {
+pub(crate) fn same(a: &str, b: &str) -> bool {
     a.len() == b.len()
         && a.bytes()
             .zip(b.bytes())

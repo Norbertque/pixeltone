@@ -6,6 +6,7 @@
 
 mod art;
 mod discovery;
+pub mod jam;
 pub mod lan;
 pub mod pairing;
 pub mod protocol;
