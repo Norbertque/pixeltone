@@ -27,6 +27,8 @@ pub fn item_from_row(row: TrackRow) -> QueueItem {
         duration_ms: Some(f64::from(row.duration_ms)),
         track_id: (row.id != 0).then_some(row.id),
         remote: false,
+        added_by: None,
+        guest_id: None,
     }
 }
 

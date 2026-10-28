@@ -15,4 +15,4 @@ mod tls;
 
 pub use pairing::{PairedDevice, Pairing};
 pub use protocol::{PROTOCOL, RemoteVolume, ServerInfo};
-pub use server::{Host, RemoteConfig, RemoteServer};
+pub use server::{Host, JAM_PAGE, RemoteConfig, RemoteServer};

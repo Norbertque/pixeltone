@@ -7,4 +7,12 @@ export type QueueEntry = { id: number, path: string,
 /**
  * The tag title, or the file name.
  */
-title: string, artist: string | null, album: string | null, durationMs: number | null, coverKey: string | null, trackId: number | null, };
+title: string, artist: string | null, album: string | null, durationMs: number | null, coverKey: string | null, trackId: number | null, 
+/**
+ * The guest who added it, in a jam.
+ */
+addedBy: string | null, 
+/**
+ * That guest's id in the jam.
+ */
+guestId: string | null, };

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use futures_util::{SinkExt, StreamExt};
 use parking_lot::Mutex;
 use pp_engine::testing::CaptureBackend;
-use pp_engine::{Engine, EngineConfig, OutputSettings, PlaybackStatus};
+use pp_engine::{Engine, EngineConfig, OutputSettings, PlaybackStatus, QueueItem};
 use pp_remote::{Host, RemoteConfig, RemoteServer, RemoteVolume};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
@@ -44,6 +44,15 @@ impl Host for TestHost {
     }
     fn library_art(&self, _hash: &str, _size: u32) -> Option<Vec<u8>> {
         None
+    }
+    fn library_items(&self, ids: &[u32]) -> Vec<QueueItem> {
+        ids.iter()
+            .map(|id| QueueItem {
+                title: Some(format!("Track {id}")),
+                track_id: Some(*id),
+                ..QueueItem::from(PathBuf::from(format!("/music/{id}.flac")))
+            })
+            .collect()
     }
 }
 
@@ -467,4 +476,195 @@ async fn a_phone_hands_its_queue_over_and_it_plays_bit_perfect() {
         "{:?}",
         requests.lock().unwrap()
     );
+}
+
+fn queue(rig: &Rig, token: &str) -> serde_json::Value {
+    https()
+        .get(format!("{}/v1/queue", base(rig)))
+        .header("Authorization", &format!("Bearer {token}"))
+        .call()
+        .unwrap()
+        .body_mut()
+        .read_json()
+        .unwrap()
+}
+
+fn join(rig: &Rig, secret: &str, device: &str) -> (u16, serde_json::Value) {
+    let mut resp = https()
+        .post(format!("{}/v1/jam/join", base(rig)))
+        .send_json(serde_json::json!({"secret": secret, "deviceId": device, "name": "Petr"}))
+        .unwrap();
+    let status = resp.status().as_u16();
+    let body = resp
+        .body_mut()
+        .read_json()
+        .unwrap_or(serde_json::Value::Null);
+    (status, body)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_jam_lets_guests_in_by_its_secret_and_only_as_far_as_allowed() {
+    let rig = rig();
+    let owner = pair(&rig);
+    let (mut owner_ws, _) = connect(&rig, &owner).await;
+    assert!(next_of(&mut owner_ws, "jam").await["jam"].is_null());
+
+    // The owner's phone starts it; the link carries the secret after '#'.
+    send(&mut owner_ws, serde_json::json!({"cmd": "jamStart"})).await;
+    let jam = next_of(&mut owner_ws, "jam").await;
+    let link = jam["jam"]["link"].as_str().unwrap().to_owned();
+    assert!(link.starts_with(pp_remote::JAM_PAGE));
+    let fragment = link.split_once('#').unwrap().1;
+    let secret = fragment
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("s="))
+        .unwrap()
+        .to_owned();
+    assert!(fragment.contains("&n=TEST-PC"));
+
+    assert_eq!(join(&rig, "not the secret", "guest-phone").0, 410);
+    let (status, joined) = join(&rig, &secret, "guest-phone");
+    assert_eq!(status, 200);
+    let guest = joined["token"].as_str().unwrap().to_owned();
+    let guest_id = joined["guestId"].as_str().unwrap().to_owned();
+    assert_eq!(
+        next_of(&mut owner_ws, "jam").await["jam"]["guests"][0]["name"],
+        "Petr"
+    );
+
+    // A guest follows the player and sees their permissions; they hold no owner powers.
+    let (mut guest_ws, _) = connect(&rig, &guest).await;
+    let view = next_of(&mut guest_ws, "guest").await;
+    assert_eq!(view["guest"]["permissions"]["addTracks"], true);
+    assert_eq!(view["guest"]["permissions"]["controlPlayback"], false);
+    send(&mut guest_ws, serde_json::json!({"cmd": "play"})).await;
+    assert!(
+        next_of(&mut guest_ws, "error").await["message"]
+            .as_str()
+            .unwrap()
+            .contains("control playback")
+    );
+    send(
+        &mut guest_ws,
+        serde_json::json!({"cmd": "setVolume", "db": -3.0}),
+    )
+    .await;
+    assert!(
+        next_of(&mut guest_ws, "error").await["message"]
+            .as_str()
+            .unwrap()
+            .contains("Only the owner")
+    );
+
+    // Their tracks go to the end of the queue with their name; only they may change them.
+    send(
+        &mut owner_ws,
+        serde_json::json!({"cmd": "queueAdd", "trackIds": [1]}),
+    )
+    .await;
+    send(
+        &mut guest_ws,
+        serde_json::json!({"cmd": "queueAdd", "trackIds": [7, 8]}),
+    )
+    .await;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let rows = loop {
+        let rows = queue(&rig, &guest);
+        if rows.as_array().unwrap().len() == 3 || Instant::now() > deadline {
+            break rows;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    assert_eq!(rows[1]["title"], "Track 7");
+    assert_eq!(rows[1]["addedBy"], "Petr");
+    assert_eq!(rows[1]["guestId"], guest_id.as_str());
+    assert!(rows[0]["addedBy"].is_null());
+    let owners_track = rows[0]["id"].as_u64().unwrap();
+    send(
+        &mut guest_ws,
+        serde_json::json!({"cmd": "queueRemove", "id": owners_track}),
+    )
+    .await;
+    assert!(
+        next_of(&mut guest_ws, "error").await["message"]
+            .as_str()
+            .unwrap()
+            .contains("isn't yours")
+    );
+
+    // Permissions change while the jam runs.
+    send(&mut owner_ws, serde_json::json!({"cmd": "jamPermissions", "permissions": {"addTracks": false, "changeOwnTracks": true, "controlPlayback": true}})).await;
+    let view = next_of(&mut guest_ws, "guest").await;
+    assert_eq!(view["guest"]["permissions"]["controlPlayback"], true);
+    send(
+        &mut guest_ws,
+        serde_json::json!({"cmd": "queueAdd", "trackIds": [9]}),
+    )
+    .await;
+    assert!(
+        next_of(&mut guest_ws, "error").await["message"]
+            .as_str()
+            .unwrap()
+            .contains("add tracks")
+    );
+
+    // Removed: the connection closes, the token dies, their upcoming tracks go.
+    send(
+        &mut owner_ws,
+        serde_json::json!({"cmd": "jamRemoveGuest", "guestId": guest_id}),
+    )
+    .await;
+    assert_eq!(
+        next_of(&mut guest_ws, "jamClosed").await["reason"],
+        "removed"
+    );
+    let resp = https()
+        .get(format!("{}/v1/queue", base(&rig)))
+        .header("Authorization", &format!("Bearer {guest}"))
+        .call()
+        .unwrap();
+    assert_eq!(resp.status(), 401);
+    assert_eq!(queue(&rig, &owner).as_array().unwrap().len(), 1);
+
+    // Coming back takes the owner's yes.
+    let (status, waiting) = join(&rig, &secret, "guest-phone");
+    assert_eq!(status, 202);
+    let request = waiting["requestId"].as_str().unwrap().to_owned();
+    // (Earlier changes were announced too: the first announcement with the request.)
+    let jam = loop {
+        let jam = next_of(&mut owner_ws, "jam").await;
+        if !jam["jam"]["requests"][0].is_null() {
+            break jam;
+        }
+    };
+    assert_eq!(jam["jam"]["requests"][0]["id"], request.as_str());
+    assert_eq!(jam["jam"]["requests"][0]["name"], "Petr");
+    send(
+        &mut owner_ws,
+        serde_json::json!({"cmd": "jamAnswer", "requestId": request, "allow": true}),
+    )
+    .await;
+    let mut resp = https()
+        .get(format!("{}/v1/jam/requests/{request}", base(&rig)))
+        .call()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while resp.status() == 202 && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        resp = https()
+            .get(format!("{}/v1/jam/requests/{request}", base(&rig)))
+            .call()
+            .unwrap();
+    }
+    assert_eq!(resp.status(), 200);
+    let back: serde_json::Value = resp.body_mut().read_json().unwrap();
+    let (mut back_ws, _) = connect(&rig, back["token"].as_str().unwrap()).await;
+    next_of(&mut back_ws, "guest").await;
+
+    // Ended: every guest is out, the old QR code with them.
+    send(&mut owner_ws, serde_json::json!({"cmd": "jamEnd"})).await;
+    assert_eq!(next_of(&mut back_ws, "jamClosed").await["reason"], "ended");
+    while !next_of(&mut owner_ws, "jam").await["jam"].is_null() {}
+    assert_eq!(join(&rig, &secret, "guest-phone").0, 410);
+    assert!(rig.server.jam().is_none());
 }

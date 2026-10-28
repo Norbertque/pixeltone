@@ -1,7 +1,6 @@
 //! Remote control from phones (PixelPlayer): the app's side of `pp-remote`. Off unless
 //! turned on in Settings → Remote control; the server only runs while it's on.
 
-use std::net::UdpSocket;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -197,12 +196,6 @@ fn installation_id(dir: &Path) -> String {
     id
 }
 
-/// The address other devices on the network reach this PC at (no packet is sent).
-fn lan_address() -> Option<String> {
-    let socket = UdpSocket::bind(("0.0.0.0", 0)).ok()?;
-    socket.connect(("192.0.2.1", 9)).ok()?;
-    Some(socket.local_addr().ok()?.ip().to_string())
-}
 
 /// Starts or stops the server to match the setting.
 pub fn apply(app: &AppHandle, enabled: bool) {
@@ -300,7 +293,7 @@ fn status(app: &AppHandle, state: &AppState) -> RemoteStatus {
         name: computer_name(),
         address: server
             .as_ref()
-            .and_then(|s| lan_address().map(|ip| format!("{ip}:{}", s.port()))),
+            .and_then(|s| pp_remote::lan::lan_address().map(|ip| format!("{ip}:{}", s.port()))),
         code,
         code_seconds,
         devices: server

@@ -1,8 +1,15 @@
 //! Who may talk to the remote server, and which URLs a phone may hand it.
 
-use std::net::IpAddr;
+use std::net::{IpAddr, UdpSocket};
 
 use axum::http::Uri;
+
+/// The address other devices on the network reach this PC at (no packet is sent).
+pub fn lan_address() -> Option<String> {
+    let socket = UdpSocket::bind(("0.0.0.0", 0)).ok()?;
+    socket.connect(("192.0.2.1", 9)).ok()?;
+    Some(socket.local_addr().ok()?.ip().to_string())
+}
 
 /// IPv4-mapped IPv6 addresses (a dual-stack socket's view of an IPv4 peer) as IPv4.
 pub fn canonical(ip: IpAddr) -> IpAddr {

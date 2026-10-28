@@ -137,7 +137,7 @@ const queue = new MockQueue<TrackMeta>();
 
 function slotFor(meta: TrackMeta, trackId: number | null): Slot<TrackMeta> {
   const { path, title, artist, album, durationMs, coverKey } = meta;
-  return queue.slot({ path, title, artist, album, durationMs, coverKey, trackId }, meta);
+  return queue.slot({ path, title, artist, album, durationMs, coverKey, trackId, addedBy: null, guestId: null }, meta);
 }
 
 /** A file outside the library: the demo track, or a name-only stand-in. */

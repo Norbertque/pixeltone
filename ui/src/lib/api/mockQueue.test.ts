@@ -5,7 +5,7 @@ import { MockQueue } from './mockQueue';
 function queue(n: number): MockQueue<string> {
   const q = new MockQueue<string>();
   const slots = Array.from({ length: n }, (_, i) =>
-    q.slot({ path: `${i}.flac`, title: String(i), artist: null, album: null, durationMs: 1000, coverKey: null, trackId: i }, String(i)),
+    q.slot({ path: `${i}.flac`, title: String(i), artist: null, album: null, durationMs: 1000, coverKey: null, trackId: i, addedBy: null, guestId: null }, String(i)),
   );
   q.set(slots, 0, false);
   return q;
@@ -17,7 +17,7 @@ describe('mock queue (engine rules)', () => {
   it('play next lands after the current track, add to queue at the end', () => {
     const q = queue(3);
     const [x, y] = ['x', 'y'].map((t) =>
-      q.slot({ path: t, title: t, artist: null, album: null, durationMs: 1, coverKey: null, trackId: null }, t),
+      q.slot({ path: t, title: t, artist: null, album: null, durationMs: 1, coverKey: null, trackId: null, addedBy: null, guestId: null }, t),
     );
     q.add([x!], true);
     q.add([y!], false);

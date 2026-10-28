@@ -34,6 +34,10 @@ pub struct QueueItem {
     pub track_id: Option<u32>,
     /// `path` is an `http://` address a paired phone serves (remote control), not a file.
     pub remote: bool,
+    /// The guest who added it, in a jam.
+    pub added_by: Option<String>,
+    /// That guest's id in the jam: only they may change it.
+    pub guest_id: Option<String>,
 }
 
 impl From<PathBuf> for QueueItem {
@@ -59,6 +63,10 @@ pub struct QueueEntry {
     pub duration_ms: Option<f64>,
     pub cover_key: Option<String>,
     pub track_id: Option<u32>,
+    /// The guest who added it, in a jam.
+    pub added_by: Option<String>,
+    /// That guest's id in the jam.
+    pub guest_id: Option<String>,
 }
 
 /// Everything needed to rebuild the queue after a restart.
@@ -301,6 +309,8 @@ impl Queue {
                 duration_ms: e.item.duration_ms,
                 cover_key: e.item.cover_key.clone(),
                 track_id: e.item.track_id,
+                added_by: e.item.added_by.clone(),
+                guest_id: e.item.guest_id.clone(),
             })
             .collect()
     }
