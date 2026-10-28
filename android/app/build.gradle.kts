@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Release signing: CI passes the key in the environment; on claude-dev it lives in
@@ -97,6 +98,8 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    implementation(libs.okhttp)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     debugImplementation(libs.compose.ui.tooling)
