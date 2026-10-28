@@ -144,6 +144,16 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `onAddMediaItems` puts it back from the id. The queue is saved to `files/queue.json` and
   restored paused, also for playback resumption. Notification covers go through
   `AlbumArtBitmapLoader` (MediaStore thumbnails).
+- Releases: `.github/workflows/android.yml` runs only for `android/**` (the Windows CI ignores
+  those paths, so neither needs `[skip ci]` for the other). On `main` it builds a signed
+  release APK numbered by its run (versionCode = run number, versionName `0.1.<run>`) and
+  replaces the `android-dev` prerelease: `Pixeltone-android.apk` and `android-latest.json`
+  (version, URL, SHA-256). Release builds read that feed at start and offer the update
+  (`update/Updater.kt`; Android's installer asks to confirm); debug builds have no feed.
+- Signing key: Actions secrets `ANDROID_KEYSTORE_BASE64` and `ANDROID_KEYSTORE_PASSWORD`;
+  the only other copy is `~/.config/pixeltone/android-release.p12` with its password file and
+  `android-signing.properties` (local `assembleRelease` reads it). Without this key installed
+  copies can never update again (Android checks the signature). Never commit or print it.
 - `ui/theme/Color.kt` is generated from the Windows default seed (#7E57C2, tonal spot, 2025
   spec) with @material/material-color-utilities 0.4.0; regenerate it the same way if the
   seed changes. The launcher icon is the Windows SVG's gradient and bars as vector drawables.
