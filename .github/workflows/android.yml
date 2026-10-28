@@ -1,0 +1,82 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Android)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # Robolectric downloads its Android jars into Maven's folder, not Gradle's cache.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ hashFiles('android/gradle/libs.versions.toml') }}
+
+      - name: Test
+        run: ./gradlew :app:testDebugUnitTest :app:lintDebug
+
+      - name: Build the release APK
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PIXELTONE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PIXELTONE_KEY_ALIAS: pixeltone
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$PIXELTONE_KEYSTORE_PASSWORD" ]; then
+            echo "::error::The signing secrets ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD are missing."
+            exit 1
+          fi
+          export PIXELTONE_KEYSTORE="$RUNNER_TEMP/release.p12"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$PIXELTONE_KEYSTORE"
+          # Every build gets its own version code, so installed copies can tell which is newer.
+          version="0.1.${{ github.run_number }}"
+          ./gradlew :app:assembleRelease -PversionCode=${{ github.run_number }} -PversionName="$version"
+          rm "$PIXELTONE_KEYSTORE"
+          mkdir -p ../artifacts
+          cp app/build/outputs/apk/release/app-release.apk ../artifacts/Pixeltone-android.apk
+          sha=$(sha256sum ../artifacts/Pixeltone-android.apk | cut -d' ' -f1)
+          url="https://github.com/${{ github.repository }}/releases/download/android-dev/Pixeltone-android.apk"
+          printf '{"versionCode": %s, "versionName": "%s", "url": "%s", "sha256": "%s"}\n' \
+            "${{ github.run_number }}" "$version" "$url" "$sha" > ../artifacts/android-latest.json
+          echo "PP_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish the android-dev release
+        if: github.event_name != 'pull_request'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-dev --yes --cleanup-tag || true
+          gh release create android-dev artifacts/Pixeltone-android.apk artifacts/android-latest.json \
+            --prerelease --target "${{ github.sha }}" --title "Android development build" \
+            --notes "Pixeltone for Android $PP_VERSION, built from ${{ github.sha }} on $(date -u +%Y-%m-%d). Install Pixeltone-android.apk on Android 8.0 or newer (allow installing from your browser or Files when asked); installed copies offer the next builds themselves."

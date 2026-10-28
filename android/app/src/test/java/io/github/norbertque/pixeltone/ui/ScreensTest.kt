@@ -24,6 +24,8 @@ import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingContent
 import io.github.norbertque.pixeltone.ui.player.QueueContent
 import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
+import io.github.norbertque.pixeltone.update.UpdateInfo
+import io.github.norbertque.pixeltone.update.UpdateState
 import java.util.Locale
 import org.junit.Rule
 import org.junit.Test
@@ -133,6 +135,18 @@ class ScreensTest {
     fun queue() = shot("queue") { QueueContent(playing, NoControls, onBack = {}) }
 
     @Test
+    fun updateOffered() = shot("update-offered") {
+        Library(tab = 1)
+        UpdateDialog(UpdateState.Available(UPDATE), "0.1.9", onUpdate = {}, onDismiss = {})
+    }
+
+    @Test
+    fun updateDownloading() = shot("update-downloading", dark = true) {
+        Library(tab = 0)
+        UpdateDialog(UpdateState.Downloading(UPDATE, 0.42f), "0.1.9", onUpdate = {}, onDismiss = {})
+    }
+
+    @Test
     fun miniPlayer() = shot("mini-player") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {})
@@ -151,6 +165,8 @@ private object NoControls : PlayerControls {
     override fun cycleRepeat() {}
     override fun toggleShuffle() {}
 }
+
+private val UPDATE = UpdateInfo(12, "0.1.12", "https://example.com/Pixeltone-android.apk", "a".repeat(64))
 
 private fun entry(track: Track) = QueueEntry(track.id, track.title, track.artist, track.album, track.albumId)
 

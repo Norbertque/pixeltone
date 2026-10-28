@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.roborazzi)
+}
+
+// Release signing: CI passes the key in the environment; on claude-dev it lives in
+// ~/.config/pixeltone/, outside the repo. Without either, release builds come out unsigned.
+val localSigning = Properties().apply {
+    val file = File(System.getProperty("user.home"), ".config/pixeltone/android-signing.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
 }
 
 android {
@@ -12,19 +21,40 @@ android {
         applicationId = "io.github.norbertque.pixeltone"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI numbers every build (its run number); the updater compares version codes.
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0-dev"
+    }
+
+    signingConfigs {
+        create("release") {
+            val store = System.getenv("PIXELTONE_KEYSTORE") ?: localSigning.getProperty("storeFile")
+            if (store != null) {
+                storeFile = file(store)
+                storePassword = System.getenv("PIXELTONE_KEYSTORE_PASSWORD")
+                    ?: localSigning.getProperty("passwordFile")?.let { File(it).readText().trim() }
+                keyAlias = System.getenv("PIXELTONE_KEY_ALIAS") ?: localSigning.getProperty("alias")
+                keyPassword = storePassword
+            }
+        }
     }
 
     buildTypes {
         debug {
-            // Development builds install beside a released Pixeltone.
+            // Development builds install beside a released Pixeltone and never update themselves.
             applicationIdSuffix = ".debug"
+            buildConfigField("String", "UPDATE_FEED", "\"\"")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+            buildConfigField(
+                "String",
+                "UPDATE_FEED",
+                "\"https://github.com/Norbertque/pixeltone/releases/download/android-dev/android-latest.json\"",
+            )
         }
     }
 
@@ -35,6 +65,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     testOptions {

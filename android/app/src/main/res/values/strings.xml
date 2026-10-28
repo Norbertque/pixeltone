@@ -42,6 +42,14 @@
     <string name="move">Move</string>
     <string name="remove_from_queue">Remove from queue</string>
 
+    <string name="update_title">Update available</string>
+    <string name="update_text">Pixeltone %1$s is ready to install. You have %2$s.</string>
+    <string name="update_now">Update</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading Pixeltone %1$s…</string>
+    <string name="update_failed">The update didn\'t install</string>
+    <string name="ok">OK</string>
+
     <string name="unknown_artist">Unknown artist</string>
     <string name="various_artists">Various artists</string>
 

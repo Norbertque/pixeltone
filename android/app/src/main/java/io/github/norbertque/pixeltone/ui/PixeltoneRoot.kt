@@ -44,6 +44,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import io.github.norbertque.pixeltone.BuildConfig
 import io.github.norbertque.pixeltone.PixeltoneApp
 import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.AUDIO_PERMISSION
@@ -75,6 +76,10 @@ fun PixeltoneRoot() {
     } else {
         AccessScreen(onAllowed = { allowed = true })
     }
+    val updater = remember { (context.applicationContext as PixeltoneApp).updater }
+    val update by updater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { updater.checkOnce() }
+    UpdateDialog(update, BuildConfig.VERSION_NAME, onUpdate = updater::update, onDismiss = updater::dismiss)
 }
 
 @Composable
