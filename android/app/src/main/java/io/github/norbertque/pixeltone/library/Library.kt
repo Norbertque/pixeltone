@@ -89,11 +89,14 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
             .sortedWith(compareBy(collator, Artist::name))
     }
 
+    private val tracksById = this.tracks.associateBy(Track::id)
     private val albumsByKey = albums.associateBy(Album::key)
     private val artistsByKey = artists.associateBy(Artist::key)
     private val trackText = this.tracks.map { fold(listOfNotNull(it.title, it.artist, it.album, it.albumArtist).joinToString(" ")) }
     private val albumText = albums.map { fold(listOfNotNull(it.title, it.artist).joinToString(" ")) }
     private val artistText = artists.map { fold(it.name) }
+
+    fun track(id: Long): Track? = tracksById[id]
 
     fun album(key: String): Album? = albumsByKey[key]
 

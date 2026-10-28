@@ -1,5 +1,6 @@
 package io.github.norbertque.pixeltone.library
 
+import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
 import android.database.Cursor
@@ -35,7 +36,7 @@ class MediaStoreLibrary(private val context: Context) {
         if (started) return
         started = true
         context.contentResolver.registerContentObserver(
-            collection(),
+            audioCollection(),
             true,
             object : ContentObserver(null) {
                 override fun onChange(selfChange: Boolean) {
@@ -79,7 +80,7 @@ class MediaStoreLibrary(private val context: Context) {
         ).toTypedArray()
         val tracks = ArrayList<Track>()
         context.contentResolver
-            .query(collection(), projection, "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null)
+            .query(audioCollection(), projection, "${MediaStore.Audio.Media.IS_MUSIC} != 0", null, null)
             ?.use { c ->
                 val id = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val title = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -113,18 +114,22 @@ class MediaStoreLibrary(private val context: Context) {
         return tracks
     }
 
-    private fun collection(): Uri =
-        if (Build.VERSION.SDK_INT >= 29) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        }
-
     private companion object {
         /** A public column since Android 11, already there (unlisted) in older MediaStores. */
         const val ALBUM_ARTIST = "album_artist"
     }
 }
+
+/** Every audio file MediaStore knows, on all volumes. */
+fun audioCollection(): Uri =
+    if (Build.VERSION.SDK_INT >= 29) {
+        MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+    } else {
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+    }
+
+/** A track's audio file. */
+fun trackUri(trackId: Long): Uri = ContentUris.withAppendedId(audioCollection(), trackId)
 
 /** A text column, without MediaStore's "<unknown>" placeholder. */
 private fun Cursor.text(column: Int): String? =

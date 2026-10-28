@@ -22,6 +22,21 @@
     <string name="album_gone">This album is no longer on the phone.</string>
     <string name="artist_gone">This artist is no longer on the phone.</string>
 
+    <string name="now_playing">Now playing</string>
+    <string name="close_player">Close</string>
+    <string name="queue">Queue</string>
+    <string name="queue_empty">Nothing is playing.</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next">Next</string>
+    <string name="previous">Previous</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="repeat_off">Repeat: off</string>
+    <string name="repeat_all">Repeat: all</string>
+    <string name="repeat_one">Repeat: one</string>
+    <string name="move">Move</string>
+    <string name="remove_from_queue">Remove from queue</string>
+
     <string name="unknown_artist">Unknown artist</string>
     <string name="various_artists">Various artists</string>
 

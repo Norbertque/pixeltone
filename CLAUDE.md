@@ -137,6 +137,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Library: MediaStore (`library/MediaStoreLibrary.kt`) → `LibraryIndex`, plain Kotlin and
   unit-tested: albums by (title, album artist), else (title, folder), as on Windows; artists
   by their folded name; search ignores case and accents.
+- Playback: `playback/PlaybackService` is a Media3 `MediaSessionService` (notification, lock
+  screen, headset/Bluetooth buttons, audio focus, pause when headphones are unplugged);
+  `PlayerConnection` is the UI's `MediaController`, with the state as flows. A media id is the
+  MediaStore track id: items a controller sends arrive without their URI, and
+  `onAddMediaItems` puts it back from the id. The queue is saved to `files/queue.json` and
+  restored paused, also for playback resumption. Notification covers go through
+  `AlbumArtBitmapLoader` (MediaStore thumbnails).
 - `ui/theme/Color.kt` is generated from the Windows default seed (#7E57C2, tonal spot, 2025
   spec) with @material/material-color-utilities 0.4.0; regenerate it the same way if the
   seed changes. The launcher icon is the Windows SVG's gradient and bars as vector drawables.

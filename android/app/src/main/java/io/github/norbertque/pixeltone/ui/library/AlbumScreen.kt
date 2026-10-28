@@ -1,7 +1,11 @@
 package io.github.norbertque.pixeltone.ui.library
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,7 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -39,6 +49,8 @@ fun AlbumScreen(
     key: String,
     onBack: () -> Unit,
     onArtist: (String) -> Unit,
+    onPlay: (List<Track>, Int) -> Unit,
+    onShuffle: (List<Track>) -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val index by vm.index.collectAsStateWithLifecycle()
@@ -50,23 +62,32 @@ fun AlbumScreen(
         loading = library == null,
         onBack = onBack,
         onArtist = artistKey?.let { { onArtist(it) } },
+        onPlay = { start -> album?.let { onPlay(it.tracks, start) } },
+        onShuffle = { album?.let { onShuffle(it.tracks) } },
     )
 }
 
 /** An album's page; [onArtist] is null when its artist has no page. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AlbumContent(album: Album?, loading: Boolean, onBack: () -> Unit, onArtist: (() -> Unit)?) {
+fun AlbumContent(
+    album: Album?,
+    loading: Boolean,
+    onBack: () -> Unit,
+    onArtist: (() -> Unit)?,
+    onPlay: (Int) -> Unit,
+    onShuffle: () -> Unit,
+) {
     Scaffold(topBar = { TopAppBar(title = {}, navigationIcon = { BackButton(onBack) }) }) { padding ->
         when {
             loading -> Loading(Modifier.padding(padding))
             album == null -> Message(stringResource(R.string.album_gone), Modifier.padding(padding))
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-                item { AlbumHeader(album, onArtist) }
-                items(album.tracks, key = Track::id) {
+                item { AlbumHeader(album, onArtist, onPlay = { onPlay(0) }, onShuffle) }
+                itemsIndexed(album.tracks, key = { _, track -> track.id }) { i, track ->
                     // The artist only where it isn't the album's own (guests on a compilation).
-                    val guest = it.artist != null && !it.artist.equals(album.artist, ignoreCase = true)
-                    TrackRow(it, numbered = true, showArtist = guest, showAlbum = false)
+                    val guest = track.artist != null && !track.artist.equals(album.artist, ignoreCase = true)
+                    TrackRow(track, numbered = true, showArtist = guest, showAlbum = false, onClick = { onPlay(i) })
                 }
             }
         }
@@ -74,7 +95,7 @@ fun AlbumContent(album: Album?, loading: Boolean, onBack: () -> Unit, onArtist: 
 }
 
 @Composable
-private fun AlbumHeader(album: Album, onArtist: (() -> Unit)?) {
+private fun AlbumHeader(album: Album, onArtist: (() -> Unit)?, onPlay: () -> Unit, onShuffle: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,6 +121,19 @@ private fun AlbumHeader(album: Album, onArtist: (() -> Unit)?) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = onPlay) {
+                Icon(Icons.Default.PlayArrow, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.play))
+            }
+            FilledTonalButton(onClick = onShuffle) {
+                Icon(Icons.Default.Shuffle, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.shuffle))
+            }
+        }
         Spacer(Modifier.height(8.dp))
     }
 }

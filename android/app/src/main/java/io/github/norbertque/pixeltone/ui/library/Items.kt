@@ -55,7 +55,13 @@ fun Cover(albumId: Long, modifier: Modifier = Modifier, shape: Shape = MaterialT
 
 /** A track in a list: its cover, or its number on an album page. */
 @Composable
-fun TrackRow(track: Track, numbered: Boolean = false, showArtist: Boolean = true, showAlbum: Boolean = true) {
+fun TrackRow(
+    track: Track,
+    numbered: Boolean = false,
+    showArtist: Boolean = true,
+    showAlbum: Boolean = true,
+    onClick: (() -> Unit)? = null,
+) {
     val artist = track.artist ?: stringResource(R.string.unknown_artist)
     val details = listOfNotNull(artist.takeIf { showArtist }, track.album.takeIf { showAlbum }).joinToString(" · ")
     ListItem(
@@ -79,6 +85,7 @@ fun TrackRow(track: Track, numbered: Boolean = false, showArtist: Boolean = true
             }
         },
         trailingContent = { Text(formatDuration(track.durationMs), style = MaterialTheme.typography.labelMedium) },
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
     )
 }
 

@@ -1,15 +1,26 @@
 package io.github.norbertque.pixeltone.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.media3.common.Player
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.norbertque.pixeltone.library.LibraryIndex
 import io.github.norbertque.pixeltone.library.Track
+import io.github.norbertque.pixeltone.playback.PlaybackState
+import io.github.norbertque.pixeltone.playback.PlayerControls
+import io.github.norbertque.pixeltone.playback.QueueEntry
 import io.github.norbertque.pixeltone.ui.library.AlbumContent
 import io.github.norbertque.pixeltone.ui.library.ArtistContent
 import io.github.norbertque.pixeltone.ui.library.LibraryContent
+import io.github.norbertque.pixeltone.ui.player.MiniPlayer
+import io.github.norbertque.pixeltone.ui.player.NowPlayingContent
+import io.github.norbertque.pixeltone.ui.player.QueueContent
 import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
 import java.util.Locale
 import org.junit.Rule
@@ -33,6 +44,15 @@ class ScreensTest {
 
     private val index = LibraryIndex(SAMPLE, Locale.ENGLISH)
 
+    private val playing = PlaybackState(
+        queue = index.albums.first { it.title == "Rubikon" }.tracks.map(::entry) + index.albums.first { it.title == "1" }.tracks.map(::entry),
+        index = 1,
+        isPlaying = true,
+        durationMs = 247_000,
+        repeatMode = Player.REPEAT_MODE_ALL,
+        shuffle = false,
+    )
+
     private fun shot(name: String, dark: Boolean = false, content: @Composable () -> Unit) {
         compose.setContent { PixeltoneTheme(dark = dark, content = content) }
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
@@ -40,7 +60,18 @@ class ScreensTest {
 
     @Composable
     private fun Library(tab: Int, query: String = "", searching: Boolean = false, library: LibraryIndex = index) {
-        LibraryContent(library.search(query), query, tab, searching, {}, {}, {}, {}, {})
+        LibraryContent(
+            results = library.search(query),
+            query = query,
+            tab = tab,
+            searching = searching,
+            onTab = {},
+            onSearching = {},
+            onQuery = {},
+            onAlbum = {},
+            onArtist = {},
+            onPlay = { _, _ -> },
+        )
     }
 
     @Test
@@ -63,20 +94,54 @@ class ScreensTest {
 
     @Test
     fun album() = shot("album") {
-        AlbumContent(index.albums.first { it.title == "Rubikon" }, loading = false, onBack = {}, onArtist = {})
+        AlbumContent(index.albums.first { it.title == "Rubikon" }, loading = false, onBack = {}, onArtist = {}, onPlay = {}, onShuffle = {})
     }
 
     @Test
     fun compilationDark() = shot("album-compilation-dark", dark = true) {
-        AlbumContent(index.albums.first { it.isCompilation }, loading = false, onBack = {}, onArtist = null)
+        AlbumContent(index.albums.first { it.isCompilation }, loading = false, onBack = {}, onArtist = null, onPlay = {}, onShuffle = {})
     }
 
     @Test
-    fun artist() = shot("artist") { ArtistContent(index.artistNamed("Kryštof"), loading = false, onBack = {}, onAlbum = {}) }
+    fun artist() = shot("artist") {
+        ArtistContent(index.artistNamed("Kryštof"), loading = false, onBack = {}, onAlbum = {}, onPlay = { _, _ -> })
+    }
 
     @Test
     fun access() = shot("access") { AccessScreen(onAllowed = {}) }
+
+    @Test
+    fun nowPlaying() = shot("now-playing") { NowPlayingContent(playing, 95_000, NoControls, onBack = {}, onQueue = {}) }
+
+    @Test
+    fun nowPlayingDark() = shot("now-playing-dark", dark = true) {
+        NowPlayingContent(playing.copy(isPlaying = false, shuffle = true, repeatMode = Player.REPEAT_MODE_ONE), 0, NoControls, {}, {})
+    }
+
+    @Test
+    fun queue() = shot("queue") { QueueContent(playing, NoControls, onBack = {}) }
+
+    @Test
+    fun miniPlayer() = shot("mini-player") {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {})
+        }
+    }
 }
+
+private object NoControls : PlayerControls {
+    override fun toggle() {}
+    override fun next() {}
+    override fun previous() {}
+    override fun seekTo(positionMs: Long) {}
+    override fun jumpTo(index: Int) {}
+    override fun move(from: Int, to: Int) {}
+    override fun remove(index: Int) {}
+    override fun cycleRepeat() {}
+    override fun toggleShuffle() {}
+}
+
+private fun entry(track: Track) = QueueEntry(track.id, track.title, track.artist, track.album, track.albumId)
 
 private var nextId = 1L
 

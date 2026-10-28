@@ -1,0 +1,183 @@
+package io.github.norbertque.pixeltone.ui.player
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
+import io.github.norbertque.pixeltone.R
+import io.github.norbertque.pixeltone.playback.PlaybackState
+import io.github.norbertque.pixeltone.playback.PlayerConnection
+import io.github.norbertque.pixeltone.playback.PlayerControls
+import io.github.norbertque.pixeltone.ui.Message
+import io.github.norbertque.pixeltone.ui.formatDuration
+import io.github.norbertque.pixeltone.ui.library.Cover
+
+@Composable
+fun NowPlayingScreen(player: PlayerConnection, onBack: () -> Unit, onQueue: () -> Unit) {
+    val state by player.state.collectAsStateWithLifecycle()
+    val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
+    NowPlayingContent(state, position, player, onBack, onQueue)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NowPlayingContent(
+    state: PlaybackState,
+    positionMs: Long,
+    controls: PlayerControls,
+    onBack: () -> Unit,
+    onQueue: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.now_playing)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.close_player))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onQueue) {
+                        Icon(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.queue))
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        val entry = state.current
+        if (entry == null) {
+            Message(stringResource(R.string.queue_empty), Modifier.padding(padding))
+            return@Scaffold
+        }
+        Column(
+            Modifier.fillMaxSize().padding(padding).padding(horizontal = 24.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Cover(entry.albumId, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    entry.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOfNotNull(entry.artist ?: stringResource(R.string.unknown_artist), entry.album).joinToString(" · "),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            SeekBar(positionMs, state.durationMs, controls::seekTo)
+            Controls(state, controls)
+        }
+    }
+}
+
+@Composable
+private fun SeekBar(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit) {
+    // While the thumb is held, it shows where the track will continue, not where it is.
+    var held by remember { mutableStateOf<Float?>(null) }
+    val fraction = held ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    Column(Modifier.fillMaxWidth()) {
+        Slider(
+            value = fraction,
+            onValueChange = { held = it },
+            onValueChangeFinished = {
+                held?.let { onSeek((it * durationMs).toLong()) }
+                held = null
+            },
+            enabled = durationMs > 0,
+        )
+        Row(Modifier.fillMaxWidth()) {
+            Text(
+                formatDuration((fraction * durationMs).toLong()),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                formatDuration(durationMs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun Controls(state: PlaybackState, controls: PlayerControls) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Toggle(Icons.Default.Shuffle, stringResource(R.string.shuffle), on = state.shuffle, onClick = controls::toggleShuffle)
+        IconButton(onClick = controls::previous, Modifier.size(56.dp)) {
+            Icon(Icons.Default.SkipPrevious, stringResource(R.string.previous), Modifier.size(36.dp))
+        }
+        FilledIconButton(onClick = controls::toggle, Modifier.size(80.dp)) {
+            if (state.isPlaying) {
+                Icon(Icons.Default.Pause, stringResource(R.string.pause), Modifier.size(40.dp))
+            } else {
+                Icon(Icons.Default.PlayArrow, stringResource(R.string.play), Modifier.size(40.dp))
+            }
+        }
+        IconButton(onClick = controls::next, Modifier.size(56.dp)) {
+            Icon(Icons.Default.SkipNext, stringResource(R.string.next), Modifier.size(36.dp))
+        }
+        val (icon, label) = when (state.repeatMode) {
+            Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne to R.string.repeat_one
+            Player.REPEAT_MODE_ALL -> Icons.Default.Repeat to R.string.repeat_all
+            else -> Icons.Default.Repeat to R.string.repeat_off
+        }
+        Toggle(icon, stringResource(label), on = state.repeatMode != Player.REPEAT_MODE_OFF, onClick = controls::cycleRepeat)
+    }
+}
+
+@Composable
+private fun Toggle(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(icon, label, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}

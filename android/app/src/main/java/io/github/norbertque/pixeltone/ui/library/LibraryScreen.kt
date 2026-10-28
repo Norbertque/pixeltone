@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -59,6 +60,7 @@ private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab
 fun LibraryScreen(
     onAlbum: (String) -> Unit,
     onArtist: (String) -> Unit,
+    onPlay: (List<Track>, Int) -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -78,6 +80,7 @@ fun LibraryScreen(
         onQuery = vm::search,
         onAlbum = onAlbum,
         onArtist = onArtist,
+        onPlay = onPlay,
     )
 }
 
@@ -94,6 +97,7 @@ fun LibraryContent(
     onQuery: (String) -> Unit,
     onAlbum: (String) -> Unit,
     onArtist: (String) -> Unit,
+    onPlay: (List<Track>, Int) -> Unit,
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     Scaffold(
@@ -125,7 +129,7 @@ fun LibraryContent(
             when {
                 results == null -> Loading()
                 query.isBlank() && results.tracks.isEmpty() -> Message(stringResource(R.string.empty_library))
-                tab == 0 -> Tracks(results.tracks, query)
+                tab == 0 -> Tracks(results.tracks, query, onPlay)
                 tab == 1 -> Albums(results.albums, query, onAlbum)
                 else -> Artists(results.artists, query, onArtist)
             }
@@ -134,13 +138,13 @@ fun LibraryContent(
 }
 
 @Composable
-private fun Tracks(tracks: List<Track>, query: String) {
+private fun Tracks(tracks: List<Track>, query: String, onPlay: (List<Track>, Int) -> Unit) {
     if (tracks.isEmpty()) {
         NoMatch(query)
         return
     }
     LazyColumn(Modifier.fillMaxSize()) {
-        items(tracks, key = Track::id) { TrackRow(it) }
+        itemsIndexed(tracks, key = { _, track -> track.id }) { i, track -> TrackRow(track, onClick = { onPlay(tracks, i) }) }
     }
 }
 
