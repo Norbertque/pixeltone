@@ -114,7 +114,10 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   own address: only `Decoder::open_http` opens those (FFmpeg limited to http/tcp); local
   paths always go through `file:`. They stay out of history and the saved queue.
 - The fork's client (PixelPlayer) is private: its licence forbids publishing modified
-  versions, so nothing of it goes into this repo, and nothing of this repo's code into it.
+  versions, so nothing of PixelPlayer goes into this repo, and nothing of this repo's code
+  into the fork. The one exception is ADR 0001: files we wrote ourselves in the fork that
+  don't build on PixelPlayer (the USB output engine, the Pixeltone client) may move into
+  `android/`, each checked for PixelPlayer code first.
 
 ## Releases and updates
 
@@ -134,7 +137,10 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   dithering, volume scaling, DSP or resampling to the exclusive path unless the badge says
   "Converted". 0 dB software gain must stay a no-op.
 - **Clean room:** never copy code, icons or other assets from PixelPlayer for Android
-  (proprietary since 2026-05-12). Matching the look is fine.
+  (proprietary since 2026-05-12). Matching the look is fine for the Windows app; Pixeltone
+  for Android (`android/`) has a look of its own (ADR 0001).
+- **Vocabulary:** use `GLOSSARY.md`'s terms in UI, code and docs alike (e.g. "track", never
+  "song"); where existing code or UI still differs, the glossary wins.
 - **Browser support:** the UI only runs in WebView2 (evergreen Chromium) or a current
   Chromium for development. Chromium-supported features may be used without fallbacks.
 - Secrets never go into git (updater key → GitHub Actions secrets; `.env` is ignored).
