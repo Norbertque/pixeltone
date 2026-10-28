@@ -1,5 +1,6 @@
 package io.github.norbertque.pixeltone.remote
 
+import android.annotation.SuppressLint
 import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
@@ -47,6 +48,8 @@ internal object PcTls {
             .build()
     }
 
+    // Deliberately not the system's trust: a PC's certificate is its own, checked by its pinned fingerprint.
+    @SuppressLint("CustomX509TrustManager")
     private class CertificateCheck(
         private val check: (X509Certificate) -> Unit,
     ) : X509TrustManager {

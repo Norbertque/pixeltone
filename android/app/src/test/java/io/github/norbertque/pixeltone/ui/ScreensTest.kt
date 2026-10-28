@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.media3.common.Player
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.norbertque.pixeltone.library.AlbumCover
 import io.github.norbertque.pixeltone.library.LibraryIndex
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.playback.PlaybackState
@@ -23,6 +24,11 @@ import io.github.norbertque.pixeltone.ui.library.LibraryContent
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingContent
 import io.github.norbertque.pixeltone.ui.player.QueueContent
+import io.github.norbertque.pixeltone.remote.FoundPc
+import io.github.norbertque.pixeltone.remote.PairedPc
+import io.github.norbertque.pixeltone.ui.remote.PlayOnContent
+import io.github.norbertque.pixeltone.ui.remote.pcChoices
+import androidx.compose.material3.Surface
 import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
 import io.github.norbertque.pixeltone.update.UpdateInfo
 import io.github.norbertque.pixeltone.update.UpdateState
@@ -147,9 +153,34 @@ class ScreensTest {
     }
 
     @Test
+    fun playOn() = shot("play-on") {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow) {
+                PlayOnContent(
+                    choices = pcChoices(listOf(FOUND_BIG_ONE, FOUND_NEW), listOf(BIG_ONE, OLD_PC)),
+                    activeId = BIG_ONE.id,
+                    connected = true,
+                    onPhone = {},
+                    onPc = {},
+                    onForget = {},
+                    onAddress = {},
+                )
+            }
+        }
+    }
+
+    @Test
+    fun nowPlayingOnPc() = shot("now-playing-on-pc") {
+        NowPlayingContent(playing, 95_000, NoControls, {}, {}, playingOn = "BIG-ONE", outputBadge = "Exclusive • 24-bit/96 kHz • Bit-perfect")
+    }
+
+    @Test
+    fun queueOnPc() = shot("queue-on-pc") { QueueContent(playing, NoControls, onBack = {}, editable = false) }
+
+    @Test
     fun miniPlayer() = shot("mini-player") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {})
+            MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {}, playingOn = "BIG-ONE")
         }
     }
 }
@@ -166,9 +197,14 @@ private object NoControls : PlayerControls {
     override fun toggleShuffle() {}
 }
 
+private val BIG_ONE = PairedPc("big", "BIG-ONE", "192.168.1.20", 47821, "ab".repeat(32), "token")
+private val OLD_PC = PairedPc("old", "OLD-PC", "192.168.1.30", 47821, "cd".repeat(32), "token")
+private val FOUND_BIG_ONE = FoundPc("BIG-ONE", "big", "BIG-ONE", "192.168.1.20", 47821)
+private val FOUND_NEW = FoundPc("WORK-PC", "work", "WORK-PC", "192.168.1.40", 47821)
+
 private val UPDATE = UpdateInfo(12, "0.1.12", "https://example.com/Pixeltone-android.apk", "a".repeat(64))
 
-private fun entry(track: Track) = QueueEntry(track.id, track.title, track.artist, track.album, track.albumId)
+private fun entry(track: Track) = QueueEntry(track.id, track.title, track.artist, track.album, AlbumCover(track.albumId))
 
 private var nextId = 1L
 

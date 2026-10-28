@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -61,6 +62,7 @@ fun LibraryScreen(
     onAlbum: (String) -> Unit,
     onArtist: (String) -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
+    onPlayOn: () -> Unit,
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -81,6 +83,7 @@ fun LibraryScreen(
         onAlbum = onAlbum,
         onArtist = onArtist,
         onPlay = onPlay,
+        onPlayOn = onPlayOn,
     )
 }
 
@@ -98,6 +101,7 @@ fun LibraryContent(
     onAlbum: (String) -> Unit,
     onArtist: (String) -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
+    onPlayOn: () -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     Scaffold(
@@ -114,6 +118,9 @@ fun LibraryContent(
                     } else {
                         IconButton(onClick = { onSearching(true) }) {
                             Icon(Icons.Default.Search, stringResource(R.string.search))
+                        }
+                        IconButton(onClick = onPlayOn) {
+                            Icon(Icons.Default.Devices, stringResource(R.string.play_on))
                         }
                     }
                 },

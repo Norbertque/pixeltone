@@ -11,16 +11,20 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.norbertque.pixeltone.library.albumIdOf
 import io.github.norbertque.pixeltone.library.loadAlbumArt
+import io.github.norbertque.pixeltone.remote.RemoteControl
+import io.github.norbertque.pixeltone.remote.loadPcCover
+import io.github.norbertque.pixeltone.remote.pcCoverKeyOf
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 /**
  * Covers for the media notification and lock screen: album art addresses go through
- * MediaStore's thumbnails (the old album art provider is gone on newer Android), everything
- * else (pictures embedded in the files) through Media3's own loader.
+ * MediaStore's thumbnails (the old album art provider is gone on newer Android), a PC's covers
+ * over the connection to it, everything else (pictures embedded in the files) through Media3's
+ * own loader.
  */
 @OptIn(UnstableApi::class)
-class AlbumArtBitmapLoader(private val context: Context) : BitmapLoader {
+class AlbumArtBitmapLoader(private val context: Context, private val remote: RemoteControl) : BitmapLoader {
     private val executor = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor())
     private val others = DataSourceBitmapLoader.Builder(context).build()
 
@@ -29,8 +33,9 @@ class AlbumArtBitmapLoader(private val context: Context) : BitmapLoader {
     override fun decodeBitmap(data: ByteArray): ListenableFuture<Bitmap> = others.decodeBitmap(data)
 
     override fun loadBitmap(uri: Uri): ListenableFuture<Bitmap> {
-        val albumId = albumIdOf(uri) ?: return others.loadBitmap(uri)
-        return executor.submit(Callable { loadAlbumArt(context, albumId, SIZE_PX) })
+        albumIdOf(uri)?.let { albumId -> return executor.submit(Callable { loadAlbumArt(context, albumId, SIZE_PX) }) }
+        pcCoverKeyOf(uri)?.let { key -> return executor.submit(Callable { remote.loadPcCover(key) }) }
+        return others.loadBitmap(uri)
     }
 
     private companion object {

@@ -42,28 +42,28 @@ import io.github.norbertque.pixeltone.ui.BackButton
 import io.github.norbertque.pixeltone.ui.Message
 
 @Composable
-fun QueueScreen(player: PlayerConnection, onBack: () -> Unit) {
+fun QueueScreen(player: PlayerConnection, onBack: () -> Unit, editable: Boolean) {
     val state by player.state.collectAsStateWithLifecycle()
-    QueueContent(state, player, onBack)
+    QueueContent(state, player, onBack, editable)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QueueContent(state: PlaybackState, controls: PlayerControls, onBack: () -> Unit) {
+fun QueueContent(state: PlaybackState, controls: PlayerControls, onBack: () -> Unit, editable: Boolean = true) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.queue)) }, navigationIcon = { BackButton(onBack) }) },
     ) { padding ->
         if (state.queue.isEmpty()) {
             Message(stringResource(R.string.queue_empty), Modifier.padding(padding))
         } else {
-            Rows(state, controls, padding)
+            Rows(state, controls, padding, editable)
         }
     }
 }
 
 /** The queue; a row dragged by its handle moves in this list, and the player gets one move when it's dropped. */
 @Composable
-private fun Rows(state: PlaybackState, controls: PlayerControls, padding: PaddingValues) {
+private fun Rows(state: PlaybackState, controls: PlayerControls, padding: PaddingValues, editable: Boolean) {
     val list = rememberLazyListState(initialFirstVisibleItemIndex = state.index.coerceAtLeast(0))
     // Each row is its position in the player's queue, in the order shown.
     var rows by remember(state.queue) { mutableStateOf(state.queue.indices.toList()) }
@@ -75,6 +75,7 @@ private fun Rows(state: PlaybackState, controls: PlayerControls, padding: Paddin
             QueueRow(
                 entry = state.queue[row],
                 playing = row == state.index,
+                editable = editable,
                 modifier = Modifier
                     .zIndex(if (isDragged) 1f else 0f)
                     .graphicsLayer { translationY = if (isDragged) offset else 0f },
@@ -122,6 +123,7 @@ private fun Rows(state: PlaybackState, controls: PlayerControls, padding: Paddin
 private fun QueueRow(
     entry: QueueEntry,
     playing: Boolean,
+    editable: Boolean,
     modifier: Modifier,
     handle: Modifier,
     onClick: () -> Unit,
@@ -139,11 +141,19 @@ private fun QueueRow(
         supportingContent = {
             Text(entry.artist ?: stringResource(R.string.unknown_artist), maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
-        leadingContent = { Icon(Icons.Default.DragHandle, stringResource(R.string.move), handle) },
-        trailingContent = {
-            IconButton(onClick = onRemove) {
-                Icon(Icons.Default.Close, stringResource(R.string.remove_from_queue))
+        leadingContent = if (editable) {
+            { Icon(Icons.Default.DragHandle, stringResource(R.string.move), handle) }
+        } else {
+            null
+        },
+        trailingContent = if (editable) {
+            {
+                IconButton(onClick = onRemove) {
+                    Icon(Icons.Default.Close, stringResource(R.string.remove_from_queue))
+                }
             }
+        } else {
+            null
         },
         colors = if (playing) {
             ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer)

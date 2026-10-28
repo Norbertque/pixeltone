@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +57,7 @@ import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.QueueScreen
+import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
 
 private const val LIBRARY = "library"
 private const val NOW_PLAYING = "now-playing"
@@ -85,15 +88,28 @@ fun PixeltoneRoot() {
 @Composable
 private fun Navigation() {
     val context = LocalContext.current
-    val player = remember { (context.applicationContext as PixeltoneApp).player }
+    val app = remember { context.applicationContext as PixeltoneApp }
+    val player = app.player
+    val remote = app.remote
     val playback by player.state.collectAsStateWithLifecycle()
+    val onPc by remote.connection.session.collectAsStateWithLifecycle()
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    val messages = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) { remote.connection.errors.collect { messages.showSnackbar(it) } }
     val nav = rememberNavController()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     Scaffold(
+        snackbarHost = { SnackbarHost(messages) },
         bottomBar = {
             val entry = playback.current
             if (entry != null && route != NOW_PLAYING && route != QUEUE) {
-                MiniPlayer(entry, playback.isPlaying, onToggle = player::toggle, onOpen = { nav.navigate(NOW_PLAYING) })
+                MiniPlayer(
+                    entry,
+                    playback.isPlaying,
+                    onToggle = player::toggle,
+                    onOpen = { nav.navigate(NOW_PLAYING) },
+                    playingOn = onPc?.pc?.name,
+                )
             }
         },
         // The screens inside handle the system bars themselves; this one only adds the mini player.
@@ -105,6 +121,7 @@ private fun Navigation() {
                     onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
                     onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
                     onPlay = player::play,
+                    onPlayOn = { choosing = true },
                 )
             }
             composable("album/{key}") { entry ->
@@ -125,13 +142,21 @@ private fun Navigation() {
                 )
             }
             composable(NOW_PLAYING) {
-                NowPlayingScreen(player, onBack = { nav.popBackStack() }, onQueue = { nav.navigate(QUEUE) })
+                NowPlayingScreen(
+                    player,
+                    onBack = { nav.popBackStack() },
+                    onQueue = { nav.navigate(QUEUE) },
+                    playingOn = onPc?.pc?.name,
+                    outputBadge = onPc?.state?.output?.badge?.label,
+                    onPlayOn = { choosing = true },
+                )
             }
             composable(QUEUE) {
-                QueueScreen(player, onBack = { nav.popBackStack() })
+                QueueScreen(player, onBack = { nav.popBackStack() }, editable = onPc == null)
             }
         }
     }
+    if (choosing) PlayOnSheet(remote, onDismiss = { choosing = false })
 }
 
 @Composable

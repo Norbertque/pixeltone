@@ -144,6 +144,14 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `onAddMediaItems` puts it back from the id. The queue is saved to `files/queue.json` and
   restored paused, also for playback resumption. Notification covers go through
   `AlbumArtBitmapLoader` (MediaStore thumbnails).
+- Remote control (`remote/`): the client moved over from the fork (ADR 0001) — discovery,
+  pairing, pinned TLS, `PcConnection` (WebSocket session). While playback is on a PC,
+  `PlaybackService` gives the media session `PcPlayer` (a Media3 `SimpleBasePlayer` mirroring
+  the PC) instead of ExoPlayer, so app, notification, lock screen and volume keys drive the PC;
+  a hand-over serves phone tracks from `PhoneFileServer` (per-run secret in every URL).
+  `PcConnectionDevServerTest` and `PcPlayerDevServerTest` run against
+  `cargo run -p pp-remote --example dev_server` with `PIXELTONE_DEV_SERVER=port:code` (a
+  pairing uses up the code; the server prints the next one).
 - Releases: `.github/workflows/android.yml` runs only for `android/**` (the Windows CI ignores
   those paths, so neither needs `[skip ci]` for the other). On `main` it builds a signed
   release APK numbered by its run (versionCode = run number, versionName `0.1.<run>`) and

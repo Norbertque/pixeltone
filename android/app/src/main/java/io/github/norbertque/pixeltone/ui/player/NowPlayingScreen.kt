@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -59,10 +62,17 @@ import io.github.norbertque.pixeltone.ui.library.Cover
 import kotlinx.coroutines.delay
 
 @Composable
-fun NowPlayingScreen(player: PlayerConnection, onBack: () -> Unit, onQueue: () -> Unit) {
+fun NowPlayingScreen(
+    player: PlayerConnection,
+    onBack: () -> Unit,
+    onQueue: () -> Unit,
+    playingOn: String?,
+    outputBadge: String?,
+    onPlayOn: () -> Unit,
+) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
-    NowPlayingContent(state, position, player, onBack, onQueue)
+    NowPlayingContent(state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +83,11 @@ fun NowPlayingContent(
     controls: PlayerControls,
     onBack: () -> Unit,
     onQueue: () -> Unit,
+    /** The PC playback is on, or null on the phone. */
+    playingOn: String? = null,
+    /** The PC's output, e.g. "Exclusive • 24-bit/96 kHz • Bit-perfect". */
+    outputBadge: String? = null,
+    onPlayOn: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -84,6 +99,9 @@ fun NowPlayingContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onPlayOn) {
+                        Icon(Icons.Default.Devices, stringResource(R.string.play_on))
+                    }
                     IconButton(onClick = onQueue) {
                         Icon(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.queue))
                     }
@@ -101,7 +119,7 @@ fun NowPlayingContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Cover(entry.albumId, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
+            Cover(entry.cover, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
             Column(Modifier.fillMaxWidth()) {
                 Text(
                     entry.title,
@@ -116,6 +134,7 @@ fun NowPlayingContent(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (playingOn != null) PlayingOn(playingOn, outputBadge)
             }
             SeekBar(positionMs, state.durationMs, controls::seekTo)
             // What a toggle now does, shown for a moment under the controls.
@@ -220,6 +239,20 @@ private fun Toggle(icon: ImageVector, label: String, on: Boolean, onClick: () ->
         ),
     ) {
         Icon(icon, label)
+    }
+}
+
+@Composable
+private fun PlayingOn(pc: String, badge: String?) {
+    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Computer, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text(stringResource(R.string.playing_on, pc), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            if (!badge.isNullOrEmpty()) {
+                Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

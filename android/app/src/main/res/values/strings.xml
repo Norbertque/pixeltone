@@ -42,6 +42,29 @@
     <string name="move">Move</string>
     <string name="remove_from_queue">Remove from queue</string>
 
+    <string name="play_on">Play on</string>
+    <string name="this_phone">This phone</string>
+    <string name="pc_here">Paired · on this Wi-Fi</string>
+    <string name="pc_away">Paired · not seen on this Wi-Fi</string>
+    <string name="pc_new">On this Wi-Fi · tap to pair</string>
+    <string name="pc_connecting">Connecting…</string>
+    <string name="pc_playing">Playing</string>
+    <string name="playing_on">Playing on %1$s</string>
+    <string name="add_pc_by_address">Add a PC by address</string>
+    <string name="address_text">Pixeltone shows the address in Settings → Remote control, like 192.168.1.20:47821.</string>
+    <string name="address_hint">Address</string>
+    <string name="address_invalid">That isn\'t an address.</string>
+    <string name="address_continue">Continue</string>
+    <string name="pair_title">Pair with %1$s</string>
+    <string name="pair_text">In Pixeltone on the PC, turn on Remote control and press Pair a phone. Then type the code it shows.</string>
+    <string name="pair_code">Code</string>
+    <string name="pair">Pair</string>
+    <string name="pair_failed">Pairing didn\'t work.</string>
+    <string name="forget_title">Forget %1$s?</string>
+    <string name="forget_text">This phone will need to pair with it again.</string>
+    <string name="forget">Forget</string>
+    <string name="cancel">Cancel</string>
+
     <string name="update_title">Update available</string>
     <string name="update_text">Pixeltone %1$s is ready to install. You have %2$s.</string>
     <string name="update_now">Update</string>

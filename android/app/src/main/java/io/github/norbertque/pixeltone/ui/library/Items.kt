@@ -36,15 +36,20 @@ import io.github.norbertque.pixeltone.ui.formatDuration
 
 /** An album's cover, or Pixeltone's bars where it has none. */
 @Composable
-fun Cover(albumId: Long, modifier: Modifier = Modifier, shape: Shape = MaterialTheme.shapes.small) {
+fun Cover(albumId: Long, modifier: Modifier = Modifier, shape: Shape = MaterialTheme.shapes.small) =
+    Cover(if (albumId >= 0) AlbumCover(albumId) else null, modifier, shape)
+
+/** A cover from any source Coil knows here ([AlbumCover], a PC's cover), or Pixeltone's bars. */
+@Composable
+fun Cover(model: Any?, modifier: Modifier = Modifier, shape: Shape = MaterialTheme.shapes.small) {
     Box(
         modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
         PixeltoneGlyph(Modifier.fillMaxSize(0.4f), MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        if (albumId >= 0) {
+        if (model != null) {
             AsyncImage(
-                model = AlbumCover(albumId),
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),

@@ -3,18 +3,23 @@ package io.github.norbertque.pixeltone.playback
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import io.github.norbertque.pixeltone.library.AlbumCover
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.library.albumArtUri
 import io.github.norbertque.pixeltone.library.albumIdOf
 import io.github.norbertque.pixeltone.library.trackUri
+import io.github.norbertque.pixeltone.remote.PcCover
+import io.github.norbertque.pixeltone.remote.pcCoverKeyOf
 
 /** A track in the queue, as the player describes it. */
 data class QueueEntry(
+    /** The phone's MediaStore id; -1 for a track of the PC's own. */
     val trackId: Long,
     val title: String,
     val artist: String?,
     val album: String?,
-    val albumId: Long,
+    /** The cover as an image for Coil ([AlbumCover], [PcCover]), or null. */
+    val cover: Any?,
 )
 
 data class PlaybackState(
@@ -77,5 +82,5 @@ fun MediaItem.toQueueEntry(): QueueEntry =
         title = mediaMetadata.title?.toString().orEmpty(),
         artist = mediaMetadata.artist?.toString(),
         album = mediaMetadata.albumTitle?.toString(),
-        albumId = mediaMetadata.artworkUri?.let(::albumIdOf) ?: -1,
+        cover = mediaMetadata.artworkUri?.let { uri -> albumIdOf(uri)?.let(::AlbumCover) ?: pcCoverKeyOf(uri)?.let(::PcCover) },
     )

@@ -27,7 +27,7 @@ import io.github.norbertque.pixeltone.ui.library.Cover
 
 /** The playing track under the library screens; tap it for Now playing. */
 @Composable
-fun MiniPlayer(entry: QueueEntry, isPlaying: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
+fun MiniPlayer(entry: QueueEntry, isPlaying: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, playingOn: String? = null) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
@@ -36,11 +36,11 @@ fun MiniPlayer(entry: QueueEntry, isPlaying: Boolean, onToggle: () -> Unit, onOp
             Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Cover(entry.albumId, Modifier.size(48.dp))
+            Cover(entry.cover, Modifier.size(48.dp))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    entry.artist ?: stringResource(R.string.unknown_artist),
+                    listOfNotNull(playingOn, entry.artist ?: stringResource(R.string.unknown_artist)).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
