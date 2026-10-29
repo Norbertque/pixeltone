@@ -137,6 +137,30 @@
         <item quantity="other">Their %d upcoming tracks will be removed too.</item>
     </plurals>
 
+    <!-- Settings, USB output -->
+    <string name="settings">Settings</string>
+    <string name="usb_title">USB DAC</string>
+    <string name="usb_exclusive">Exclusive USB output</string>
+    <string name="usb_exclusive_text">Plays straight into a USB DAC, bit-perfect: no Android mixing, resampling or effects. Other apps and system sounds can’t use the DAC meanwhile.</string>
+    <string name="usb_no_device">Connect a USB DAC.</string>
+    <string name="usb_permission">Allow Pixeltone to use %1$s in Android’s dialog.</string>
+    <string name="usb_denied">Pixeltone may not use %1$s.</string>
+    <string name="usb_ask_again">Ask again</string>
+    <string name="usb_ready">%1$s is ready: up to %2$s.</string>
+    <string name="usb_active">Playing into %1$s: %2$s</string>
+    <string name="usb_try_again">Try again</string>
+    <string name="usb_rates">Rates: %1$s</string>
+    <string name="usb_volume">Volume</string>
+    <string name="usb_dac_volume">DAC volume</string>
+    <string name="usb_software_volume">Software volume</string>
+    <string name="usb_software_volume_text">The DAC has no volume of its own, so Pixeltone turns it down; at 0 dB the output is bit-perfect again.</string>
+    <string name="usb_loud_title">Louder than −10 dB?</string>
+    <string name="usb_loud_text">Some DACs drive earphones very loud at full scale. Check the level before you go higher.</string>
+    <string name="usb_loud_allow">Allow louder</string>
+    <string name="usb_fixed">Line level</string>
+    <string name="usb_fixed_text">Full scale, no volume here: for an amplifier after the DAC.</string>
+    <string name="usb_licence">USB output uses libusb (LGPL 2.1); its source is in Pixeltone’s repository.</string>
+
     <plurals name="tracks_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>

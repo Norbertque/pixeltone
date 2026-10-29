@@ -12,6 +12,14 @@ import io.github.norbertque.pixeltone.remote.PcCoverFetcher
 import io.github.norbertque.pixeltone.remote.PcCoverKeyer
 import io.github.norbertque.pixeltone.remote.RemoteControl
 import io.github.norbertque.pixeltone.update.Updater
+import io.github.norbertque.pixeltone.usb.PreferencesUsbSettings
+import io.github.norbertque.pixeltone.usb.UsbDeviceManager
+import io.github.norbertque.pixeltone.usb.UsbExclusiveModeController
+import io.github.norbertque.pixeltone.usb.UsbSettings
+import io.github.norbertque.pixeltone.usbaudio.UsbAudioSession
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class PixeltoneApp : Application(), ImageLoaderFactory {
     val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this) }
@@ -19,6 +27,17 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
+    val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
+
+    /** Exclusive USB output: follows the DAC and its permission for as long as the app runs. */
+    val usb: UsbExclusiveModeController by lazy {
+        UsbExclusiveModeController(
+            UsbDeviceManager(this),
+            usbSettings,
+            CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            sessionFactory = { connection, capabilities -> UsbAudioSession.open(connection, capabilities) },
+        )
+    }
 
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)

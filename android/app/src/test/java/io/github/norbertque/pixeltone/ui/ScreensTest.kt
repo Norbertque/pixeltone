@@ -40,6 +40,14 @@ import io.github.norbertque.pixeltone.ui.jam.JoinContent
 import io.github.norbertque.pixeltone.ui.jam.OwnerPart
 import io.github.norbertque.pixeltone.ui.jam.StartJamContent
 import io.github.norbertque.pixeltone.ui.jam.WaitingContent
+import io.github.norbertque.pixeltone.ui.settings.SettingsContent
+import io.github.norbertque.pixeltone.ui.settings.UsbPanel
+import io.github.norbertque.pixeltone.usb.DAC
+import io.github.norbertque.pixeltone.usb.SAMPLE_DAC
+import io.github.norbertque.pixeltone.usb.UsbExclusiveState
+import io.github.norbertque.pixeltone.usbaudio.negotiation.Conversion
+import io.github.norbertque.pixeltone.usbaudio.negotiation.NegotiatedFormat
+import io.github.norbertque.pixeltone.usbaudio.negotiation.SourceFormat
 import io.github.norbertque.pixeltone.ui.remote.PlayOnContent
 import io.github.norbertque.pixeltone.ui.remote.pcChoices
 import androidx.compose.material3.Surface
@@ -254,6 +262,37 @@ class ScreensTest {
             onAddTracks = {},
         )
     }
+
+    @Test
+    fun settingsOff() = shot("settings-usb-off") { Settings(UsbPanel(false, UsbExclusiveState.Disabled, null, null, false, false)) }
+
+    @Test
+    fun settingsPlaying() = shot("settings-usb-playing") {
+        val active = UsbExclusiveState.Active(
+            device = DAC,
+            capabilities = SAMPLE_DAC,
+            format = NegotiatedFormat(SAMPLE_DAC.formats[1], 96_000, Conversion.BIT_PERFECT),
+            source = SourceFormat(96_000, 24, 2, isFloat = true),
+            conversion = Conversion.BIT_PERFECT,
+            hardwareVolume = false,
+            softwareVolumeDb = -30f,
+        )
+        Settings(UsbPanel(true, active, -30f, null, false, false))
+    }
+
+    @Test
+    fun settingsDeniedDark() = shot("settings-usb-denied-dark", dark = true) {
+        Settings(UsbPanel(true, UsbExclusiveState.PermissionDenied(DAC.copy(hasPermission = false)), null, null, false, false))
+    }
+
+    @Test
+    fun nowPlayingUsb() = shot("now-playing-usb") {
+        NowPlayingContent(playing, 95_000, NoControls, {}, {}, outputBadge = "USB • 24-bit/96 kHz • Bit-perfect")
+    }
+
+    @Composable
+    private fun Settings(usb: UsbPanel) =
+        SettingsContent(usb, onBack = {}, onEnabled = {}, onRetry = {}, onHardwareVolume = {}, onSoftwareVolume = {}, onAcknowledgeLoudness = {}, onFixedVolume = {})
 
     @Test
     fun miniPlayer() = shot("mini-player") {

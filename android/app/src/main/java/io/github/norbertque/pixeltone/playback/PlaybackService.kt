@@ -1,6 +1,7 @@
 package io.github.norbertque.pixeltone.playback
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -8,7 +9,9 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -27,6 +30,10 @@ import io.github.norbertque.pixeltone.remote.PhoneFileServer
 import io.github.norbertque.pixeltone.remote.RemoteHost
 import io.github.norbertque.pixeltone.remote.RemoteProtocol
 import io.github.norbertque.pixeltone.remote.RemoteSession
+import io.github.norbertque.pixeltone.usb.UsbAudioSink
+import io.github.norbertque.pixeltone.usb.UsbDeviceVolumePlayer
+import io.github.norbertque.pixeltone.usb.UsbExclusiveState
+import io.github.norbertque.pixeltone.usbaudio.UsbAudioSession
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +54,10 @@ import kotlinx.coroutines.withContext
  *
  * While playback is on a Pixeltone PC, the session runs [PcPlayer] instead of the phone's own
  * player, and the phone serves the handed-over tracks to the PC.
+ *
+ * With exclusive USB output on and a DAC ready, the phone's player is rebuilt to play into the
+ * DAC directly ([UsbAudioSink], bit-perfect) and back to Android's output when the DAC goes;
+ * the queue and position move with it.
  */
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -57,6 +68,15 @@ class PlaybackService : MediaSessionService() {
     private lateinit var store: QueueStore
     private lateinit var local: ExoPlayer
     private lateinit var pc: PcPlayer
+
+    /** The DAC the phone's player plays into; null for Android's own output. */
+    private var usbInUse: UsbAudioSession? = null
+
+    /** Playback stopped because the DAC went away: it goes on when the DAC is back. */
+    private var pausedByUnplug = false
+    private val saver = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) = saveSoon()
+    }
     private var session: MediaSession? = null
     private var pendingSave: Job? = null
 
@@ -68,19 +88,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         store = QueueStore(File(filesDir, "queue.json"))
-        local = ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
-                true, // handle audio focus: pause for calls and other players
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_LOCAL)
-            .build()
-        local.addListener(
-            object : Player.Listener {
-                override fun onEvents(player: Player, events: Player.Events) = saveSoon()
-            },
-        )
+        local = buildPlayer(usb = null)
         pc = PcPlayer(mainLooper, app.remote, app.library) { items, start, positionMs ->
             app.remote.connection.session.value?.let { handOver(it.pc, HandOver(items, start, positionMs)) }
         }
@@ -101,7 +109,9 @@ class PlaybackService : MediaSessionService() {
             override fun playHere() = takeBack()
         }
         scope.launch { app.remote.connection.session.collect(::follow) }
-        scope.launch { restore(local) }
+        scope.launch { app.usb.sessionLost.collect { lostDac() } }
+        scope.launch { app.usb.state.collect(::followUsb) }
+        scope.launch { restore() }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -124,6 +134,79 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
+    /* ------------------------------ Phone output ------------------------------ */
+
+    /** The phone's player, into Android's output or straight into a USB DAC. */
+    private fun buildPlayer(usb: UsbAudioSession?): ExoPlayer {
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioOutputPlaybackParams: Boolean,
+            ): AudioSink? =
+                if (usb != null) {
+                    // It takes float directly, so decoders hand over 24-bit sources whole.
+                    UsbAudioSink(usb, app.usb::onSinkFormatChanged, app.usb::onSessionDead)
+                } else {
+                    super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
+                }
+        }
+        return ExoPlayer.Builder(this, renderers)
+            .setAudioAttributes(
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
+                true, // handle audio focus: pause for calls and other players (never ducks on a DAC)
+            )
+            // Pause when headphones come out; a DAC played into directly isn't one of Android's
+            // outputs (its unplugging pauses through the USB controller instead).
+            .setHandleAudioBecomingNoisy(usb == null)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
+            .build()
+            .also { it.addListener(saver) }
+    }
+
+    /** The phone's player as the session shows it: on a DAC, the volume keys turn the DAC's volume. */
+    private fun localForSession(): Player = if (usbInUse != null) UsbDeviceVolumePlayer(local, app.usb) else local
+
+    private fun followUsb(state: UsbExclusiveState) {
+        val ready = state is UsbExclusiveState.Ready || state is UsbExclusiveState.Active
+        val wanted = app.usb.activeSession.takeIf { ready }
+        if (wanted === usbInUse) return
+        if (usbInUse?.isAlive == false) lostDac()
+        switchOutput(wanted)
+        if (wanted != null && pausedByUnplug) {
+            pausedByUnplug = false
+            val device = (state as? UsbExclusiveState.Ready)?.device ?: (state as? UsbExclusiveState.Active)?.device
+            if (device != null && app.usbSettings.rememberedDevices.value[device.key]?.autoResume != false) local.play()
+        }
+    }
+
+    /** The DAC was unplugged (or stopped answering) while the phone played into it. */
+    private fun lostDac() {
+        if (usbInUse == null) return
+        if (local.playWhenReady) {
+            pausedByUnplug = true
+            local.pause()
+        }
+    }
+
+    /** A new phone player for the output, taking over the queue, position and modes. */
+    private fun switchOutput(usb: UsbAudioSession?) {
+        val old = local
+        val next = buildPlayer(usb)
+        if (old.mediaItemCount > 0) {
+            next.setMediaItems(List(old.mediaItemCount) { old.getMediaItemAt(it) }, old.currentMediaItemIndex, old.currentPosition)
+        }
+        next.repeatMode = old.repeatMode
+        next.shuffleModeEnabled = old.shuffleModeEnabled
+        next.prepare()
+        next.playWhenReady = old.playWhenReady
+        local = next
+        usbInUse = usb
+        session?.let { if (it.player !== pc) it.player = localForSession() }
+        old.removeListener(saver)
+        old.release()
+    }
+
     /* ----------------------------- Phone and PC ----------------------------- */
 
     /** The session runs whichever player has the playback: the PC's while a session with one is on. */
@@ -133,7 +216,7 @@ class PlaybackService : MediaSessionService() {
             local.pause()
             session.player = pc
         } else if (remote == null && session.player === pc) {
-            session.player = local
+            session.player = localForSession()
             app.remote.files.stop()
             pendingHandOver = null
         }
@@ -249,10 +332,12 @@ class PlaybackService : MediaSessionService() {
     }
 
     /** Puts the saved queue back, paused, unless something is playing already. */
-    private suspend fun restore(player: ExoPlayer) {
-        if (player.mediaItemCount > 0) return
+    private suspend fun restore() {
+        if (local.mediaItemCount > 0) return
         val saved = withContext(Dispatchers.IO) { store.load() } ?: return
         val resumed = resume(saved) ?: return
+        // The player may have been rebuilt meanwhile (a DAC came up): the one in use now.
+        val player = local
         if (player.mediaItemCount > 0) return
         player.setMediaItems(resumed.mediaItems, resumed.startIndex, resumed.startPositionMs)
         player.repeatMode = saved.repeatMode

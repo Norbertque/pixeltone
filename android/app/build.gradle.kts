@@ -72,6 +72,8 @@ android {
     testOptions {
         // Robolectric screenshot tests (Roborazzi) render with the app's resources.
         unitTests.isIncludeAndroidResources = true
+        // Plain JVM tests (the USB engine's) log through android.util.Log, which does nothing there.
+        unitTests.isReturnDefaultValues = true
         // Robolectric's Android 16+ sets up shared memory through JDK internals.
         unitTests.all {
             it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED", "--add-opens=java.base/java.io=ALL-UNNAMED")
@@ -103,10 +105,15 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.core)
+    implementation(project(":usbaudio"))
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
+    testImplementation(libs.truth)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.robolectric)

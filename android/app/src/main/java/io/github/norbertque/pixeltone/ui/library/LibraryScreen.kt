@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +64,7 @@ fun LibraryScreen(
     onArtist: (String) -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     onPlayOn: () -> Unit,
+    onSettings: () -> Unit = {},
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -84,6 +86,7 @@ fun LibraryScreen(
         onArtist = onArtist,
         onPlay = onPlay,
         onPlayOn = onPlayOn,
+        onSettings = onSettings,
     )
 }
 
@@ -102,6 +105,7 @@ fun LibraryContent(
     onArtist: (String) -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     onPlayOn: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     Scaffold(
@@ -121,6 +125,9 @@ fun LibraryContent(
                         }
                         IconButton(onClick = onPlayOn) {
                             Icon(Icons.Default.Devices, stringResource(R.string.play_on))
+                        }
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Default.Settings, stringResource(R.string.settings))
                         }
                     }
                 },

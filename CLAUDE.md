@@ -168,6 +168,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   music; the owner's jam is the `jam` route (Now Playing's Jam button while on a PC). Phone
   tracks go to a jam as uploads (`PcConnection.upload`), never as a hand-over.
   `JamDevServerTest` plays a whole jam against the dev server (`PIXELTONE_DEV_SERVER`).
+- USB output (`docs/android-usb.md`): the `:usbaudio` module is the UAC driver (Kotlin
+  descriptor parsing and format negotiation, C++ isochronous stream over libusb, NDK
+  28.2.13676358 + CMake 3.22.1 from `~/.local/opt/android-sdk`); `app/.../usb/` holds the
+  Media3 `UsbAudioSink`, `PcmRepacker`, the controller and `UsbSettings`. `PlaybackService`
+  rebuilds the phone's player around the sink when a DAC is ready and back when it goes. The
+  bit-perfect policy is the Windows one; libusb stays a separate `.so` (LGPL-2.1). Only a real
+  DAC can test the native side (checklist in the doc).
 - The page a jam's QR code opens is `site/jam/index.html`, published by
   `.github/workflows/pages.yml` at `https://norbertque.github.io/pixeltone/jam/`. Without
   Android having verified that link for the app (that needs `assetlinks.json` at the domain's

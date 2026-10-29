@@ -66,12 +66,15 @@ import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.QueueScreen
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
+import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
+import io.github.norbertque.pixeltone.usb.usbBadge
 import kotlinx.coroutines.launch
 
 private const val LIBRARY = "library"
 private const val NOW_PLAYING = "now-playing"
 private const val QUEUE = "queue"
 private const val JAM = "jam"
+private const val SETTINGS = "settings"
 
 @Composable
 fun PixeltoneRoot() {
@@ -108,6 +111,7 @@ private fun Navigation() {
     val remote = app.remote
     val playback by player.state.collectAsStateWithLifecycle()
     val onPc by remote.connection.session.collectAsStateWithLifecycle()
+    val usb by app.usb.state.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
     val messages = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { remote.connection.errors.collect { messages.showSnackbar(it) } }
@@ -138,7 +142,11 @@ private fun Navigation() {
                     onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
                     onPlay = player::play,
                     onPlayOn = { choosing = true },
+                    onSettings = { nav.navigate(SETTINGS) },
                 )
+            }
+            composable(SETTINGS) {
+                SettingsScreen(app, onBack = { nav.popBackStack() })
             }
             composable("album/{key}") { entry ->
                 AlbumScreen(
@@ -163,7 +171,7 @@ private fun Navigation() {
                     onBack = { nav.popBackStack() },
                     onQueue = { nav.navigate(QUEUE) },
                     playingOn = onPc?.pc?.name,
-                    outputBadge = onPc?.state?.output?.badge?.label,
+                    outputBadge = if (onPc != null) onPc?.state?.output?.badge?.label else usbBadge(usb),
                     onPlayOn = { choosing = true },
                     onJam = if (onPc != null) ({ nav.navigate(JAM) }) else null,
                 )
