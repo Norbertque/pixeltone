@@ -97,6 +97,47 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun `reads a jam as owners and guests get it`() {
+        val jam = PcMessage.parse(
+            """{"type":"jam","jam":{"link":"https://norbertque.github.io/pixeltone/jam/#v=1","permissions":""" +
+                """{"addTracks":true,"changeOwnTracks":false,"controlPlayback":true},"guests":[{"id":"g1","name":"Petr"}],""" +
+                """"requests":[{"id":"r1","name":"Jana"}]}}""",
+        ) as PcMessage.Jam
+        assertEquals("Petr", jam.jam!!.guests.single().name)
+        assertEquals("r1", jam.jam.requests.single().id)
+        assertFalse(jam.jam.permissions.changeOwnTracks)
+        assertNull((PcMessage.parse("""{"type":"jam","jam":null}""") as PcMessage.Jam).jam)
+
+        val guest = PcMessage.parse(
+            """{"type":"guest","guest":{"guestId":"g1","name":"Petr","permissions":{"addTracks":false,"changeOwnTracks":true,"controlPlayback":false}}}""",
+        ) as PcMessage.Guest
+        assertFalse(guest.guest.permissions.addTracks)
+        assertEquals("removed", (PcMessage.parse("""{"type":"jamClosed","reason":"removed"}""") as PcMessage.JamClosed).reason)
+
+        val add = Json.parseToJsonElement(PcCommand.queueAdd(listOf(7, 8))).jsonObject
+        assertEquals("queueAdd", add["cmd"]?.jsonPrimitive?.content)
+        assertEquals(listOf("7", "8"), add["trackIds"]!!.jsonArray.map { it.jsonPrimitive.content })
+        val permissions = Json.parseToJsonElement(PcCommand.jamPermissions(GuestPermissions(controlPlayback = true))).jsonObject
+        assertEquals("true", permissions["permissions"]!!.jsonObject["controlPlayback"]?.jsonPrimitive?.content)
+        val answer = Json.parseToJsonElement(PcCommand.jamAnswer("r1", allow = false)).jsonObject
+        assertEquals("false", answer["allow"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `reads a jam's link`() {
+        val fingerprint = "ab".repeat(32)
+        val invite = parseJamLink("$JAM_PAGE#v=1&h=192.168.1.20&p=47821&f=$fingerprint&s=se%2Bcret&n=BIG%20ONE")
+        assertEquals(JamInvite("192.168.1.20", 47821, fingerprint, "se+cret", "BIG ONE"), invite)
+        // The page's button sends the same as a query.
+        assertEquals(invite, parseJamLink("pixeltone://jam?v=1&h=192.168.1.20&p=47821&f=$fingerprint&s=se%2Bcret&n=BIG%20ONE"))
+        assertNull(parseJamLink("$JAM_PAGE#v=2&h=192.168.1.20&p=47821&f=$fingerprint&s=x&n=PC"))
+        assertNull(parseJamLink("$JAM_PAGE#v=1&h=192.168.1.20&p=47821&f=short&s=x&n=PC"))
+        assertNull(parseJamLink("$JAM_PAGE#v=1&h=192.168.1.20&f=$fingerprint&s=x"))
+        assertNull(parseJamLink("https://example.com/#v=1&h=1.2.3.4&p=1&f=$fingerprint&s=x"))
+        assertNull(parseJamLink(JAM_PAGE))
+    }
+
+    @Test
     fun `reads addresses as Pixeltone shows them`() {
         assertEquals("192.168.1.20" to 47821, parseAddress("192.168.1.20:47821"))
         assertEquals("192.168.1.20" to RemoteProtocol.DEFAULT_PORT, parseAddress(" 192.168.1.20 "))

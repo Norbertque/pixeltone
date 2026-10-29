@@ -24,6 +24,9 @@ class RemoteControl(context: Context) {
     val paired = PairedPcs(File(context.noBackupFilesDir, "paired-pcs.json"))
     val discovery = PcDiscovery(context)
     val connection = PcConnection(context, paired)
+
+    /** In someone's jam, as a guest. */
+    val guestConnection = PcConnection(context, paired, guest = true)
     val files = PhoneFileServer(MediaStoreFiles(context))
 
     @Volatile
@@ -48,8 +51,8 @@ class RemoteControl(context: Context) {
     fun forget(pc: PairedPc) = connection.forget(pc)
 }
 
-/** The PC's cover named [key], as an image to load with Coil. */
-data class PcCover(val key: String)
+/** The PC's cover named [key], as an image to load with Coil; [guest]: of the jam this phone is in. */
+data class PcCover(val key: String, val guest: Boolean = false)
 
 /** A PC's cover as an address the media session can hand around (see `AlbumArtBitmapLoader`). */
 fun pcCoverUri(key: String): Uri =

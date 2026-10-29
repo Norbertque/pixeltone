@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -69,10 +70,11 @@ fun NowPlayingScreen(
     playingOn: String?,
     outputBadge: String?,
     onPlayOn: () -> Unit,
+    onJam: (() -> Unit)? = null,
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
-    NowPlayingContent(state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn)
+    NowPlayingContent(state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn, onJam)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +90,8 @@ fun NowPlayingContent(
     /** The PC's output, e.g. "Exclusive • 24-bit/96 kHz • Bit-perfect". */
     outputBadge: String? = null,
     onPlayOn: () -> Unit = {},
+    /** The jam on the PC playback is on; null on the phone. */
+    onJam: (() -> Unit)? = null,
 ) {
     Scaffold(
         topBar = {
@@ -99,6 +103,11 @@ fun NowPlayingContent(
                     }
                 },
                 actions = {
+                    if (onJam != null) {
+                        IconButton(onClick = onJam) {
+                            Icon(Icons.Default.Groups, stringResource(R.string.jam))
+                        }
+                    }
                     IconButton(onClick = onPlayOn) {
                         Icon(Icons.Default.Devices, stringResource(R.string.play_on))
                     }

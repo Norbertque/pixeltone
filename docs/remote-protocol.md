@@ -110,8 +110,9 @@ for a jam even with remote control off.
 **The link** (`jam.link`, what the QR code shows):
 `https://norbertque.github.io/pixeltone/jam/#v=1&h=<ip>&p=<port>&f=<fingerprint>&s=<secret>&n=<PC name>`.
 Everything after `#` stays on the phone (browsers don't send it). The app opens such links;
-the page tells people without it where to get it. The phone talks to `h:p`, pinning `f` like
-a pairing would.
+the page (`site/jam/`) tells people without it where to get it, and its "Open in Pixeltone"
+button passes the same parameters as `pixeltone://jam?v=1&h=…`. The phone talks to `h:p`,
+pinning `f` like a pairing would.
 
 **Joining**: `POST /v1/jam/join {secret, deviceId, name}` →
 

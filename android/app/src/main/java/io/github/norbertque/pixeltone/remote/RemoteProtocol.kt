@@ -16,6 +16,7 @@ import kotlinx.serialization.json.put
  * WebSocket on the local network. Pixeltone on a PC runs the server; this app finds it over
  * mDNS, pairs with a six-digit code, follows and drives the PC's player and hands its own
  * queue over (the PC fetches the files from this phone and plays them, bit-perfect if it can).
+ * Guests join a jam on a PC with its QR code instead of pairing.
  */
 internal val RemoteJson = Json {
     ignoreUnknownKeys = true
@@ -121,7 +122,84 @@ data class PcQueueRow(
     val album: String? = null,
     val durationMs: Double? = null,
     val coverKey: String? = null,
+    /** In a jam: the guest who added it. */
+    val addedBy: String? = null,
+    val guestId: String? = null,
 )
+
+/** What guests may do in a jam; the owner changes it while the jam runs. */
+@Serializable
+data class GuestPermissions(
+    val addTracks: Boolean = true,
+    /** Remove and move the tracks they added. */
+    val changeOwnTracks: Boolean = true,
+    /** Play, pause, skip and seek. */
+    val controlPlayback: Boolean = false,
+)
+
+@Serializable
+data class JamGuest(val id: String, val name: String)
+
+/** A removed guest asking to come back. */
+@Serializable
+data class RejoinRequest(val id: String, val name: String)
+
+/** The jam as owners see it. */
+@Serializable
+data class PcJam(
+    /** What the QR code shows. */
+    val link: String,
+    val permissions: GuestPermissions = GuestPermissions(),
+    val guests: List<JamGuest> = emptyList(),
+    val requests: List<RejoinRequest> = emptyList(),
+)
+
+/** A guest's own place in the jam. */
+@Serializable
+data class GuestView(
+    val guestId: String,
+    val name: String,
+    val permissions: GuestPermissions = GuestPermissions(),
+)
+
+@Serializable
+internal data class JoinRequest(val secret: String, val deviceId: String, val name: String)
+
+@Serializable
+internal data class JoinResponse(val token: String, val guestId: String, val server: PcInfo)
+
+@Serializable
+internal data class JoinWaiting(val requestId: String)
+
+/** A track of the PC's library. */
+@Serializable
+data class PcLibraryTrack(
+    val id: Long,
+    val title: String,
+    val artist: String? = null,
+    val album: String? = null,
+    val durationMs: Double = 0.0,
+    val coverKey: String? = null,
+)
+
+@Serializable
+data class PcLibraryAlbum(
+    val id: Long,
+    val title: String,
+    val artist: String? = null,
+    val year: Int? = null,
+    val trackCount: Int = 0,
+    val coverKey: String? = null,
+)
+
+@Serializable
+data class PcLibraryResults(
+    val tracks: List<PcLibraryTrack> = emptyList(),
+    val albums: List<PcLibraryAlbum> = emptyList(),
+)
+
+@Serializable
+data class PcLibraryAlbumDetail(val album: PcLibraryAlbum, val tracks: List<PcLibraryTrack> = emptyList())
 
 /** A phone track in a hand-over: `url` serves the original file from this phone. */
 @Serializable
@@ -143,6 +221,15 @@ sealed interface PcMessage {
     data object LibraryChanged : PcMessage
     data class Error(val code: String, val message: String) : PcMessage
 
+    /** To owners: the jam now; null when none runs. */
+    data class Jam(val jam: PcJam?) : PcMessage
+
+    /** To a guest: their place in the jam now. */
+    data class Guest(val guest: GuestView) : PcMessage
+
+    /** To a guest: the jam is over for them. */
+    data class JamClosed(val reason: String) : PcMessage
+
     companion object {
         /** Null for anything this version doesn't know (newer PCs may send more). */
         fun parse(text: String): PcMessage? = runCatching {
@@ -157,6 +244,13 @@ sealed interface PcMessage {
                         ?.let { RemoteJson.decodeFromJsonElement(PcVolume.serializer(), it) },
                 )
                 "libraryChanged" -> LibraryChanged
+                "jam" -> Jam(
+                    obj["jam"]
+                        ?.takeIf { it is JsonObject }
+                        ?.let { RemoteJson.decodeFromJsonElement(PcJam.serializer(), it) },
+                )
+                "guest" -> Guest(RemoteJson.decodeFromJsonElement(GuestView.serializer(), obj.getValue("guest")))
+                "jamClosed" -> JamClosed(obj["reason"]?.jsonPrimitive?.content.orEmpty())
                 "error" -> Error(
                     code = obj["code"]?.jsonPrimitive?.content.orEmpty(),
                     message = obj["message"]?.jsonPrimitive?.content.orEmpty(),
@@ -199,6 +293,43 @@ object PcCommand {
     fun setMuted(muted: Boolean): String = buildJsonObject {
         put("cmd", "setMuted")
         put("muted", muted)
+    }.toString()
+
+    fun jamPermissions(permissions: GuestPermissions): String = JsonObject(
+        mapOf(
+            "cmd" to JsonPrimitive("jamPermissions"),
+            "permissions" to RemoteJson.encodeToJsonElement(permissions),
+        ),
+    ).toString()
+
+    fun jamRemoveGuest(guestId: String): String = buildJsonObject {
+        put("cmd", "jamRemoveGuest")
+        put("guestId", guestId)
+    }.toString()
+
+    fun jamAnswer(requestId: String, allow: Boolean): String = buildJsonObject {
+        put("cmd", "jamAnswer")
+        put("requestId", requestId)
+        put("allow", allow)
+    }.toString()
+
+    /** Library tracks of the PC to the end of its queue. */
+    fun queueAdd(trackIds: List<Long>): String = JsonObject(
+        mapOf(
+            "cmd" to JsonPrimitive("queueAdd"),
+            "trackIds" to JsonArray(trackIds.map { JsonPrimitive(it) }),
+        ),
+    ).toString()
+
+    fun queueRemove(id: Long): String = buildJsonObject {
+        put("cmd", "queueRemove")
+        put("id", id)
+    }.toString()
+
+    fun queueMove(id: Long, to: Int): String = buildJsonObject {
+        put("cmd", "queueMove")
+        put("id", id)
+        put("to", to)
     }.toString()
 
     /** A hand-over: the PC replaces its queue with [items] and plays from [start]. */

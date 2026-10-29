@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,7 +23,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,11 +33,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,6 +56,9 @@ import io.github.norbertque.pixeltone.PixeltoneApp
 import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.AUDIO_PERMISSION
 import io.github.norbertque.pixeltone.library.mayReadAudio
+import io.github.norbertque.pixeltone.remote.PcJam
+import io.github.norbertque.pixeltone.ui.jam.GuestJamScreen
+import io.github.norbertque.pixeltone.ui.jam.OwnerJamScreen
 import io.github.norbertque.pixeltone.ui.library.AlbumScreen
 import io.github.norbertque.pixeltone.ui.library.ArtistScreen
 import io.github.norbertque.pixeltone.ui.library.LibraryScreen
@@ -58,10 +66,12 @@ import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.QueueScreen
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
+import kotlinx.coroutines.launch
 
 private const val LIBRARY = "library"
 private const val NOW_PLAYING = "now-playing"
 private const val QUEUE = "queue"
+private const val JAM = "jam"
 
 @Composable
 fun PixeltoneRoot() {
@@ -69,15 +79,20 @@ fun PixeltoneRoot() {
     var allowed by remember { mutableStateOf(context.mayReadAudio()) }
     // Access can be given in the system settings while the app waits in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { allowed = context.mayReadAudio() }
-    if (allowed) {
-        LaunchedEffect(Unit) {
-            val app = context.applicationContext as PixeltoneApp
-            app.library.start()
-            app.player.connect()
+    val app = remember { context.applicationContext as PixeltoneApp }
+    val guest by app.jam.guest.collectAsStateWithLifecycle()
+    Box {
+        if (allowed) {
+            LaunchedEffect(Unit) {
+                app.library.start()
+                app.player.connect()
+            }
+            Navigation()
+        } else {
+            AccessScreen(onAllowed = { allowed = true })
         }
-        Navigation()
-    } else {
-        AccessScreen(onAllowed = { allowed = true })
+        // Someone else's jam, over everything: joining needs no access to this phone's music.
+        if (guest != null) GuestJamScreen(app)
     }
     val updater = remember { (context.applicationContext as PixeltoneApp).updater }
     val update by updater.state.collectAsStateWithLifecycle()
@@ -97,12 +112,13 @@ private fun Navigation() {
     val messages = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { remote.connection.errors.collect { messages.showSnackbar(it) } }
     val nav = rememberNavController()
+    JamNews(onPc?.jam, messages, onOpen = { nav.navigate(JAM) { launchSingleTop = true } })
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     Scaffold(
         snackbarHost = { SnackbarHost(messages) },
         bottomBar = {
             val entry = playback.current
-            if (entry != null && route != NOW_PLAYING && route != QUEUE) {
+            if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM) {
                 MiniPlayer(
                     entry,
                     playback.isPlaying,
@@ -149,7 +165,11 @@ private fun Navigation() {
                     playingOn = onPc?.pc?.name,
                     outputBadge = onPc?.state?.output?.badge?.label,
                     onPlayOn = { choosing = true },
+                    onJam = if (onPc != null) ({ nav.navigate(JAM) }) else null,
                 )
+            }
+            composable(JAM) {
+                OwnerJamScreen(app, onBack = { nav.popBackStack() })
             }
             composable(QUEUE) {
                 QueueScreen(player, onBack = { nav.popBackStack() }, editable = onPc == null)
@@ -157,6 +177,35 @@ private fun Navigation() {
         }
     }
     if (choosing) PlayOnSheet(remote, onDismiss = { choosing = false })
+}
+
+/** The owner hears about the jam wherever they are in the app: who came and went, who asks to come back. */
+@Composable
+private fun JamNews(jam: PcJam?, messages: SnackbarHostState, onOpen: () -> Unit) {
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var last by remember { mutableStateOf<PcJam?>(null) }
+    LaunchedEffect(jam) {
+        val before = last
+        last = jam
+        if (before == null || jam == null) return@LaunchedEffect
+        for (g in jam.guests.filter { g -> before.guests.none { it.id == g.id } }) {
+            scope.launch { messages.showSnackbar(resources.getString(R.string.jam_joined, g.name)) }
+        }
+        for (g in before.guests.filter { g -> jam.guests.none { it.id == g.id } }) {
+            scope.launch { messages.showSnackbar(resources.getString(R.string.jam_left, g.name)) }
+        }
+        for (r in jam.requests.filter { r -> before.requests.none { it.id == r.id } }) {
+            scope.launch {
+                val answer = messages.showSnackbar(
+                    resources.getString(R.string.jam_request, r.name),
+                    actionLabel = resources.getString(R.string.jam_open),
+                    duration = SnackbarDuration.Long,
+                )
+                if (answer == SnackbarResult.ActionPerformed) onOpen()
+            }
+        }
+    }
 }
 
 @Composable

@@ -25,7 +25,21 @@ import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingContent
 import io.github.norbertque.pixeltone.ui.player.QueueContent
 import io.github.norbertque.pixeltone.remote.FoundPc
+import io.github.norbertque.pixeltone.jam.Uploads
+import io.github.norbertque.pixeltone.remote.GuestPermissions
+import io.github.norbertque.pixeltone.remote.GuestView
+import io.github.norbertque.pixeltone.remote.JamGuest
 import io.github.norbertque.pixeltone.remote.PairedPc
+import io.github.norbertque.pixeltone.remote.PcJam
+import io.github.norbertque.pixeltone.remote.PcQueueRow
+import io.github.norbertque.pixeltone.remote.PcState
+import io.github.norbertque.pixeltone.remote.PcTrack
+import io.github.norbertque.pixeltone.remote.RejoinRequest
+import io.github.norbertque.pixeltone.ui.jam.JamContent
+import io.github.norbertque.pixeltone.ui.jam.JoinContent
+import io.github.norbertque.pixeltone.ui.jam.OwnerPart
+import io.github.norbertque.pixeltone.ui.jam.StartJamContent
+import io.github.norbertque.pixeltone.ui.jam.WaitingContent
 import io.github.norbertque.pixeltone.ui.remote.PlayOnContent
 import io.github.norbertque.pixeltone.ui.remote.pcChoices
 import androidx.compose.material3.Surface
@@ -178,6 +192,70 @@ class ScreensTest {
     fun queueOnPc() = shot("queue-on-pc") { QueueContent(playing, NoControls, onBack = {}, editable = false) }
 
     @Test
+    fun jamJoin() = shot("jam-join") {
+        JoinContent("BIG-ONE", "Petr", busy = false, error = null, onJoin = {}, onCancel = {})
+    }
+
+    @Test
+    fun jamJoinFailedDark() = shot("jam-join-failed-dark", dark = true) {
+        JoinContent("BIG-ONE", "Petr", busy = false, error = "Can't reach BIG-ONE. Is this phone on the same Wi-Fi?", onJoin = {}, onCancel = {})
+    }
+
+    @Test
+    fun jamWaiting() = shot("jam-waiting") { WaitingContent(onCancel = {}) }
+
+    @Test
+    fun jamStart() = shot("jam-start") { StartJamContent("BIG-ONE", onStart = {}, onBack = {}) }
+
+    @Test
+    fun jamGuest() = shot("jam-guest") {
+        JamContent(
+            title = "BIG-ONE’s jam",
+            connected = true,
+            state = JAM_STATE,
+            playing = JAM_ROWS.first(),
+            upNext = JAM_ROWS.drop(1),
+            me = GuestView("g-petr", "Petr", GuestPermissions()),
+            owner = null,
+            uploads = Uploads(total = 3, done = 1, current = "Night Swim", fraction = 0.42f),
+            coverOf = { it },
+            onBack = {},
+            onFinish = {},
+            onCommand = {},
+            onAddTracks = {},
+        )
+    }
+
+    @Test
+    fun jamOwnerDark() = shot("jam-owner-dark", dark = true) {
+        JamContent(
+            title = "Jam",
+            connected = true,
+            state = JAM_STATE,
+            playing = JAM_ROWS.first(),
+            upNext = JAM_ROWS.drop(1),
+            me = null,
+            owner = OwnerPart(
+                jam = PcJam(
+                    link = "https://norbertque.github.io/pixeltone/jam/#v=1&h=192.168.1.20&p=47821&f=${"ab".repeat(32)}&s=secret&n=BIG-ONE",
+                    guests = listOf(JamGuest("g-petr", "Petr"), JamGuest("g-jana", "Jana")),
+                    requests = listOf(RejoinRequest("r1", "Tomáš")),
+                ),
+                onShare = {},
+                onRemoveGuest = {},
+                onPermissions = {},
+                onAnswer = { _, _ -> },
+            ),
+            uploads = Uploads(),
+            coverOf = { it },
+            onBack = {},
+            onFinish = {},
+            onCommand = {},
+            onAddTracks = {},
+        )
+    }
+
+    @Test
     fun miniPlayer() = shot("mini-player") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {}, playingOn = "BIG-ONE")
@@ -196,6 +274,20 @@ private object NoControls : PlayerControls {
     override fun cycleRepeat() {}
     override fun toggleShuffle() {}
 }
+
+private val JAM_STATE = PcState(
+    status = "playing",
+    track = PcTrack(title = "Rubikon", artist = "Lenka Dusilová", durationMs = 241_000.0),
+    queueIndex = 0,
+    queueLength = 4,
+)
+
+private val JAM_ROWS = listOf(
+    PcQueueRow(1, title = "Rubikon", artist = "Lenka Dusilová", durationMs = 241_000.0),
+    PcQueueRow(2, title = "Night Swim", artist = "Hidden Orchestra", durationMs = 312_000.0, addedBy = "Petr", guestId = "g-petr"),
+    PcQueueRow(3, title = "Tidal", artist = "Floating Points", durationMs = 284_000.0, addedBy = "Jana", guestId = "g-jana"),
+    PcQueueRow(4, title = "Glass", artist = "Maribou State", durationMs = 263_000.0),
+)
 
 private val BIG_ONE = PairedPc("big", "BIG-ONE", "192.168.1.20", 47821, "ab".repeat(32), "token")
 private val OLD_PC = PairedPc("old", "OLD-PC", "192.168.1.30", 47821, "cd".repeat(32), "token")

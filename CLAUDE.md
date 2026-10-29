@@ -161,6 +161,18 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `PcConnectionDevServerTest` and `PcPlayerDevServerTest` run against
   `cargo run -p pp-remote --example dev_server` with `PIXELTONE_DEV_SERVER=port:code` (a
   pairing uses up the code; the server prints the next one).
+- Jams (`jam/JamControl.kt`, `ui/jam/`): a guest's own `PcConnection(guest = true)` in
+  `RemoteControl.guestConnection` (never stored as a paired PC), joined from a jam link
+  (`remote/JamLink.kt`; `MainActivity` takes the https page link and `pixeltone://jam?…`).
+  The guest screens lie over everything in `PixeltoneRoot` and need no access to the phone's
+  music; the owner's jam is the `jam` route (Now Playing's Jam button while on a PC). Phone
+  tracks go to a jam as uploads (`PcConnection.upload`), never as a hand-over.
+  `JamDevServerTest` plays a whole jam against the dev server (`PIXELTONE_DEV_SERVER`).
+- The page a jam's QR code opens is `site/jam/index.html`, published by
+  `.github/workflows/pages.yml` at `https://norbertque.github.io/pixeltone/jam/`. Without
+  Android having verified that link for the app (that needs `assetlinks.json` at the domain's
+  root, i.e. a `norbertque.github.io` repository), the browser shows the page and its
+  "Open in Pixeltone" button sends `intent://jam?…;scheme=pixeltone`.
 - Releases: `.github/workflows/android.yml` runs only for `android/**` (the Windows CI ignores
   those paths, so neither needs `[skip ci]` for the other). On `main` it builds a signed
   release APK numbered by its run (versionCode = run number, versionName `0.1.<run>`) and
