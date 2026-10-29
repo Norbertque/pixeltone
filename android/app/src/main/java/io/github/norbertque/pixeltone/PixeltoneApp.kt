@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import io.github.norbertque.pixeltone.jam.JamControl
 import io.github.norbertque.pixeltone.library.AlbumCoverFetcher
 import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
+import io.github.norbertque.pixeltone.library.History
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
 import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.playback.PlayerConnection
@@ -29,6 +30,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }
     val lists: UserLists by lazy { UserLists(File(filesDir, "lists.json")) }
+    val history: History by lazy { History(File(filesDir, "history.jsonl")) }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

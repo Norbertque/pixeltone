@@ -20,6 +20,8 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import io.github.norbertque.pixeltone.MainActivity
 import io.github.norbertque.pixeltone.PixeltoneApp
+import io.github.norbertque.pixeltone.library.PlayCounter
+import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.library.mayReadAudio
 import io.github.norbertque.pixeltone.library.trackUri
 import io.github.norbertque.pixeltone.remote.HandOverItem
@@ -77,6 +79,26 @@ class PlaybackService : MediaSessionService() {
     private val saver = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = saveSoon()
     }
+
+    /** The phone's own listens go into the play history. */
+    private val counter by lazy { PlayCounter(System::currentTimeMillis, app.history::record) }
+    private val counting = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            counter.onTrack(trackOf(mediaItem), local.isPlaying, again = reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) = counter.onPlaying(isPlaying)
+
+        // A jump back to the start (previous, a seek) is a new listen, as on Windows.
+        override fun onPositionDiscontinuity(old: Player.PositionInfo, new: Player.PositionInfo, reason: Int) {
+            val restarted = reason == Player.DISCONTINUITY_REASON_SEEK && old.mediaItemIndex == new.mediaItemIndex &&
+                new.positionMs < 1_500 && old.positionMs > 10_000
+            if (restarted) counter.onTrack(trackOf(new.mediaItem), local.isPlaying, again = true)
+        }
+    }
+
+    private fun trackOf(item: MediaItem?): Track? =
+        item?.mediaId?.toLongOrNull()?.let { app.library.index.value?.track(it) }
     private var session: MediaSession? = null
     private var pendingSave: Job? = null
 
@@ -123,6 +145,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         save()
+        counter.flush()
         app.remote.host = null
         app.remote.connection.end()
         app.remote.files.stop()
@@ -161,7 +184,10 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(usb == null)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-            .also { it.addListener(saver) }
+            .also {
+                it.addListener(saver)
+                it.addListener(counting)
+            }
     }
 
     /** The phone's player as the session shows it: on a DAC, the volume keys turn the DAC's volume. */
@@ -204,6 +230,7 @@ class PlaybackService : MediaSessionService() {
         usbInUse = usb
         session?.let { if (it.player !== pc) it.player = localForSession() }
         old.removeListener(saver)
+        old.removeListener(counting)
         old.release()
     }
 

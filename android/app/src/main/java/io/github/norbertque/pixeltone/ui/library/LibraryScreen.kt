@@ -18,7 +18,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +74,7 @@ fun LibraryScreen(
     onFavourites: () -> Unit = {},
     onPlaylist: (Long) -> Unit = {},
     onNewPlaylist: () -> Unit = {},
+    onStats: () -> Unit = {},
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -96,6 +101,7 @@ fun LibraryScreen(
         onFavourites = onFavourites,
         onPlaylist = onPlaylist,
         onNewPlaylist = onNewPlaylist,
+        onStats = onStats,
     )
 }
 
@@ -119,8 +125,10 @@ fun LibraryContent(
     onFavourites: () -> Unit = {},
     onPlaylist: (Long) -> Unit = {},
     onNewPlaylist: () -> Unit = {},
+    onStats: () -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
+    var menu by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -139,8 +147,26 @@ fun LibraryContent(
                         IconButton(onClick = onPlayOn) {
                             Icon(Icons.Default.Devices, stringResource(R.string.play_on))
                         }
-                        IconButton(onClick = onSettings) {
-                            Icon(Icons.Default.Settings, stringResource(R.string.settings))
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Default.MoreVert, stringResource(R.string.more))
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.listening_stats)) },
+                                leadingIcon = { Icon(Icons.Default.Insights, null) },
+                                onClick = {
+                                    menu = false
+                                    onStats()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.settings)) },
+                                leadingIcon = { Icon(Icons.Default.Settings, null) },
+                                onClick = {
+                                    menu = false
+                                    onSettings()
+                                },
+                            )
                         }
                     }
                 },

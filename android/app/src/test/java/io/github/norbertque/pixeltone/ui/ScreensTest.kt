@@ -45,6 +45,9 @@ import io.github.norbertque.pixeltone.library.Lists
 import io.github.norbertque.pixeltone.library.Playlist
 import io.github.norbertque.pixeltone.ui.library.ListRow
 import io.github.norbertque.pixeltone.ui.library.PlaylistContent
+import io.github.norbertque.pixeltone.library.Listen
+import io.github.norbertque.pixeltone.library.listeningStats
+import io.github.norbertque.pixeltone.ui.stats.StatsContent
 import io.github.norbertque.pixeltone.ui.settings.SettingsContent
 import io.github.norbertque.pixeltone.ui.settings.UsbPanel
 import io.github.norbertque.pixeltone.usb.DAC
@@ -332,6 +335,15 @@ class ScreensTest {
     @Test
     fun nowPlayingFavourite() = shot("now-playing-favourite", dark = true) {
         NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = true, onAddToPlaylist = {})
+    }
+
+    @Test
+    fun stats() = shot("stats") {
+        val now = 100L * 86_400_000
+        val listens = index.tracks.flatMapIndexed { i, track ->
+            List(index.tracks.size - i) { n -> Listen(ListedTrack.of(track), now - (i * 7 + n) * 3_600_000L, track.durationMs) }
+        }
+        StatsContent(listeningStats(listens, since = null), period = 2, now = now, onPeriod = {}, onBack = {}, onTrack = {})
     }
 
     @Test
