@@ -29,6 +29,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +60,16 @@ import io.github.norbertque.pixeltone.library.mayReadAudio
 import io.github.norbertque.pixeltone.remote.PcJam
 import io.github.norbertque.pixeltone.ui.jam.GuestJamScreen
 import io.github.norbertque.pixeltone.ui.jam.OwnerJamScreen
+import io.github.norbertque.pixeltone.library.Track
+import io.github.norbertque.pixeltone.library.albumKey
+import io.github.norbertque.pixeltone.ui.library.AddToPlaylistDialog
 import io.github.norbertque.pixeltone.ui.library.AlbumScreen
+import io.github.norbertque.pixeltone.ui.library.LocalAddToPlaylist
+import io.github.norbertque.pixeltone.ui.library.LocalTrackMenu
+import io.github.norbertque.pixeltone.ui.library.NameDialog
+import io.github.norbertque.pixeltone.ui.library.PlaylistScreen
+import io.github.norbertque.pixeltone.ui.library.TrackAction
+import io.github.norbertque.pixeltone.ui.library.TrackMenu
 import io.github.norbertque.pixeltone.ui.library.ArtistScreen
 import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
@@ -75,6 +85,7 @@ private const val NOW_PLAYING = "now-playing"
 private const val QUEUE = "queue"
 private const val JAM = "jam"
 private const val SETTINGS = "settings"
+private const val FAVOURITES = "favourites"
 
 @Composable
 fun PixeltoneRoot() {
@@ -112,79 +123,159 @@ private fun Navigation() {
     val playback by player.state.collectAsStateWithLifecycle()
     val onPc by remote.connection.session.collectAsStateWithLifecycle()
     val usb by app.usb.state.collectAsStateWithLifecycle()
+    val lists by app.lists.lists.collectAsStateWithLifecycle()
+    val index by app.library.index.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
+    /** The track whose menu is open; tracks waiting for a playlist; a new playlist's tracks. */
+    var menuFor by remember { mutableStateOf<Track?>(null) }
+    var adding by remember { mutableStateOf<List<Track>?>(null) }
+    var naming by remember { mutableStateOf<List<Track>?>(null) }
     val messages = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     LaunchedEffect(Unit) { remote.connection.errors.collect { messages.showSnackbar(it) } }
     val nav = rememberNavController()
     JamNews(onPc?.jam, messages, onOpen = { nav.navigate(JAM) { launchSingleTop = true } })
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
-    Scaffold(
-        snackbarHost = { SnackbarHost(messages) },
-        bottomBar = {
-            val entry = playback.current
-            if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM) {
-                MiniPlayer(
-                    entry,
-                    playback.isPlaying,
-                    onToggle = player::toggle,
-                    onOpen = { nav.navigate(NOW_PLAYING) },
-                    playingOn = onPc?.pc?.name,
-                )
-            }
-        },
-        // The screens inside handle the system bars themselves; this one only adds the mini player.
-        contentWindowInsets = WindowInsets(0),
-    ) { padding ->
-        NavHost(nav, startDestination = LIBRARY, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
-            composable(LIBRARY) {
-                LibraryScreen(
-                    onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
-                    onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
-                    onPlay = player::play,
-                    onPlayOn = { choosing = true },
-                    onSettings = { nav.navigate(SETTINGS) },
-                )
-            }
-            composable(SETTINGS) {
-                SettingsScreen(app, onBack = { nav.popBackStack() })
-            }
-            composable("album/{key}") { entry ->
-                AlbumScreen(
-                    key = entry.arguments?.getString("key").orEmpty(),
-                    onBack = { nav.popBackStack() },
-                    onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
-                    onPlay = player::play,
-                    onShuffle = player::shuffle,
-                )
-            }
-            composable("artist/{key}") { entry ->
-                ArtistScreen(
-                    key = entry.arguments?.getString("key").orEmpty(),
-                    onBack = { nav.popBackStack() },
-                    onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
-                    onPlay = player::play,
-                )
-            }
-            composable(NOW_PLAYING) {
-                NowPlayingScreen(
-                    player,
-                    onBack = { nav.popBackStack() },
-                    onQueue = { nav.navigate(QUEUE) },
-                    playingOn = onPc?.pc?.name,
-                    outputBadge = if (onPc != null) onPc?.state?.output?.badge?.label else usbBadge(usb),
-                    onPlayOn = { choosing = true },
-                    onJam = if (onPc != null) ({ nav.navigate(JAM) }) else null,
-                )
-            }
-            composable(JAM) {
-                OwnerJamScreen(app, onBack = { nav.popBackStack() })
-            }
-            composable(QUEUE) {
-                QueueScreen(player, onBack = { nav.popBackStack() }, editable = onPc == null)
+    // The phone's own track that plays (a PC's tracks aren't the phone's to list).
+    val playingTrack = playback.current?.trackId?.takeIf { onPc == null && it >= 0 }?.let { index?.track(it) }
+    CompositionLocalProvider(LocalTrackMenu provides { menuFor = it }, LocalAddToPlaylist provides { adding = it }) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(messages) },
+            bottomBar = {
+                val entry = playback.current
+                if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM) {
+                    MiniPlayer(
+                        entry,
+                        playback.isPlaying,
+                        onToggle = player::toggle,
+                        onOpen = { nav.navigate(NOW_PLAYING) },
+                        playingOn = onPc?.pc?.name,
+                    )
+                }
+            },
+            // The screens inside handle the system bars themselves; this one only adds the mini player.
+            contentWindowInsets = WindowInsets(0),
+        ) { padding ->
+            NavHost(nav, startDestination = LIBRARY, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
+                composable(LIBRARY) {
+                    LibraryScreen(
+                        onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
+                        onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                        onPlay = player::play,
+                        onPlayOn = { choosing = true },
+                        onSettings = { nav.navigate(SETTINGS) },
+                        lists = lists,
+                        onFavourites = { nav.navigate(FAVOURITES) },
+                        onPlaylist = { nav.navigate("playlist/$it") },
+                        onNewPlaylist = { naming = emptyList() },
+                    )
+                }
+                composable(FAVOURITES) {
+                    PlaylistScreen(app, id = null, onBack = { nav.popBackStack() })
+                }
+                composable("playlist/{id}") { entry ->
+                    PlaylistScreen(app, id = entry.arguments?.getString("id")?.toLongOrNull() ?: -1L, onBack = { nav.popBackStack() })
+                }
+                composable(SETTINGS) {
+                    SettingsScreen(app, onBack = { nav.popBackStack() })
+                }
+                composable("album/{key}") { entry ->
+                    AlbumScreen(
+                        key = entry.arguments?.getString("key").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                        onPlay = player::play,
+                        onShuffle = player::shuffle,
+                    )
+                }
+                composable("artist/{key}") { entry ->
+                    ArtistScreen(
+                        key = entry.arguments?.getString("key").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
+                        onPlay = player::play,
+                    )
+                }
+                composable(NOW_PLAYING) {
+                    NowPlayingScreen(
+                        player,
+                        onBack = { nav.popBackStack() },
+                        onQueue = { nav.navigate(QUEUE) },
+                        playingOn = onPc?.pc?.name,
+                        outputBadge = if (onPc != null) onPc?.state?.output?.badge?.label else usbBadge(usb),
+                        onPlayOn = { choosing = true },
+                        onJam = if (onPc != null) ({ nav.navigate(JAM) }) else null,
+                        favourite = playingTrack?.let { lists.isFavourite(it) },
+                        onFavourite = { playingTrack?.let { app.lists.setFavourite(it, !lists.isFavourite(it)) } },
+                        onAddToPlaylist = playingTrack?.let { { adding = listOf(it) } },
+                    )
+                }
+                composable(JAM) {
+                    OwnerJamScreen(app, onBack = { nav.popBackStack() })
+                }
+                composable(QUEUE) {
+                    QueueScreen(player, onBack = { nav.popBackStack() }, editable = onPc == null)
+                }
             }
         }
     }
     if (choosing) PlayOnSheet(remote, onDismiss = { choosing = false })
+    menuFor?.let { track ->
+        val album = albumKey(track)?.let { index?.album(it) }
+        val artist = track.artist?.let { index?.artistNamed(it) }
+        TrackMenu(
+            track = track,
+            favourite = lists.isFavourite(track),
+            hasAlbum = album != null,
+            hasArtist = artist != null,
+            onAction = { action ->
+                when (action) {
+                    TrackAction.PlayNext -> player.playNext(listOf(track))
+                    TrackAction.AddToQueue -> player.addToQueue(listOf(track))
+                    TrackAction.AddToPlaylist -> adding = listOf(track)
+                    TrackAction.Favourite -> app.lists.setFavourite(track, !lists.isFavourite(track))
+                    TrackAction.Album -> album?.let { nav.navigate("album/${Uri.encode(it.key)}") }
+                    TrackAction.Artist -> artist?.let { nav.navigate("artist/${Uri.encode(it.key)}") }
+                }
+            },
+            onDismiss = { menuFor = null },
+        )
+    }
+    adding?.let { tracks ->
+        AddToPlaylistDialog(
+            playlists = lists.playlists,
+            count = tracks.size,
+            onPick = { id ->
+                adding = null
+                app.lists.add(id, tracks)
+                val name = lists.playlist(id)?.name.orEmpty()
+                scope.launch { messages.showSnackbar(resources.getString(R.string.added_to, name)) }
+            },
+            onNew = {
+                adding = null
+                naming = tracks
+            },
+            onDismiss = { adding = null },
+        )
+    }
+    naming?.let { tracks ->
+        NameDialog(
+            title = stringResource(R.string.new_playlist),
+            initial = "",
+            confirm = stringResource(R.string.create),
+            onConfirm = { name ->
+                naming = null
+                val id = app.lists.create(name, tracks)
+                if (tracks.isEmpty()) {
+                    nav.navigate("playlist/$id")
+                } else {
+                    scope.launch { messages.showSnackbar(resources.getString(R.string.added_to, name)) }
+                }
+            },
+            onDismiss = { naming = null },
+        )
+    }
 }
 
 /** The owner hears about the jam wherever they are in the app: who came and went, who asks to come back. */

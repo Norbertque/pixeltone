@@ -161,6 +161,34 @@
     <string name="usb_fixed_text">Full scale, no volume here: for an amplifier after the DAC.</string>
     <string name="usb_licence">USB output uses libusb (LGPL 2.1); its source is in Pixeltone’s repository.</string>
 
+    <!-- Favourites and playlists -->
+    <string name="tab_playlists">Playlists</string>
+    <string name="favourites">Favourites</string>
+    <string name="favourite">Add to favourites</string>
+    <string name="unfavourite">Remove from favourites</string>
+    <string name="favourites_empty">Tracks you mark with the heart show up here.</string>
+    <string name="new_playlist">New playlist</string>
+    <string name="playlist_name">Name</string>
+    <string name="create">Create</string>
+    <string name="rename">Rename</string>
+    <string name="rename_playlist">Rename playlist</string>
+    <string name="delete_playlist">Delete playlist</string>
+    <string name="playlist_empty">Add tracks with a long press on a track, or from an album.</string>
+    <string name="playlist_gone">This playlist was deleted.</string>
+    <string name="not_on_phone">Not on this phone any more</string>
+    <string name="remove_from_list">Remove</string>
+    <string name="play_next">Play next</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="add_to_playlist">Add to playlist</string>
+    <string name="go_to_album">Go to album</string>
+    <string name="go_to_artist">Go to artist</string>
+    <string name="more">More</string>
+    <string name="added_to">Added to %1$s</string>
+    <plurals name="add_tracks_to_playlist">
+        <item quantity="one">Add %d track to</item>
+        <item quantity="other">Add %d tracks to</item>
+    </plurals>
+
     <plurals name="tracks_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>

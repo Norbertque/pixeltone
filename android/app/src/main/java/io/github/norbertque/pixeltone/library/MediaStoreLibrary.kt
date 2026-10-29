@@ -76,6 +76,7 @@ class MediaStoreLibrary(private val context: Context) {
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.YEAR,
             if (relativePaths) MediaStore.Audio.Media.RELATIVE_PATH else MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.DISPLAY_NAME,
             ALBUM_ARTIST.takeIf { withAlbumArtist },
         ).toTypedArray()
         val tracks = ArrayList<Track>()
@@ -91,6 +92,7 @@ class MediaStoreLibrary(private val context: Context) {
                 val number = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val year = c.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val folder = c.getColumnIndexOrThrow(projection[8])
+                val fileName = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val albumArtist = if (withAlbumArtist) c.getColumnIndexOrThrow(ALBUM_ARTIST) else -1
                 while (c.moveToNext()) {
                     // TRACK holds the disc in its thousands: 2005 is disc 2, track 5.
@@ -108,6 +110,7 @@ class MediaStoreLibrary(private val context: Context) {
                         trackNumber = (discAndTrack % 1000).takeIf { it > 0 },
                         year = c.getInt(year).takeIf { it > 0 },
                         folder = if (relativePaths) place else File(place).parent.orEmpty(),
+                        fileName = c.getString(fileName).orEmpty(),
                     )
                 }
             }

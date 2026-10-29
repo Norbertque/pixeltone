@@ -7,6 +7,7 @@ import io.github.norbertque.pixeltone.jam.JamControl
 import io.github.norbertque.pixeltone.library.AlbumCoverFetcher
 import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
+import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.remote.PcCoverFetcher
 import io.github.norbertque.pixeltone.remote.PcCoverKeyer
@@ -17,6 +18,7 @@ import io.github.norbertque.pixeltone.usb.UsbDeviceManager
 import io.github.norbertque.pixeltone.usb.UsbExclusiveModeController
 import io.github.norbertque.pixeltone.usb.UsbSettings
 import io.github.norbertque.pixeltone.usbaudio.UsbAudioSession
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +28,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val player: PlayerConnection by lazy { PlayerConnection(this) }
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }
+    val lists: UserLists by lazy { UserLists(File(filesDir, "lists.json")) }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

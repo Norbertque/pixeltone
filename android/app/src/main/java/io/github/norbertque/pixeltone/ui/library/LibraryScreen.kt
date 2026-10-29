@@ -54,9 +54,10 @@ import io.github.norbertque.pixeltone.library.SearchResult
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
+import io.github.norbertque.pixeltone.library.Lists
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
-private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists)
+private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists, R.string.tab_playlists)
 
 @Composable
 fun LibraryScreen(
@@ -65,6 +66,10 @@ fun LibraryScreen(
     onPlay: (List<Track>, Int) -> Unit,
     onPlayOn: () -> Unit,
     onSettings: () -> Unit = {},
+    lists: Lists = Lists(),
+    onFavourites: () -> Unit = {},
+    onPlaylist: (Long) -> Unit = {},
+    onNewPlaylist: () -> Unit = {},
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -87,6 +92,10 @@ fun LibraryScreen(
         onPlay = onPlay,
         onPlayOn = onPlayOn,
         onSettings = onSettings,
+        lists = lists,
+        onFavourites = onFavourites,
+        onPlaylist = onPlaylist,
+        onNewPlaylist = onNewPlaylist,
     )
 }
 
@@ -106,6 +115,10 @@ fun LibraryContent(
     onPlay: (List<Track>, Int) -> Unit,
     onPlayOn: () -> Unit = {},
     onSettings: () -> Unit = {},
+    lists: Lists = Lists(),
+    onFavourites: () -> Unit = {},
+    onPlaylist: (Long) -> Unit = {},
+    onNewPlaylist: () -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     Scaffold(
@@ -141,6 +154,8 @@ fun LibraryContent(
                 }
             }
             when {
+                // Playlists can be looked at (and made) before the library is read, and without tracks.
+                tab == 3 -> PlaylistsTab(lists, query, onFavourites, onPlaylist, onNewPlaylist)
                 results == null -> Loading()
                 query.isBlank() && results.tracks.isEmpty() -> Message(stringResource(R.string.empty_library))
                 tab == 0 -> Tracks(results.tracks, query, onPlay)

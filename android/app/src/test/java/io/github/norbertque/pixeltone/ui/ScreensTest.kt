@@ -40,6 +40,11 @@ import io.github.norbertque.pixeltone.ui.jam.JoinContent
 import io.github.norbertque.pixeltone.ui.jam.OwnerPart
 import io.github.norbertque.pixeltone.ui.jam.StartJamContent
 import io.github.norbertque.pixeltone.ui.jam.WaitingContent
+import io.github.norbertque.pixeltone.library.ListedTrack
+import io.github.norbertque.pixeltone.library.Lists
+import io.github.norbertque.pixeltone.library.Playlist
+import io.github.norbertque.pixeltone.ui.library.ListRow
+import io.github.norbertque.pixeltone.ui.library.PlaylistContent
 import io.github.norbertque.pixeltone.ui.settings.SettingsContent
 import io.github.norbertque.pixeltone.ui.settings.UsbPanel
 import io.github.norbertque.pixeltone.usb.DAC
@@ -293,6 +298,41 @@ class ScreensTest {
     @Composable
     private fun Settings(usb: UsbPanel) =
         SettingsContent(usb, onBack = {}, onEnabled = {}, onRetry = {}, onHardwareVolume = {}, onSoftwareVolume = {}, onAcknowledgeLoudness = {}, onFixedVolume = {})
+
+    @Test
+    fun playlistsTab() = shot("library-playlists") {
+        LibraryContent(
+            results = index.search(""),
+            query = "",
+            tab = 3,
+            searching = false,
+            onTab = {},
+            onSearching = {},
+            onQuery = {},
+            onAlbum = {},
+            onArtist = {},
+            onPlay = { _, _ -> },
+            lists = Lists(
+                favourites = index.tracks.take(12).map(ListedTrack::of),
+                playlists = listOf(
+                    Playlist(1, "Road trip", index.tracks.take(23).map(ListedTrack::of)),
+                    Playlist(2, "Late night", index.tracks.drop(5).take(8).map(ListedTrack::of)),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun playlist() = shot("playlist") {
+        val rows = index.tracks.take(6).map { ListRow(ListedTrack.of(it), it) } +
+            ListRow(ListedTrack("Music/Gone/x.flac", "A track that left", "Somebody"), null)
+        PlaylistContent("Road trip", rows, reorderable = true, {}, {}, {}, {}, { _, _ -> }, {}, {})
+    }
+
+    @Test
+    fun nowPlayingFavourite() = shot("now-playing-favourite", dark = true) {
+        NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = true, onAddToPlaylist = {})
+    }
 
     @Test
     fun miniPlayer() = shot("mini-player") {

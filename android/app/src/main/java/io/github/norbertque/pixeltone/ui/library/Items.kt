@@ -1,7 +1,9 @@
 package io.github.norbertque.pixeltone.ui.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
@@ -58,7 +60,8 @@ fun Cover(model: Any?, modifier: Modifier = Modifier, shape: Shape = MaterialThe
     }
 }
 
-/** A track in a list: its cover, or its number on an album page. */
+/** A track in a list: its cover, or its number on an album page. A long press opens its menu. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrackRow(
     track: Track,
@@ -90,7 +93,12 @@ fun TrackRow(
             }
         },
         trailingContent = { Text(formatDuration(track.durationMs), style = MaterialTheme.typography.labelMedium) },
-        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) {
+            val openMenu = LocalTrackMenu.current
+            Modifier.combinedClickable(onClick = onClick, onLongClick = { openMenu(track) })
+        } else {
+            Modifier
+        },
     )
 }
 

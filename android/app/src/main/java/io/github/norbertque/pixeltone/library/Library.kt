@@ -19,7 +19,11 @@ data class Track(
     val year: Int?,
     /** The file's folder; tells apart albums of the same name that have no album artist. */
     val folder: String,
-)
+    val fileName: String = "",
+) {
+    /** The file, as folder and name: what playlists and favourites remember (MediaStore ids can change). */
+    val fileKey: String get() = folder.trimEnd('/') + "/" + fileName
+}
 
 data class Album(
     val key: String,
@@ -90,6 +94,7 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
     }
 
     private val tracksById = this.tracks.associateBy(Track::id)
+    private val tracksByFile = this.tracks.associateBy(Track::fileKey)
     private val albumsByKey = albums.associateBy(Album::key)
     private val artistsByKey = artists.associateBy(Artist::key)
     private val trackText = this.tracks.map { fold(listOfNotNull(it.title, it.artist, it.album, it.albumArtist).joinToString(" ")) }
@@ -97,6 +102,9 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
     private val artistText = artists.map { fold(it.name) }
 
     fun track(id: Long): Track? = tracksById[id]
+
+    /** The track in the file [Track.fileKey] names, if it's still on the phone. */
+    fun trackByFile(key: String): Track? = tracksByFile[key]
 
     fun album(key: String): Album? = albumsByKey[key]
 

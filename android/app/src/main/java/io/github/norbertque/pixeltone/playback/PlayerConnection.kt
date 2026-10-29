@@ -62,6 +62,23 @@ class PlayerConnection(private val context: Context) : PlayerControls {
         play()
     }
 
+    /** [tracks] right after the one that plays (or as the queue, when it's empty). */
+    fun playNext(tracks: List<Track>) = command {
+        if (mediaItemCount == 0) {
+            setMediaItems(tracks.map(Track::toMediaItem))
+            prepare()
+        } else {
+            addMediaItems(currentMediaItemIndex + 1, tracks.map(Track::toMediaItem))
+        }
+    }
+
+    /** [tracks] at the end of the queue. */
+    fun addToQueue(tracks: List<Track>) = command {
+        val empty = mediaItemCount == 0
+        addMediaItems(tracks.map(Track::toMediaItem))
+        if (empty) prepare()
+    }
+
     /** Replaces the queue with [tracks] and plays them shuffled. */
     fun shuffle(tracks: List<Track>) = command {
         setMediaItems(tracks.map(Track::toMediaItem), tracks.indices.random(), 0)

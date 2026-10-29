@@ -14,10 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -71,10 +75,16 @@ fun NowPlayingScreen(
     outputBadge: String?,
     onPlayOn: () -> Unit,
     onJam: (() -> Unit)? = null,
+    favourite: Boolean? = null,
+    onFavourite: () -> Unit = {},
+    onAddToPlaylist: (() -> Unit)? = null,
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
-    NowPlayingContent(state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn, onJam)
+    NowPlayingContent(
+        state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn, onJam,
+        favourite, onFavourite, onAddToPlaylist,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +102,10 @@ fun NowPlayingContent(
     onPlayOn: () -> Unit = {},
     /** The jam on the PC playback is on; null on the phone. */
     onJam: (() -> Unit)? = null,
+    /** Whether the phone's track that plays is a favourite; null hides the heart (a PC's track). */
+    favourite: Boolean? = null,
+    onFavourite: () -> Unit = {},
+    onAddToPlaylist: (() -> Unit)? = null,
 ) {
     Scaffold(
         topBar = {
@@ -103,6 +117,11 @@ fun NowPlayingContent(
                     }
                 },
                 actions = {
+                    if (onAddToPlaylist != null) {
+                        IconButton(onClick = onAddToPlaylist) {
+                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist))
+                        }
+                    }
                     if (onJam != null) {
                         IconButton(onClick = onJam) {
                             Icon(Icons.Default.Groups, stringResource(R.string.jam))
@@ -130,12 +149,24 @@ fun NowPlayingContent(
         ) {
             Cover(entry.cover, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
             Column(Modifier.fillMaxWidth()) {
-                Text(
-                    entry.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        entry.title,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (favourite != null) {
+                        IconToggleButton(checked = favourite, onCheckedChange = { onFavourite() }) {
+                            if (favourite) {
+                                Icon(Icons.Default.Favorite, stringResource(R.string.unfavourite), tint = MaterialTheme.colorScheme.primary)
+                            } else {
+                                Icon(Icons.Default.FavoriteBorder, stringResource(R.string.favourite))
+                            }
+                        }
+                    }
+                }
                 Text(
                     listOfNotNull(entry.artist ?: stringResource(R.string.unknown_artist), entry.album).joinToString(" · "),
                     style = MaterialTheme.typography.titleMedium,
@@ -143,7 +174,10 @@ fun NowPlayingContent(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (playingOn != null) PlayingOn(playingOn, outputBadge)
+                when {
+                    playingOn != null -> PlayingOn(playingOn, outputBadge)
+                    outputBadge != null -> Output(outputBadge)
+                }
             }
             SeekBar(positionMs, state.durationMs, controls::seekTo)
             // What a toggle now does, shown for a moment under the controls.
@@ -262,6 +296,16 @@ private fun PlayingOn(pc: String, badge: String?) {
                 Text(badge, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+/** Where the phone's own playback goes, when it isn't Android's output: a USB DAC. */
+@Composable
+private fun Output(badge: String) {
+    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Usb, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(8.dp))
+        Text(badge, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 
