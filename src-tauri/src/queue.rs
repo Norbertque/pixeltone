@@ -133,6 +133,7 @@ struct SavedKey {
 
 pub struct QueueStore {
     path: PathBuf,
+    jam_tracks: Option<PathBuf>,
     tx: Mutex<mpsc::Sender<()>>,
     last: Mutex<(Option<SavedKey>, Instant)>,
 }
@@ -143,6 +144,8 @@ impl QueueStore {
         let (tx, rx) = mpsc::channel::<()>();
         let handle = app.clone();
         let file = path.clone();
+        let jam_tracks = crate::remote::jam_tracks_dir(app);
+        let skip = jam_tracks.clone();
         thread::Builder::new()
             .name("pp-queue-save".into())
             .spawn(move || {
@@ -150,13 +153,14 @@ impl QueueStore {
                     thread::sleep(DEBOUNCE);
                     while rx.try_recv().is_ok() {}
                     if let Some(state) = handle.try_state::<AppState>() {
-                        save(&file, &state.engine);
+                        save(&file, &state.engine, skip.as_deref());
                     }
                 }
             })
             .expect("spawn queue writer");
         Self {
             path,
+            jam_tracks,
             tx: Mutex::new(tx),
             last: Mutex::new((None, Instant::now())),
         }
@@ -189,7 +193,7 @@ impl QueueStore {
 
     /// Writes right away (on exit).
     pub fn save_now(&self, engine: &Engine) {
-        save(&self.path, engine);
+        save(&self.path, engine, self.jam_tracks.as_deref());
     }
 }
 
@@ -202,8 +206,8 @@ pub fn load(path: &Path) -> Option<QueueSnapshot> {
     (!snapshot.items.is_empty()).then_some(snapshot)
 }
 
-fn save(path: &Path, engine: &Engine) {
-    let snapshot = sanitize(engine.queue_snapshot());
+fn save(path: &Path, engine: &Engine, jam_tracks: Option<&Path>) {
+    let snapshot = sanitize(engine.queue_snapshot(), jam_tracks);
     // A phone's queue (remote control) only plays while the phone serves it: keep the last
     // queue of the PC's own instead.
     if snapshot.items.iter().any(|i| i.remote) {
@@ -224,15 +228,19 @@ fn save(path: &Path, engine: &Engine) {
     }
 }
 
-/// Drops items whose paths JSON can't hold (not valid Unicode), keeping indices right.
-fn sanitize(mut s: QueueSnapshot) -> QueueSnapshot {
-    if s.items.iter().all(|i| i.path.to_str().is_some()) {
+/// Drops items whose paths JSON can't hold (not valid Unicode) and a jam's phone tracks
+/// (copies in `jam_tracks`, deleted when the jam ends), keeping indices right.
+fn sanitize(mut s: QueueSnapshot, jam_tracks: Option<&Path>) -> QueueSnapshot {
+    let keep = |i: &QueueItem| {
+        i.path.to_str().is_some() && !jam_tracks.is_some_and(|d| i.path.starts_with(d))
+    };
+    if s.items.iter().all(keep) {
         return s;
     }
     let mut new_index = Vec::with_capacity(s.items.len());
     let mut kept = 0u32;
     for item in &s.items {
-        if item.path.to_str().is_some() {
+        if keep(item) {
             new_index.push(Some(kept));
             kept += 1;
         } else {
@@ -240,7 +248,7 @@ fn sanitize(mut s: QueueSnapshot) -> QueueSnapshot {
         }
     }
     let remap = |i: u32| new_index.get(i as usize).copied().flatten();
-    s.items.retain(|i| i.path.to_str().is_some());
+    s.items.retain(keep);
     s.current = s.current.and_then(remap);
     s.original = s
         .original
@@ -268,7 +276,7 @@ mod tests {
             position_ms: 5.0,
             repeat: RepeatMode::All,
         };
-        assert_eq!(sanitize(s.clone()), s);
+        assert_eq!(sanitize(s.clone(), Some(Path::new("/jam"))), s);
     }
 
     #[cfg(unix)]
@@ -284,11 +292,26 @@ mod tests {
             position_ms: 5.0,
             repeat: RepeatMode::Off,
         };
-        let clean = sanitize(s);
+        let clean = sanitize(s, None);
         assert_eq!(clean.items.len(), 2);
         assert_eq!(clean.current, Some(1));
         assert_eq!(clean.original, Some(vec![1, 0]));
         assert!(serde_json::to_vec(&clean).is_ok());
+    }
+
+    #[test]
+    fn sanitize_drops_a_jams_phone_tracks() {
+        let s = QueueSnapshot {
+            items: vec![item("a.flac"), item("/jam/x/1.flac"), item("c.flac")],
+            original: None,
+            current: Some(1),
+            position_ms: 5.0,
+            repeat: RepeatMode::Off,
+        };
+        let clean = sanitize(s, Some(Path::new("/jam")));
+        assert_eq!(clean.items, vec![item("a.flac"), item("c.flac")]);
+        assert_eq!(clean.current, None);
+        assert_eq!(clean.position_ms, 0.0);
     }
 
     #[test]

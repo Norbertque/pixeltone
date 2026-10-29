@@ -183,6 +183,30 @@ fn queue_edits_while_playing_change_what_comes_next() {
 }
 
 #[test]
+fn withdrawing_the_playing_track_moves_on_to_the_next_that_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let [a, b, c] = ["a", "b", "c"].map(|n| s16(dir.path(), &format!("{n}.flac"), "1"));
+    let h = harness(realtime(), true);
+    h.engine
+        .play_files(vec![a.clone(), b.clone(), c.clone()], 0);
+    h.wait_for("a playing", |s| s.status == PlaybackStatus::Playing);
+
+    h.engine
+        .withdraw_from_queue(vec![h.wait_id(&a), h.wait_id(&b)]);
+    let s = h.wait_for("c playing", |s| {
+        s.status == PlaybackStatus::Playing
+            && s.track.as_ref().is_some_and(|t| Path::new(&t.path) == c)
+    });
+    assert_eq!(s.queue_length, 1);
+
+    // Nothing after it: playback stops and nothing is current.
+    h.engine.withdraw_from_queue(vec![h.wait_id(&c)]);
+    let s = h.wait_for("stopped", |s| s.status == PlaybackStatus::Stopped);
+    assert!(s.current_id.is_none());
+    assert!(h.queue_paths().is_empty());
+}
+
+#[test]
 fn shuffle_keeps_the_current_track_and_unshuffle_restores_the_order() {
     let dir = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = (0..12)

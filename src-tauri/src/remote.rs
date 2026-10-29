@@ -1,16 +1,21 @@
 //! Remote control from phones (PixelPlayer): the app's side of `pp-remote`. Off unless
 //! turned on in Settings → Remote control; the server only runs while it's on.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
 use pp_core::ShareMode;
 use pp_core::gain::{FLOOR_DB, LOCKED_MAX_DB};
-use pp_engine::Engine;
+use pp_engine::{Engine, QueueItem};
+use pp_library::{AlbumRow, AlbumSort, TrackRow};
+use pp_remote::jam::GuestPermissions;
+use pp_remote::protocol::{
+    JamView, LibraryAlbum, LibraryAlbumDetail, LibraryResults, LibraryTrack,
+};
 use pp_remote::{Host, RemoteConfig, RemoteServer, RemoteVolume};
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::AppState;
 use crate::settings::AppSettings;
@@ -170,6 +175,91 @@ impl Host for AppHost {
         let path = self.state().library.art().existing(hash, size)?;
         std::fs::read(path).ok()
     }
+
+    fn library_items(&self, ids: &[u32]) -> Vec<QueueItem> {
+        let mut rows: Vec<Option<TrackRow>> = Vec::new();
+        let found = self.state().library.tracks_by_id(ids).unwrap_or_default();
+        // In the order asked, whatever order the library answers in.
+        for id in ids {
+            rows.push(found.iter().find(|r| r.id == *id).cloned());
+        }
+        rows.into_iter()
+            .flatten()
+            .map(crate::queue::item_from_row)
+            .collect()
+    }
+
+    fn library_search(&self, query: &str, limit: u32) -> LibraryResults {
+        let Ok(found) = self.state().library.search(query, limit) else {
+            return LibraryResults::default();
+        };
+        LibraryResults {
+            tracks: found.tracks.into_iter().map(library_track).collect(),
+            albums: found.albums.into_iter().map(library_album).collect(),
+        }
+    }
+
+    fn library_albums(&self, offset: u32, limit: u32) -> Vec<LibraryAlbum> {
+        self.state()
+            .library
+            .albums(AlbumSort::Title, offset, limit)
+            .map(|rows| rows.into_iter().map(library_album).collect())
+            .unwrap_or_default()
+    }
+
+    fn library_album(&self, id: u32) -> Option<LibraryAlbumDetail> {
+        let detail = self.state().library.album(id).ok()??;
+        Some(LibraryAlbumDetail {
+            album: library_album(detail.album),
+            tracks: detail.tracks.into_iter().map(library_track).collect(),
+        })
+    }
+
+    fn jam_changed(&self, jam: Option<&JamView>) {
+        // While a jam runs, what plays isn't the owner's listening.
+        self.state().history.set_jam(jam.is_some());
+        let _ = self.app.emit("remote://jam", jam);
+        if jam.is_none() {
+            // The server may have run only for the jam. Not from here: this can be one of the
+            // server's own threads, and stopping it waits for them.
+            let app = self.app.clone();
+            std::thread::spawn(move || {
+                let enabled = app
+                    .state::<AppState>()
+                    .settings
+                    .lock()
+                    .preferences
+                    .remote_enabled;
+                apply(&app, enabled);
+            });
+        }
+    }
+}
+
+fn some_text(text: String) -> Option<String> {
+    (!text.is_empty()).then_some(text)
+}
+
+fn library_track(row: TrackRow) -> LibraryTrack {
+    LibraryTrack {
+        id: row.id,
+        title: row.title,
+        artist: some_text(row.artist),
+        album: some_text(row.album),
+        duration_ms: f64::from(row.duration_ms),
+        cover_key: row.cover.as_deref().map(crate::library::cover_key),
+    }
+}
+
+fn library_album(row: AlbumRow) -> LibraryAlbum {
+    LibraryAlbum {
+        id: row.id,
+        title: row.title,
+        artist: some_text(row.artist),
+        year: row.year,
+        track_count: row.track_count,
+        cover_key: row.cover.as_deref().map(crate::library::cover_key),
+    }
 }
 
 fn computer_name() -> String {
@@ -196,14 +286,29 @@ fn installation_id(dir: &Path) -> String {
     id
 }
 
+/// The server's folder: its certificate, paired phones, a jam's phone tracks.
+fn remote_dir(app: &AppHandle) -> tauri::Result<PathBuf> {
+    Ok(app.path().app_local_data_dir()?.join("remote"))
+}
 
-/// Starts or stops the server to match the setting.
+const JAM_TRACKS: &str = "jam-tracks";
+
+/// Where a jam's phone tracks are copied while it runs; the server empties it.
+pub fn jam_tracks_dir(app: &AppHandle) -> Option<PathBuf> {
+    remote_dir(app).ok().map(|d| d.join(JAM_TRACKS))
+}
+
+/// Starts or stops the server to match the setting. A jam keeps it running until it ends,
+/// whatever the setting.
 pub fn apply(app: &AppHandle, enabled: bool) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
     let mut slot = state.remote.lock();
     if !enabled {
+        if slot.as_ref().is_some_and(|s| s.jam().is_some()) {
+            return;
+        }
         // Dropping it stops the server and withdraws the announcement.
         slot.take();
         return;
@@ -211,8 +316,8 @@ pub fn apply(app: &AppHandle, enabled: bool) {
     if slot.is_some() {
         return;
     }
-    let dir = match app.path().app_local_data_dir() {
-        Ok(d) => d.join("remote"),
+    let dir = match remote_dir(app) {
+        Ok(d) => d,
         Err(e) => {
             tracing::warn!("remote control: {e}");
             return;
@@ -229,6 +334,7 @@ pub fn apply(app: &AppHandle, enabled: bool) {
             host_name: name,
             id: installation_id(&dir),
             version: app.package_info().version.to_string(),
+            jam_tracks_dir: dir.join(JAM_TRACKS),
             data_dir: dir,
             port: PORT,
         },
@@ -332,6 +438,49 @@ pub fn remote_stop_pairing(app: AppHandle, state: State<'_, AppState>) -> Remote
         s.pairing().close();
     }
     status(&app, &state)
+}
+
+/// The jam that runs, as the PC's Jam panel shows it.
+#[tauri::command]
+pub fn jam_state(app: AppHandle) -> Option<JamView> {
+    server(&app)?.jam()
+}
+
+/// Starts a jam; the server runs for it even with remote control off.
+#[tauri::command]
+pub fn jam_start(app: AppHandle) -> Result<JamView, String> {
+    apply(&app, true);
+    let server =
+        server(&app).ok_or("The jam couldn't start: the remote control server didn't start.")?;
+    Ok(server.jam_start())
+}
+
+/// Ends the jam; the server stops with it if it ran only for the jam (`jam_changed`).
+#[tauri::command]
+pub fn jam_end(app: AppHandle) {
+    if let Some(s) = server(&app) {
+        s.jam_end();
+    }
+}
+
+#[tauri::command]
+pub fn jam_permissions(app: AppHandle, permissions: GuestPermissions) {
+    if let Some(s) = server(&app) {
+        s.jam_permissions(permissions);
+    }
+}
+
+#[tauri::command]
+pub fn jam_remove_guest(app: AppHandle, guest_id: String) {
+    if let Some(s) = server(&app) {
+        s.jam_remove_guest(&guest_id);
+    }
+}
+
+/// The owner's answer to a rejoin request; false when it isn't waiting any more.
+#[tauri::command]
+pub fn jam_answer(app: AppHandle, request_id: String, allow: bool) -> bool {
+    server(&app).is_some_and(|s| s.jam_answer(&request_id, allow))
 }
 
 #[tauri::command]

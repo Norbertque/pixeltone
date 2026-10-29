@@ -4,8 +4,10 @@
 use std::net::{IpAddr, Ipv6Addr, SocketAddr, TcpListener};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
+use axum::body::Body;
 use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, FromRequestParts, Path, Query, Request, State};
 use axum::http::request::Parts;
@@ -26,12 +28,13 @@ use crate::art::{self, Art};
 use crate::discovery::Advertisement;
 use crate::jam::{GuestPermissions, Jam, Join};
 use crate::lan;
-use crate::pairing::{PairError, PairedDevice, Pairing};
+use crate::pairing::{PairError, PairedDevice, Pairing, random};
 use crate::protocol::{
     Command, GuestView, JamView, JoinRequest, JoinResponse, JoinWaiting, LibraryAlbum,
     LibraryAlbumDetail, LibraryResults, LoadRequest, MAX_LOAD, Message, PROTOCOL, PairRequest,
     PairResponse, RemoteVolume, ServerInfo,
 };
+use crate::space;
 use crate::tls::Identity;
 
 /// The page a jam's QR code links to: the app opens such links, and the page tells people
@@ -82,7 +85,15 @@ pub struct RemoteConfig {
     pub data_dir: PathBuf,
     /// Preferred port (another is picked when it's taken); 0 for any.
     pub port: u16,
+    /// Phone tracks sent during a jam are copied here, a folder per jam. Emptied at start and
+    /// whenever a jam ends.
+    pub jam_tracks_dir: PathBuf,
 }
+
+/// The largest phone track a jam takes.
+const MAX_UPLOAD: u64 = 2 << 30;
+/// Phone tracks are refused while they would leave the PC less than this.
+const KEEP_FREE: u64 = 5 << 30;
 
 /// What goes out to connected phones, and to whom.
 enum Outbound {
@@ -111,6 +122,9 @@ struct Shared {
     jam: Arc<Mutex<Option<Jam>>>,
     /// The jam as last announced, to announce only changes.
     last_jam: Arc<Mutex<Option<JamView>>>,
+    jam_tracks_dir: Arc<PathBuf>,
+    /// Bytes of phone tracks on their way, so uploads side by side don't overfill the disk.
+    uploading: Arc<AtomicU64>,
 }
 
 pub struct RemoteServer {
@@ -153,6 +167,8 @@ impl RemoteServer {
             protocol: PROTOCOL,
             fingerprint: identity.fingerprint(),
         };
+        // Copies from a jam that ended with the app (or a crash) aren't needed any more.
+        let _ = std::fs::remove_dir_all(&config.jam_tracks_dir);
         let (events, _) = broadcast::channel(256);
         let shared = Shared {
             host,
@@ -164,6 +180,8 @@ impl RemoteServer {
             last_volume: Arc::new(Mutex::new(None)),
             jam: Arc::new(Mutex::new(None)),
             last_jam: Arc::new(Mutex::new(None)),
+            jam_tracks_dir: Arc::new(config.jam_tracks_dir),
+            uploading: Arc::new(AtomicU64::new(0)),
         };
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -295,6 +313,8 @@ impl RemoteServer {
 
 impl Drop for RemoteServer {
     fn drop(&mut self) {
+        // A jam doesn't outlive the server: guests are told, phone tracks leave the queue.
+        jam_end(&self.shared);
         self.handle
             .graceful_shutdown(Some(Duration::from_millis(500)));
         if let Some(runtime) = self.runtime.take() {
@@ -437,13 +457,42 @@ fn jam_start(s: &Shared) -> JamView {
 }
 
 fn jam_end(s: &Shared) {
-    if s.jam.lock().take().is_some() {
-        let _ = s.events.send(Arc::new(Outbound::CloseGuests {
-            id: None,
-            reason: "ended",
-        }));
-        announce_jam(s);
+    let Some(jam) = s.jam.lock().take() else {
+        return;
+    };
+    let _ = s.events.send(Arc::new(Outbound::CloseGuests {
+        id: None,
+        reason: "ended",
+    }));
+    drop_phone_tracks(s, jam.id());
+    announce_jam(s);
+}
+
+/// The jam's phone tracks leave the queue, then the disk.
+fn drop_phone_tracks(s: &Shared, jam_id: &str) {
+    let dir = s.jam_tracks_dir.join(jam_id);
+    let engine = s.host.engine();
+    let copies: Vec<u32> = engine
+        .queue_entries(0, usize::MAX)
+        .into_iter()
+        .filter(|e| std::path::Path::new(&e.path).starts_with(&dir))
+        .map(|e| e.id)
+        .collect();
+    if !copies.is_empty() {
+        engine.withdraw_from_queue(copies);
     }
+    // The one that played may stay open a moment longer, and Windows won't delete it then.
+    std::thread::spawn(move || {
+        for wait in [0, 1, 3, 10] {
+            std::thread::sleep(Duration::from_secs(wait));
+            match std::fs::remove_dir_all(&dir) {
+                Ok(()) => return,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+                Err(_) => {}
+            }
+        }
+        tracing::warn!("can't delete the jam's phone tracks in {}", dir.display());
+    });
 }
 
 fn jam_permissions(s: &Shared, permissions: GuestPermissions) {
@@ -527,6 +576,7 @@ fn router(shared: Shared) -> Router {
         .route("/v1/cover/{*key}", get(cover))
         .route("/v1/jam/join", post(join))
         .route("/v1/jam/requests/{id}", get(join_request))
+        .route("/v1/jam/tracks", post(upload))
         .route("/v1/library/search", get(library_search))
         .route("/v1/library/albums", get(library_albums))
         .route("/v1/library/albums/{id}", get(library_album))
@@ -686,6 +736,171 @@ async fn join_request(State(s): State<Shared>, Path(id): Path<String>) -> Respon
     };
     announce_jam(&s);
     response
+}
+
+/// What a phone says about the track it sends (the file itself is the request's body).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Upload {
+    /// The file's name on the phone: its extension is kept, and it's the title without one.
+    #[serde(default)]
+    name: String,
+    title: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
+    duration_ms: Option<f64>,
+}
+
+/// Space set aside for an upload on its way, given back when it's done.
+struct Reservation(Arc<AtomicU64>, u64);
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        self.0.fetch_sub(self.1, Ordering::SeqCst);
+    }
+}
+
+/// `POST /v1/jam/tracks`: a phone's own track joins the jam as a copy on the PC (the original
+/// bytes, so it plays bit-perfect), at the end of the queue.
+async fn upload(
+    State(s): State<Shared>,
+    caller: Caller,
+    Query(about): Query<Upload>,
+    request: Request,
+) -> Response {
+    let refuse = |status: StatusCode, why: &str| (status, why.to_owned()).into_response();
+    let Some(jam_id) = s.jam.lock().as_ref().map(|j| j.id().to_owned()) else {
+        return refuse(StatusCode::CONFLICT, "There's no jam.");
+    };
+    let guest = match caller {
+        Caller::Guest(guest) => Some(guest),
+        Caller::Owner(_) => None,
+    };
+    if guest.as_ref().is_some_and(|g| !g.permissions.add_tracks) {
+        return refuse(
+            StatusCode::FORBIDDEN,
+            "The owner hasn't let guests add tracks.",
+        );
+    }
+    let Some(length) = request
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+    else {
+        return refuse(StatusCode::LENGTH_REQUIRED, "Send the track's size.");
+    };
+    if length > MAX_UPLOAD {
+        return refuse(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "A track can be at most 2 GB.",
+        );
+    }
+    let dir = s.jam_tracks_dir.join(&jam_id);
+    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+        tracing::warn!("can't make {}: {e}", dir.display());
+        return refuse(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "The PC couldn't store the track.",
+        );
+    }
+    let on_the_way = s.uploading.fetch_add(length, Ordering::SeqCst) + length;
+    let _reservation = Reservation(s.uploading.clone(), length);
+    let free = {
+        let dir = dir.clone();
+        tokio::task::spawn_blocking(move || space::available(&dir))
+            .await
+            .ok()
+            .and_then(Result::ok)
+    };
+    if free.is_none_or(|free| free < on_the_way.saturating_add(KEEP_FREE)) {
+        return refuse(
+            StatusCode::INSUFFICIENT_STORAGE,
+            "The PC is running out of disk space.",
+        );
+    }
+    let path = dir.join(copy_name(&about.name));
+    if let Err((status, why)) = receive(request.into_body(), &path, length).await {
+        let _ = tokio::fs::remove_file(&path).await;
+        return refuse(status, why);
+    }
+    // Still the same jam, with this guest in it and still allowed to add?
+    let still = s.jam.lock().as_ref().is_some_and(|j| {
+        j.id() == jam_id
+            && guest
+                .as_ref()
+                .is_none_or(|g| j.guest_by_id(&g.guest_id).is_some() && j.permissions.add_tracks)
+    });
+    if !still {
+        let _ = tokio::fs::remove_file(&path).await;
+        return refuse(
+            StatusCode::GONE,
+            "The jam ended, or you're no longer in it.",
+        );
+    }
+    let title = about.title.filter(|t| !t.trim().is_empty()).or_else(|| {
+        std::path::Path::new(&about.name)
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .map(str::to_owned)
+    });
+    let item = QueueItem {
+        path,
+        cover_key: None,
+        title,
+        artist: about.artist.filter(|t| !t.trim().is_empty()),
+        album: about.album.filter(|t| !t.trim().is_empty()),
+        duration_ms: about.duration_ms.filter(|d| *d > 0.0),
+        track_id: None,
+        remote: false,
+        added_by: guest.as_ref().map(|g| g.name.clone()),
+        guest_id: guest.map(|g| g.guest_id),
+    };
+    s.host.engine().enqueue(vec![item], false);
+    StatusCode::NO_CONTENT.into_response()
+}
+
+/// A fresh name for a copy, with the phone's extension (some formats are known by it).
+fn copy_name(original: &str) -> String {
+    let extension = std::path::Path::new(original)
+        .extension()
+        .and_then(|e| e.to_str())
+        .filter(|e| e.len() <= 8 && e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map_or_else(|| "bin".to_owned(), str::to_ascii_lowercase);
+    let id: String = random::<8>().iter().map(|b| format!("{b:02x}")).collect();
+    format!("{id}.{extension}")
+}
+
+/// Writes the body to `path`: exactly `length` bytes.
+async fn receive(
+    body: Body,
+    path: &std::path::Path,
+    length: u64,
+) -> Result<(), (StatusCode, &'static str)> {
+    use tokio::io::AsyncWriteExt;
+    const BROKE_OFF: (StatusCode, &str) = (StatusCode::BAD_REQUEST, "The upload broke off.");
+    let store_failed = |e: std::io::Error| {
+        tracing::warn!("can't store a phone track: {e}");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "The PC couldn't store the track.",
+        )
+    };
+    let mut file = tokio::fs::File::create(path).await.map_err(store_failed)?;
+    let mut stream = body.into_data_stream();
+    let mut received = 0u64;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|_| BROKE_OFF)?;
+        received += chunk.len() as u64;
+        if received > length {
+            return Err((StatusCode::BAD_REQUEST, "More bytes than announced."));
+        }
+        file.write_all(&chunk).await.map_err(store_failed)?;
+    }
+    if received < length {
+        return Err(BROKE_OFF);
+    }
+    file.flush().await.map_err(store_failed)
 }
 
 #[derive(Deserialize)]
@@ -1014,9 +1229,12 @@ fn guest_command(s: &Shared, guest: &GuestView, command: Command) -> Result<Afte
 }
 
 /// Takes over a phone's queue: its files, served by the phone itself, from `position_ms`
-/// into the track at `start`. While a jam runs the queue is everyone's: the phone's tracks
-/// join its end instead.
+/// into the track at `start`. Not while a jam runs: the queue is everyone's then, and a
+/// phone sends copies of its tracks instead (`/v1/jam/tracks`).
 fn load(s: &Shared, peer: IpAddr, request: LoadRequest) -> Result<(), String> {
+    if s.jam.lock().is_some() {
+        return Err("During a jam, the phone sends copies of its tracks instead.".into());
+    }
     if request.items.is_empty() {
         return Err("Nothing to play.".into());
     }
@@ -1047,10 +1265,6 @@ fn load(s: &Shared, peer: IpAddr, request: LoadRequest) -> Result<(), String> {
         });
     }
     let engine = s.host.engine();
-    if s.jam.lock().is_some() {
-        engine.enqueue(items, false);
-        return Ok(());
-    }
     // The first cover now, so Now Playing has it from the start.
     if let Some(key) = &items[start].cover_key {
         s.art.ensure(key, &engine.covers());

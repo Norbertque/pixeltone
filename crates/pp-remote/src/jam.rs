@@ -106,6 +106,8 @@ enum Answer {
 }
 
 pub struct Jam {
+    /// Names the jam where that's no secret (the folder of its phone tracks).
+    id: String,
     secret: String,
     pub permissions: GuestPermissions,
     guests: Vec<Guest>,
@@ -144,6 +146,7 @@ impl Default for Jam {
 impl Jam {
     pub fn new() -> Self {
         Self {
+            id: new_id(),
             secret: new_token(),
             permissions: GuestPermissions::default(),
             guests: Vec::new(),
@@ -151,6 +154,10 @@ impl Jam {
             declined: HashSet::new(),
             requests: Vec::new(),
         }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     /// What the QR code carries, besides the PC's address and certificate.

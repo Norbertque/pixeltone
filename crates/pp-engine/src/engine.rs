@@ -199,6 +199,7 @@ enum Command {
         next: bool,
     },
     Remove(Vec<u32>),
+    Withdraw(Vec<u32>),
     Move {
         id: u32,
         to: usize,
@@ -335,8 +336,15 @@ impl Engine {
         self.send(Command::Enqueue { items, next });
     }
 
+    /// Removes queue items, never the current one.
     pub fn remove_from_queue(&self, ids: Vec<u32>) {
         self.send(Command::Remove(ids));
+    }
+
+    /// Removes queue items, the current one too: playback moves on to the next item that
+    /// stays, as if the current one had ended, or stops when none is left after it.
+    pub fn withdraw_from_queue(&self, ids: Vec<u32>) {
+        self.send(Command::Withdraw(ids));
     }
 
     pub fn move_in_queue(&self, id: u32, to: usize) {
@@ -586,6 +594,27 @@ impl Control {
                 }
             }
             Command::Remove(ids) => {
+                self.queue.lock().remove(&ids, self.current);
+            }
+            Command::Withdraw(ids) => {
+                if let Some(current) = self.current.filter(|c| ids.contains(c)) {
+                    let next = {
+                        let q = self.queue.lock();
+                        // At most once round the queue (repeat all comes back to the start).
+                        std::iter::successors(q.next(current), |&id| q.next(id))
+                            .take(q.len())
+                            .find(|id| !ids.contains(id))
+                    };
+                    match next {
+                        Some(id) => self.skip_to(id),
+                        None => {
+                            self.close_session(SEEK_FADE_MS);
+                            self.parked = None;
+                            self.current = None;
+                            self.status = PlaybackStatus::Stopped;
+                        }
+                    }
+                }
                 self.queue.lock().remove(&ids, self.current);
             }
             Command::Move { id, to } => {

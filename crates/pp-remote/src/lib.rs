@@ -11,6 +11,7 @@ pub mod lan;
 pub mod pairing;
 pub mod protocol;
 mod server;
+mod space;
 mod tls;
 
 pub use pairing::{PairedDevice, Pairing};

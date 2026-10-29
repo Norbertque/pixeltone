@@ -3,6 +3,7 @@
 //! scrobbling rule); time paused or skipped over doesn't count.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use parking_lot::Mutex;
@@ -57,6 +58,8 @@ fn unix_now() -> i64 {
 pub struct History {
     library: Arc<Library>,
     current: Mutex<Option<Listen>>,
+    /// A jam runs: what plays then isn't the owner's listening (ADR 0002).
+    jam: AtomicBool,
 }
 
 impl History {
@@ -64,6 +67,16 @@ impl History {
         Self {
             library,
             current: Mutex::new(None),
+            jam: AtomicBool::new(false),
+        }
+    }
+
+    /// While a jam runs nothing counts. A listen under way when it starts ends there (and
+    /// counts if it already did); after the jam, counting resumes with the next track.
+    pub fn set_jam(&self, on: bool) {
+        if self.jam.swap(on, Ordering::Relaxed) != on && on {
+            let listen = self.current.lock().take();
+            self.finish(listen);
         }
     }
 
@@ -105,7 +118,11 @@ impl History {
         let path = s.track.as_ref().map(|t| t.path.as_str());
         if current.as_ref().map(|l| l.path.as_str()) != path {
             self.finish(current.take());
-            *current = Self::start(s);
+            *current = if self.jam.load(Ordering::Relaxed) {
+                None
+            } else {
+                Self::start(s)
+            };
         }
         if let Some(l) = current.as_mut() {
             let playing = s.status == PlaybackStatus::Playing;

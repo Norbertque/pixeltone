@@ -102,6 +102,7 @@ fn rig() -> Rig {
                 version: "0.1.0".into(),
                 data_dir: dir.path().to_path_buf(),
                 port: 0,
+                jam_tracks_dir: dir.path().join("jam-tracks"),
             },
             host.clone(),
         )
@@ -667,4 +668,91 @@ async fn a_jam_lets_guests_in_by_its_secret_and_only_as_far_as_allowed() {
     while !next_of(&mut owner_ws, "jam").await["jam"].is_null() {}
     assert_eq!(join(&rig, &secret, "guest-phone").0, 410);
     assert!(rig.server.jam().is_none());
+}
+
+fn upload(rig: &Rig, token: &str, query: &str, bytes: &[u8]) -> (u16, String) {
+    let mut resp = https()
+        .post(format!("{}/v1/jam/tracks?{query}", base(rig)))
+        .header("Authorization", &format!("Bearer {token}"))
+        .send(bytes)
+        .unwrap();
+    let status = resp.status().as_u16();
+    (status, resp.body_mut().read_to_string().unwrap_or_default())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_jams_phone_tracks_are_copies_that_go_when_it_ends() {
+    let rig = rig();
+    let dir = tempfile::tempdir().unwrap();
+    let original = std::fs::read(flac(dir.path())).unwrap();
+    let owner = pair(&rig);
+    assert_eq!(upload(&rig, &owner, "name=a.flac", &original).0, 409);
+
+    let link = rig.server.jam_start().link;
+    let secret = link
+        .split_once('#')
+        .unwrap()
+        .1
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("s="))
+        .unwrap()
+        .to_owned();
+    let (_, joined) = join(&rig, &secret, "guest-phone");
+    let guest = joined["token"].as_str().unwrap().to_owned();
+
+    // The guest's own file, byte for byte, at the end of the queue with their name.
+    let (status, _) = upload(
+        &rig,
+        &guest,
+        "name=My%20Song.FLAC&artist=Band&durationMs=600",
+        &original,
+    );
+    assert_eq!(status, 204);
+    let rows = queue(&rig, &guest);
+    assert_eq!(rows[0]["title"], "My Song");
+    assert_eq!(rows[0]["artist"], "Band");
+    assert_eq!(rows[0]["addedBy"], "Petr");
+    let copy = PathBuf::from(rows[0]["path"].as_str().unwrap());
+    assert!(copy.starts_with(rig._dir.path().join("jam-tracks")));
+    assert_eq!(copy.extension().unwrap(), "flac");
+    assert_eq!(std::fs::read(&copy).unwrap(), original);
+
+    // A hand-over would replace everyone's queue: the owner's phone sends copies too.
+    let (mut owner_ws, _) = connect(&rig, &owner).await;
+    send(
+        &mut owner_ws,
+        serde_json::json!({"cmd": "load", "items": [{"url": "http://127.0.0.1:9/x.flac"}]}),
+    )
+    .await;
+    assert!(
+        next_of(&mut owner_ws, "error").await["message"]
+            .as_str()
+            .unwrap()
+            .contains("copies")
+    );
+    assert_eq!(upload(&rig, &owner, "name=b.flac", &original).0, 204);
+    assert!(queue(&rig, &owner)[1]["addedBy"].is_null());
+
+    rig.server
+        .jam_permissions(pp_remote::jam::GuestPermissions {
+            add_tracks: false,
+            ..Default::default()
+        });
+    assert_eq!(upload(&rig, &guest, "name=c.flac", &original).0, 403);
+
+    // Ended: the copies leave the queue (the current one too) and the disk.
+    assert_eq!(
+        rig.host.engine.snapshot().current_id,
+        rows[0]["id"].as_u64().map(|i| i as u32)
+    );
+    rig.server.jam_end();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while (!queue(&rig, &owner).as_array().unwrap().is_empty() || copy.exists())
+        && Instant::now() < deadline
+    {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(queue(&rig, &owner).as_array().unwrap().is_empty());
+    assert!(rig.host.engine.snapshot().current_id.is_none());
+    assert!(!copy.exists());
 }
