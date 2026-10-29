@@ -3,9 +3,13 @@ package io.github.norbertque.pixeltone.playback
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.scale
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -36,6 +40,8 @@ import io.github.norbertque.pixeltone.usb.UsbAudioSink
 import io.github.norbertque.pixeltone.usb.UsbDeviceVolumePlayer
 import io.github.norbertque.pixeltone.usb.UsbExclusiveState
 import io.github.norbertque.pixeltone.usbaudio.UsbAudioSession
+import io.github.norbertque.pixeltone.widget.PlayerWidget
+import io.github.norbertque.pixeltone.widget.WidgetState
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +104,33 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /** The home-screen widget follows what the session plays. */
+    private val widget = object : Player.Listener {
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (session?.player?.let { it === player || (it as? ForwardingPlayer)?.wrappedPlayer === player } != true) return
+            if (events.containsAny(Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+                updateWidget()
+            }
+        }
+    }
+
+    private fun updateWidget() {
+        val session = session ?: return
+        val player = session.player
+        val metadata = player.mediaMetadata
+        val state = WidgetState(metadata.title?.toString(), metadata.artist?.toString(), player.isPlaying)
+        PlayerWidget.update(this, state, cover = null)
+        val cover = session.bitmapLoader.loadBitmapFromMetadata(metadata) ?: return
+        cover.addListener(
+            {
+                val bitmap = runCatching { cover.get() }.getOrNull() ?: return@addListener
+                // RemoteViews carry their bitmaps whole: a small one is plenty for the widget.
+                PlayerWidget.update(this, state, bitmap.fitWithin(WIDGET_COVER_PX))
+            },
+            ContextCompat.getMainExecutor(this),
+        )
+    }
+
     private fun trackOf(item: MediaItem?): Track? =
         item?.mediaId?.toLongOrNull()?.let { app.library.index.value?.track(it) }
     private var session: MediaSession? = null
@@ -136,6 +169,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch { app.usb.state.collect(::followUsb) }
         scope.launch { app.sleep.state.collectLatest(::sleep) }
         pc.addListener(stopAfterPcTrack)
+        pc.addListener(widget)
         scope.launch { restore() }
     }
 
@@ -221,6 +255,7 @@ class PlaybackService : MediaSessionService() {
                 it.addListener(saver)
                 it.addListener(counting)
                 it.addListener(stopAfterLocalTrack)
+                it.addListener(widget)
                 it.pauseAtEndOfMediaItems = app.sleep.state.value == Sleep.EndOfTrack
             }
     }
@@ -264,9 +299,11 @@ class PlaybackService : MediaSessionService() {
         local = next
         usbInUse = usb
         session?.let { if (it.player !== pc) it.player = localForSession() }
+        updateWidget()
         old.removeListener(saver)
         old.removeListener(counting)
         old.removeListener(stopAfterLocalTrack)
+        old.removeListener(widget)
         old.release()
     }
 
@@ -278,8 +315,10 @@ class PlaybackService : MediaSessionService() {
         if (remote != null && session.player !== pc) {
             local.pause()
             session.player = pc
+            updateWidget()
         } else if (remote == null && session.player === pc) {
             session.player = localForSession()
+            updateWidget()
             app.remote.files.stop()
             pendingHandOver = null
         }
@@ -456,4 +495,12 @@ class PlaybackService : MediaSessionService() {
             return result
         }
     }
+}
+
+private const val WIDGET_COVER_PX = 256
+
+/** At most [px] on its longer side. */
+private fun Bitmap.fitWithin(px: Int): Bitmap {
+    val factor = px.toFloat() / maxOf(width, height)
+    return if (factor >= 1f) this else scale((width * factor).toInt().coerceAtLeast(1), (height * factor).toInt().coerceAtLeast(1))
 }

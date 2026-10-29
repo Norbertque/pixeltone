@@ -2,4 +2,10 @@
 <resources>
     <!-- The scheme's background (ui/theme/Color.kt), so the window matches before Compose draws. -->
     <color name="window_background">#FEF7FE</color>
+    <!-- The home-screen widget, from the same scheme (Android 12+ uses the wallpaper's: values-v31). -->
+    <color name="widget_background">#F3EBF5</color>
+    <color name="widget_text">#35313A</color>
+    <color name="widget_text_secondary">#625D67</color>
+    <color name="widget_play_background">#DBC5FE</color>
+    <color name="widget_play_icon">#4E3D6C</color>
 </resources>

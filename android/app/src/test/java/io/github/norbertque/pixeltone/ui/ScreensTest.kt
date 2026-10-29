@@ -52,6 +52,14 @@ import io.github.norbertque.pixeltone.lyrics.Lyrics
 import io.github.norbertque.pixeltone.lyrics.parseLrc
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsContent
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsState
+import io.github.norbertque.pixeltone.widget.PlayerWidget
+import io.github.norbertque.pixeltone.widget.WidgetState
+import android.widget.FrameLayout
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import io.github.norbertque.pixeltone.ui.settings.SettingsContent
 import io.github.norbertque.pixeltone.ui.settings.UsbPanel
 import io.github.norbertque.pixeltone.usb.DAC
@@ -365,6 +373,19 @@ class ScreensTest {
     @Test
     fun nowPlayingSleep() = shot("now-playing-sleep") {
         NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = false, sleep = "Stops in 23:41")
+    }
+
+    @Test
+    fun widget() = shot("widget") {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AndroidView(
+                factory = { context ->
+                    PlayerWidget.views(context, WidgetState("Ty a já", "Kryštof", playing = true), cover = null)
+                        .apply(context, FrameLayout(context))
+                },
+                modifier = Modifier.fillMaxWidth().height(96.dp).padding(horizontal = 16.dp),
+            )
+        }
     }
 
     @Test

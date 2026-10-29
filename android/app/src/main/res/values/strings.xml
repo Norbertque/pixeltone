@@ -225,6 +225,10 @@
         <item quantity="other">In %d minutes</item>
     </plurals>
 
+    <!-- Home-screen widget -->
+    <string name="widget_description">What plays, with play/pause and skip</string>
+    <string name="widget_idle">Tap to open</string>
+
     <plurals name="tracks_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>
