@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "pixeltone-android"
 include(":app")
+include(":usbaudio")
