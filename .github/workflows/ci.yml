@@ -9,6 +9,8 @@ on:
       - '**/*.md'
       - 'android/**'
       - '.github/workflows/android.yml'
+      - 'site/**'
+      - '.github/workflows/pages.yml'
   pull_request:
   workflow_dispatch:
 

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<meta name="robots" content="noindex">
+<title>Join a jam · Pixeltone</title>
+<!--
+  A jam's QR code links here. Everything after '#' (the PC's address, its certificate and the
+  jam's secret) stays in this browser: it is never sent to this site. Pixeltone for Android
+  opens such links itself; this page is for phones where it doesn't (yet).
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fdf7ff;
+    --surface: #f3edf7;
+    --text: #1d1b20;
+    --muted: #49454f;
+    --primary: #65558f;
+    --on-primary: #ffffff;
+    --container: #e9ddff;
+    --on-container: #4d3d75;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218;
+      --surface: #211f26;
+      --text: #e6e0e9;
+      --muted: #cac4d0;
+      --primary: #cfbdfe;
+      --on-primary: #36265d;
+      --container: #4d3d75;
+      --on-container: #e9ddff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { width: min(440px, 100%); text-align: center; }
+  svg { width: 72px; height: 72px; }
+  h1 { margin: 16px 0 8px; font-size: 26px; line-height: 1.25; font-weight: 500; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  .button {
+    display: block;
+    margin: 12px 0;
+    padding: 14px 20px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .primary { background: var(--primary); color: var(--on-primary); }
+  .tonal { background: var(--container); color: var(--on-container); }
+  .note {
+    margin: 20px 0 0;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: var(--surface);
+    font-size: 14px;
+    text-align: left;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <svg viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="50" r="48" fill="var(--container)" />
+    <g fill="var(--on-container)">
+      <rect x="29" y="40" width="10" height="20" rx="5" />
+      <rect x="45" y="27" width="10" height="46" rx="5" />
+      <rect x="61" y="36" width="10" height="28" rx="5" />
+    </g>
+  </svg>
+  <h1 id="title">Join a jam</h1>
+  <p id="lead">Add tracks to the queue playing on a PC with Pixeltone, from your phone.</p>
+
+  <div id="incomplete" hidden>
+    <p>This link isn't complete. Scan the QR code on the PC again.</p>
+  </div>
+
+  <div id="actions">
+    <p id="missing" class="note" hidden>Pixeltone isn't on this phone yet. Get it below, then come back to this page and open the jam.</p>
+    <a id="open" class="button primary" href="#">Open in Pixeltone</a>
+    <a class="button tonal" href="https://github.com/Norbertque/pixeltone/releases/download/android-dev/Pixeltone-android.apk">Get Pixeltone for Android</a>
+    <p class="note">
+      Your phone has to be on the same Wi-Fi as the PC. Pixeltone needs Android 8 or newer;
+      when Android asks, allow your browser to install it.
+    </p>
+  </div>
+
+  <p id="not-android" class="note" hidden>Pixeltone is on Android for now: open this link on an Android phone.</p>
+</main>
+<script>
+  (function () {
+    var fragment = location.hash.slice(1);
+    var params = new URLSearchParams(fragment);
+    var name = params.get('n');
+    if (name) {
+      document.getElementById('title').textContent = 'Join ' + name + '’s jam';
+      document.getElementById('lead').textContent =
+        'Add tracks to the queue playing on ' + name + ', from your phone.';
+    }
+    var complete = ['v', 'h', 'p', 'f', 's'].every(function (k) { return params.get(k); });
+    if (!complete) {
+      document.getElementById('incomplete').hidden = false;
+      document.getElementById('actions').hidden = true;
+      return;
+    }
+    var android = /Android/i.test(navigator.userAgent);
+    if (!android) document.getElementById('not-android').hidden = false;
+    if (new URLSearchParams(location.search).has('missing')) document.getElementById('missing').hidden = false;
+    // Back here (with a note) when no app takes the link.
+    var fallback = location.origin + location.pathname + '?missing=1#' + fragment;
+    document.getElementById('open').href = android
+      ? 'intent://jam?' + fragment + '#Intent;scheme=pixeltone;S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end'
+      : 'pixeltone://jam?' + fragment;
+  })();
+</script>
+</body>
+</html>
