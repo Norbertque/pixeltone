@@ -76,6 +76,7 @@ import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.QueueScreen
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
+import io.github.norbertque.pixeltone.ui.lyrics.LyricsScreen
 import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
 import io.github.norbertque.pixeltone.ui.stats.StatsScreen
 import io.github.norbertque.pixeltone.usb.usbBadge
@@ -88,6 +89,7 @@ private const val JAM = "jam"
 private const val SETTINGS = "settings"
 private const val FAVOURITES = "favourites"
 private const val STATS = "stats"
+private const val LYRICS = "lyrics"
 
 @Composable
 fun PixeltoneRoot() {
@@ -146,7 +148,7 @@ private fun Navigation() {
             snackbarHost = { SnackbarHost(messages) },
             bottomBar = {
                 val entry = playback.current
-                if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM) {
+                if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM && route != LYRICS) {
                     MiniPlayer(
                         entry,
                         playback.isPlaying,
@@ -215,7 +217,11 @@ private fun Navigation() {
                         favourite = playingTrack?.let { lists.isFavourite(it) },
                         onFavourite = { playingTrack?.let { app.lists.setFavourite(it, !lists.isFavourite(it)) } },
                         onAddToPlaylist = playingTrack?.let { { adding = listOf(it) } },
+                        onLyrics = { nav.navigate(LYRICS) },
                     )
+                }
+                composable(LYRICS) {
+                    LyricsScreen(app, onBack = { nav.popBackStack() })
                 }
                 composable(JAM) {
                     OwnerJamScreen(app, onBack = { nav.popBackStack() })

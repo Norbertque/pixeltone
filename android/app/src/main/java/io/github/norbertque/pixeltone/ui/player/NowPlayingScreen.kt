@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Pause
@@ -78,12 +79,13 @@ fun NowPlayingScreen(
     favourite: Boolean? = null,
     onFavourite: () -> Unit = {},
     onAddToPlaylist: (() -> Unit)? = null,
+    onLyrics: () -> Unit = {},
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
     NowPlayingContent(
         state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn, onJam,
-        favourite, onFavourite, onAddToPlaylist,
+        favourite, onFavourite, onAddToPlaylist, onLyrics,
     )
 }
 
@@ -106,6 +108,7 @@ fun NowPlayingContent(
     favourite: Boolean? = null,
     onFavourite: () -> Unit = {},
     onAddToPlaylist: (() -> Unit)? = null,
+    onLyrics: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -117,6 +120,9 @@ fun NowPlayingContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onLyrics) {
+                        Icon(Icons.Default.Lyrics, stringResource(R.string.lyrics))
+                    }
                     if (onAddToPlaylist != null) {
                         IconButton(onClick = onAddToPlaylist) {
                             Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist))

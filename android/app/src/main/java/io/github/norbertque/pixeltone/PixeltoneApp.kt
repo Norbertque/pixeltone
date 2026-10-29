@@ -9,6 +9,7 @@ import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
 import io.github.norbertque.pixeltone.library.History
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
 import io.github.norbertque.pixeltone.library.UserLists
+import io.github.norbertque.pixeltone.lyrics.LyricsFinder
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.remote.PcCoverFetcher
 import io.github.norbertque.pixeltone.remote.PcCoverKeyer
@@ -31,6 +32,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val jam: JamControl by lazy { JamControl(this, remote) }
     val lists: UserLists by lazy { UserLists(File(filesDir, "lists.json")) }
     val history: History by lazy { History(File(filesDir, "history.jsonl")) }
+    val lyrics: LyricsFinder by lazy { LyricsFinder(this) }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

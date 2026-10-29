@@ -77,6 +77,7 @@ fun SettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val fixed by settings.fixedVolumeOutput.collectAsStateWithLifecycle()
     val acknowledged by settings.maxVolumeAcknowledged.collectAsStateWithLifecycle()
     val softwareDb by usb.softwareVolumeDb.collectAsStateWithLifecycle()
+    val lyricsOnline by app.lyrics.online.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var hardware by remember { mutableStateOf<Float?>(null) }
     val session = usb.activeSession
@@ -99,6 +100,8 @@ fun SettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
         onSoftwareVolume = { usb.setSoftwareVolumeDb(it) },
         onAcknowledgeLoudness = { settings.setMaxVolumeAcknowledged(true) },
         onFixedVolume = settings::setFixedVolumeOutput,
+        lyricsOnline = lyricsOnline,
+        onLyricsOnline = app.lyrics::setOnline,
     )
 }
 
@@ -113,6 +116,8 @@ fun SettingsContent(
     onSoftwareVolume: (Float) -> Unit,
     onAcknowledgeLoudness: () -> Unit,
     onFixedVolume: (Boolean) -> Unit,
+    lyricsOnline: Boolean = true,
+    onLyricsOnline: (Boolean) -> Unit = {},
 ) {
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.settings)) }, navigationIcon = { BackButton(onBack) }) },
@@ -129,6 +134,12 @@ fun SettingsContent(
                 val ready = usb.state is UsbExclusiveState.Ready || usb.state is UsbExclusiveState.Active
                 if (ready) Volume(usb, onHardwareVolume, onSoftwareVolume, onAcknowledgeLoudness, onFixedVolume)
             }
+            SectionTitle(stringResource(R.string.lyrics))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.lyrics_online)) },
+                supportingContent = { Text(stringResource(R.string.lyrics_online_text)) },
+                trailingContent = { Switch(checked = lyricsOnline, onCheckedChange = onLyricsOnline) },
+            )
             HorizontalDivider(Modifier.padding(top = 16.dp))
             Text(
                 stringResource(R.string.usb_licence),

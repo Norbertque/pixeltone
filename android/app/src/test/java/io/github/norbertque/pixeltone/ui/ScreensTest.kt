@@ -48,6 +48,10 @@ import io.github.norbertque.pixeltone.ui.library.PlaylistContent
 import io.github.norbertque.pixeltone.library.Listen
 import io.github.norbertque.pixeltone.library.listeningStats
 import io.github.norbertque.pixeltone.ui.stats.StatsContent
+import io.github.norbertque.pixeltone.lyrics.Lyrics
+import io.github.norbertque.pixeltone.lyrics.parseLrc
+import io.github.norbertque.pixeltone.ui.lyrics.LyricsContent
+import io.github.norbertque.pixeltone.ui.lyrics.LyricsState
 import io.github.norbertque.pixeltone.ui.settings.SettingsContent
 import io.github.norbertque.pixeltone.ui.settings.UsbPanel
 import io.github.norbertque.pixeltone.usb.DAC
@@ -344,6 +348,18 @@ class ScreensTest {
             List(index.tracks.size - i) { n -> Listen(ListedTrack.of(track), now - (i * 7 + n) * 3_600_000L, track.durationMs) }
         }
         StatsContent(listeningStats(listens, since = null), period = 2, now = now, onPeriod = {}, onBack = {}, onTrack = {})
+    }
+
+    @Test
+    fun lyricsSynced() = shot("lyrics-synced", dark = true) {
+        val lrc = (0 until 24).joinToString("\n") { i -> "[%02d:%02d.00]Line number ${i + 1} of the song".format(i * 4 / 60, i * 4 % 60) }
+        val (lines, _) = parseLrc(lrc)
+        LyricsContent("Ty a já", "Kryštof", LyricsState.Found(Lyrics(lines, true, Lyrics.Source.LRCLIB)), true, 41_000, {}, {})
+    }
+
+    @Test
+    fun lyricsMissing() = shot("lyrics-missing") {
+        LyricsContent("Ty a já", "Kryštof", LyricsState.Missing, online = false, positionMs = 0, onSeek = {}, onBack = {})
     }
 
     @Test
