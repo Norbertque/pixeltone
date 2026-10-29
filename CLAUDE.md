@@ -168,6 +168,12 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   music; the owner's jam is the `jam` route (Now Playing's Jam button while on a PC). Phone
   tracks go to a jam as uploads (`PcConnection.upload`), never as a hand-over.
   `JamDevServerTest` plays a whole jam against the dev server (`PIXELTONE_DEV_SERVER`).
+- The user's own data lives in the app's files: `lists.json` (favourites, playlists; tracks
+  by `Track.fileKey` = folder + file name, which outlives MediaStore ids), `history.jsonl`
+  (listens counted by `PlayCounter` with Windows' rule) and the lyrics cache (`LyricsFinder`:
+  the file's tags, then LRCLIB). A long press on any track row opens its menu
+  (`LocalTrackMenu`). The sleep timer (`SleepTimer`) and the home-screen widget (`PlayerWidget`,
+  RemoteViews) are carried out by `PlaybackService`.
 - USB output (`docs/android-usb.md`): the `:usbaudio` module is the UAC driver (Kotlin
   descriptor parsing and format negotiation, C++ isochronous stream over libusb, NDK
   28.2.13676358 + CMake 3.22.1 from `~/.local/opt/android-sdk`); `app/.../usb/` holds the
