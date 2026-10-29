@@ -27,8 +27,10 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Screenshots of the UI (mock backend): Playwright's headless shell is installed in
   `~/.cache/ms-playwright` with its libraries unpacked from Debian packages into
   `~/.local/opt/chromium-libs` (no root). Run it with
-  `LD_LIBRARY_PATH=~/.local/opt/chromium-libs/usr/lib/x86_64-linux-gnu:~/.local/opt/chromium-libs/lib/x86_64-linux-gnu`,
-  `executablePath` pointing at `chrome-headless-shell` and `--no-sandbox`, against `npm run dev`.
+  `LD_LIBRARY_PATH=~/.local/opt/chromium-libs/usr/lib/x86_64-linux-gnu:~/.local/opt/chromium-libs/lib/x86_64-linux-gnu`
+  and `FONTCONFIG_FILE=~/.local/opt/chromium-libs/fonts.conf` (without it no text renders, web
+  fonts included), `executablePath` pointing at `chrome-headless-shell` and `--no-sandbox`,
+  against `npm run dev`.
   Look at layout changes this way before shipping them.
 - Windows type-check of everything, including the app crate's `cfg(windows)` code:
   `. ~/.local/opt/pp-toolchain/env.sh && . ~/.local/opt/pp-toolchain/win-check.sh &&
@@ -113,6 +115,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - A phone's tracks are `QueueItem { remote: true }` with an `http://` path on the phone's
   own address: only `Decoder::open_http` opens those (FFmpeg limited to http/tcp); local
   paths always go through `file:`. They stay out of history and the saved queue.
+- Jams (ADR 0002, protocol doc "Jam"): the rules in `pp-remote/src/jam.rs`, the server in
+  `server.rs` (guests are callers with a token, filtered by guest permissions). The app keeps
+  the server running during a jam even with remote control off (`remote::apply`), stops
+  history while one runs (`History::set_jam`) and shows it in `JamDialog.svelte`
+  (`jam.svelte.ts`, events `remote://jam`). Phones' own tracks arrive as copies in
+  `remote/jam-tracks/<jam id>` (app local data), leave the queue through
+  `Engine::withdraw_from_queue` when the jam ends, and never reach the saved queue.
 - The fork's client (PixelPlayer) is private: its licence forbids publishing modified
   versions, so nothing of PixelPlayer goes into this repo, and nothing of this repo's code
   into the fork. The one exception is ADR 0001: files we wrote ourselves in the fork that

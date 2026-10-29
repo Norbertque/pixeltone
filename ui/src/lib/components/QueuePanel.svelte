@@ -3,6 +3,7 @@
 
   import { api, type QueueEntry } from '../api';
   import { PagedRows } from '../library.svelte';
+  import { jam } from '../jam.svelte';
   import { artworkUrl, formatTime, player } from '../player.svelte';
   import type { HandleProps } from '../queue/drag';
   import { toasts } from '../toasts.svelte';
@@ -73,7 +74,10 @@
         <Artwork src={artworkUrl(entry.coverKey, 300)} size="40px" radius="var(--shape-sm)" />
         <span class="text">
           <span class="title title-small">{entry.title}</span>
-          <span class="sub body-small">{entry.artist ?? entry.album ?? ''}</span>
+          <span class="sub body-small">
+            {#if entry.addedBy}<span class="by"><Icon name="person" size={14} />{entry.addedBy}</span>{/if}
+            {entry.artist ?? entry.album ?? ''}
+          </span>
         </span>
         {#if current}
           <span class="now" aria-label="Now playing"><Icon name={player.playing ? 'graphic_eq' : 'pause'} size={20} /></span>
@@ -116,6 +120,7 @@
       <h2 id="queue-title" class="title-large rounded emphasized">Queue</h2>
       <span class="count body-medium">{count.toLocaleString()} song{count === 1 ? '' : 's'}</span>
     </div>
+    <Button variant={jam.running ? 'tonal' : 'text'} icon="groups" onclick={() => (jam.dialogOpen = true)}>Jam</Button>
     <IconButton
       icon="shuffle"
       label={player.shuffle ? 'Shuffle: on' : 'Shuffle: off'}
@@ -253,6 +258,18 @@
   .current .sub {
     color: inherit;
     opacity: 0.8;
+  }
+  .by {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-right: 6px;
+    color: var(--md-sys-color-tertiary);
+    font-weight: 500;
+    vertical-align: bottom;
+  }
+  .current .by {
+    color: inherit;
   }
   .time {
     font-variant-numeric: tabular-nums;

@@ -1,6 +1,8 @@
-//! Remote control from phones (PixelPlayer): the app's side of `pp-remote`. Off unless
-//! turned on in Settings → Remote control; the server only runs while it's on.
+//! Remote control from phones (Pixeltone for Android): the app's side of `pp-remote`. Off
+//! unless turned on in Settings → Remote control; the server only runs while it's on, or while
+//! a jam runs.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,6 +18,7 @@ use pp_remote::protocol::{
 use pp_remote::{Host, RemoteConfig, RemoteServer, RemoteVolume};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_notification::NotificationExt;
 
 use crate::AppState;
 use crate::settings::AppSettings;
@@ -27,6 +30,8 @@ struct AppHost {
     app: AppHandle,
     /// Level to return to when the app's own volume is unmuted.
     before_mute: Mutex<f32>,
+    /// Rejoin requests already told about.
+    requests_seen: Mutex<HashSet<String>>,
 }
 
 impl AppHost {
@@ -219,6 +224,7 @@ impl Host for AppHost {
         // While a jam runs, what plays isn't the owner's listening.
         self.state().history.set_jam(jam.is_some());
         let _ = self.app.emit("remote://jam", jam);
+        self.notify_requests(jam);
         if jam.is_none() {
             // The server may have run only for the jam. Not from here: this can be one of the
             // server's own threads, and stopping it waits for them.
@@ -233,6 +239,49 @@ impl Host for AppHost {
                 apply(&app, enabled);
             });
         }
+    }
+}
+
+impl AppHost {
+    /// A removed guest asking to come back can't wait: Windows says so while the app is out
+    /// of sight (the app itself shows Allow / Decline).
+    fn notify_requests(&self, jam: Option<&JamView>) {
+        let requests = jam.map_or(&[][..], |j| &j.info.requests[..]);
+        let fresh: Vec<String> = {
+            let mut seen = self.requests_seen.lock();
+            seen.retain(|id| requests.iter().any(|r| &r.id == id));
+            requests
+                .iter()
+                .filter(|r| seen.insert(r.id.clone()))
+                .map(|r| r.name.clone())
+                .collect()
+        };
+        if fresh.is_empty() {
+            return;
+        }
+        // Not on this thread: it can be the main one, which window questions would wait for.
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            let in_sight = app.get_webview_window("main").is_some_and(|w| {
+                w.is_visible().unwrap_or(false)
+                    && w.is_focused().unwrap_or(false)
+                    && !w.is_minimized().unwrap_or(false)
+            });
+            if in_sight {
+                return;
+            }
+            for name in fresh {
+                let shown = app
+                    .notification()
+                    .builder()
+                    .title("Jam")
+                    .body(format!("{name} wants to rejoin the jam"))
+                    .show();
+                if let Err(e) = shown {
+                    tracing::warn!("can't show a notification: {e}");
+                }
+            }
+        });
     }
 }
 
@@ -327,6 +376,7 @@ pub fn apply(app: &AppHandle, enabled: bool) {
     let host = Arc::new(AppHost {
         app: app.clone(),
         before_mute: Mutex::new(-20.0),
+        requests_seen: Mutex::new(HashSet::new()),
     });
     match RemoteServer::start(
         RemoteConfig {

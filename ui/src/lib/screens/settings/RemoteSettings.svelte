@@ -66,7 +66,7 @@
     <div class="row-text">
       <span class="title-medium">Control from your phone</span>
       <span class="body-medium">
-        PixelPlayer on a phone on the same Wi-Fi can play its music on this PC and control it, like a remote. Phones
+        Pixeltone for Android on a phone on the same Wi-Fi can play its music on this PC and control it, like a remote. Phones
         are paired once with a code; the connection is encrypted. Windows may ask whether Pixeltone can use private
         networks: allow it.
       </span>
@@ -95,7 +95,7 @@
 
       {#if status.code}
         <div class="pairing" aria-live="polite">
-          <span class="label-large">Enter this code in PixelPlayer</span>
+          <span class="label-large">Enter this code on the phone</span>
           <span class="code display-medium">{grouped(status.code)}</span>
           <span class="body-small muted">
             Works once, for {Math.floor(status.codeSeconds / 60)}:{String(status.codeSeconds % 60).padStart(2, '0')}

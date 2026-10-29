@@ -7,6 +7,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import MiniWindow from './MiniWindow.svelte';
 import { api } from './lib/api';
+import { initJam } from './lib/jam.svelte';
 import { initLibrary } from './lib/library.svelte';
 import { output } from './lib/output.svelte';
 import { initPlayer } from './lib/player.svelte';
@@ -32,6 +33,7 @@ void initPlayer();
 if (!mini) {
   void initLibrary();
   void output.start();
+  void initJam();
   initUpdates();
 }
 

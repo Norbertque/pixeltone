@@ -13,6 +13,7 @@ import type {
   DeviceInfo,
   FormatCandidate,
   HardwareVolumeInfo,
+  JamView,
   OutputBadge,
   PlayerError,
   PlayerSnapshot,
@@ -489,6 +490,47 @@ export const mockBackend: Backend = {
     remoteDevices = remoteDevices.filter((d) => d.id !== id);
     return mockRemote();
   },
+  jamState: async () => jam && structuredClone(jam),
+  async jamStart() {
+    if (!jam) {
+      jam = {
+        link: 'https://norbertque.github.io/pixeltone/jam/#v=1&h=192.168.1.20&p=47821&f=5c1d0e8a&s=mock-secret&n=DEV-PC',
+        permissions: { addTracks: true, changeOwnTracks: true, controlPlayback: false },
+        guests: [],
+        requests: [],
+      };
+      jamChanged();
+      simulateGuests();
+    }
+    return structuredClone(jam);
+  },
+  async jamEnd() {
+    jamTimers.forEach(clearTimeout);
+    jam = null;
+    jamChanged();
+  },
+  async jamPermissions(permissions) {
+    if (!jam) return;
+    jam.permissions = { ...permissions };
+    jamChanged();
+  },
+  async jamRemoveGuest(guestId) {
+    if (!jam) return;
+    jam.guests = jam.guests.filter((g) => g.id !== guestId);
+    const upcoming = queue.items.filter((s, i) => i > queue.current && s.entry.guestId === guestId);
+    queue.remove(upcoming.map((s) => s.entry.id));
+    sync();
+    jamChanged();
+  },
+  async jamAnswer(requestId, allow) {
+    const request = jam?.requests.find((r) => r.id === requestId);
+    if (!jam || !request) return false;
+    jam.requests = jam.requests.filter((r) => r !== request);
+    if (allow) jam.guests.push({ id: `g-${request.id}`, name: request.name });
+    jamChanged();
+    return true;
+  },
+  onJam: (cb) => subscribe(jamListeners, cb),
   checkForUpdate: async () => null,
   installUpdate: async () => {},
   aiStatus: async () => ({ hasKey: mockAiKey, songs: 1863, sentSongs: 1863, estimateUsd: 0.21 }),
@@ -522,6 +564,43 @@ export const mockBackend: Backend = {
     return { written, failed: paths.length > written ? ['some files: not in the demo library'] : [] };
   },
 };
+
+/* A jam: guests arrive and add tracks, and a removed one asks to come back, so the PC's side
+   can be seen and tried. */
+let jam: JamView | null = null;
+const jamListeners = new Set<(jam: JamView | null) => void>();
+let jamTimers: ReturnType<typeof setTimeout>[] = [];
+
+function jamChanged(): void {
+  for (const l of jamListeners) l(jam && structuredClone(jam));
+}
+
+function guestAdds(guestId: string, name: string, every: number, count: number): void {
+  const ids = mockLibrary
+    .tracks('title', 0, 2000)
+    .filter((_, i) => i % every === 3)
+    .slice(0, count)
+    .map((t) => t.id);
+  const slots = rowSlots(ids);
+  for (const s of slots) s.entry = { ...s.entry, addedBy: name, guestId };
+  queue.add(slots, false);
+  sync();
+}
+
+function simulateGuests(): void {
+  const steps: [number, () => void][] = [
+    [1200, () => (jam!.guests.push({ id: 'g-petr', name: 'Petr' }), guestAdds('g-petr', 'Petr', 41, 3))],
+    [2600, () => (jam!.guests.push({ id: 'g-jana', name: 'Jana' }), guestAdds('g-jana', 'Jana', 67, 2))],
+    [4200, () => jam!.requests.push({ id: 'r-tomas', name: 'Tomáš' })],
+  ];
+  jamTimers = steps.map(([ms, step]) =>
+    setTimeout(() => {
+      if (!jam) return;
+      step();
+      jamChanged();
+    }, ms),
+  );
+}
 
 function userDataChanged(): void {
   for (const l of changedListeners) l();

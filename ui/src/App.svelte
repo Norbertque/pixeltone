@@ -3,6 +3,7 @@
 
   import AiPlaylistDialog from './lib/components/AiPlaylistDialog.svelte';
   import ContextMenu from './lib/components/ContextMenu.svelte';
+  import JamDialog from './lib/components/JamDialog.svelte';
   import MiniPlayer from './lib/components/MiniPlayer.svelte';
   import PlaylistPicker from './lib/components/PlaylistPicker.svelte';
   import PromptDialog from './lib/components/PromptDialog.svelte';
@@ -161,6 +162,7 @@
   <PlaylistPicker />
   <TagEditor />
   <AiPlaylistDialog />
+  <JamDialog />
 </div>
 
 <style>

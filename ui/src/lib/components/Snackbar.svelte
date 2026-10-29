@@ -4,11 +4,13 @@
   import { toasts } from '../toasts.svelte';
   import Icon from './Icon.svelte';
   import IconButton from './IconButton.svelte';
+  import JamRequests from './JamRequests.svelte';
 
   const ICONS = { info: 'info', warning: 'warning', error: 'error' } as const;
 </script>
 
 <div class="stack" role="status" aria-live="polite">
+  <JamRequests />
   {#each toasts.items as toast (toast.id)}
     <div class={['snackbar', toast.tone]} transition:fly={{ y: 24, duration: 220 }}>
       <Icon name={ICONS[toast.tone]} size={20} />

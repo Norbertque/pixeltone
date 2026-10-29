@@ -126,6 +126,30 @@ export interface RemoteStatus {
   codeSeconds: number;
   devices: RemoteDevice[];
 }
+/** A jam (crates/pp-remote, `JamView`): a shared queue that guests join with its QR code. */
+export interface GuestPermissions {
+  addTracks: boolean;
+  /** Remove and move the tracks they added. */
+  changeOwnTracks: boolean;
+  /** Play, pause, skip and seek. */
+  controlPlayback: boolean;
+}
+export interface JamGuest {
+  id: string;
+  name: string;
+}
+/** A removed guest asking to come back. */
+export interface RejoinRequest {
+  id: string;
+  name: string;
+}
+export interface JamView {
+  /** What the QR code shows. */
+  link: string;
+  permissions: GuestPermissions;
+  guests: JamGuest[];
+  requests: RejoinRequest[];
+}
 /** A newer version, from the update feed. */
 export interface UpdateInfo {
   version: string;
@@ -317,6 +341,19 @@ export interface Backend {
   remotePair(): Promise<RemoteStatus>;
   remoteStopPairing(): Promise<RemoteStatus>;
   remoteForget(id: string): Promise<RemoteStatus>;
+
+  // Jam
+  jamState(): Promise<JamView | null>;
+  /** Starts a jam; the remote control server runs for it even when turned off. */
+  jamStart(): Promise<JamView>;
+  /** Ends it: guests are out, and the tracks they sent from their phones leave the queue. */
+  jamEnd(): Promise<void>;
+  jamPermissions(permissions: GuestPermissions): Promise<void>;
+  /** Takes a guest out, with their tracks still to come. */
+  jamRemoveGuest(guestId: string): Promise<void>;
+  /** Answers a rejoin request; false when it isn't waiting any more. */
+  jamAnswer(requestId: string, allow: boolean): Promise<boolean>;
+  onJam(cb: (jam: JamView | null) => void): Promise<Unlisten>;
 
   // Updates
   /** A newer version than this one, or null. */

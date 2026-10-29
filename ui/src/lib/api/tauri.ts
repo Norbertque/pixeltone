@@ -26,6 +26,7 @@ import {
   type DeviceChange,
   type DeviceInfo,
   type HardwareVolumeInfo,
+  type JamView,
   type PlayerError,
   type PlayerSnapshot,
   type QueueEntry,
@@ -165,6 +166,13 @@ export const tauriBackend: Backend = {
   remotePair: () => invoke<RemoteStatus>('remote_pair'),
   remoteStopPairing: () => invoke<RemoteStatus>('remote_stop_pairing'),
   remoteForget: (id) => invoke<RemoteStatus>('remote_forget', { id }),
+  jamState: () => invoke<JamView | null>('jam_state'),
+  jamStart: () => invoke<JamView>('jam_start'),
+  jamEnd: () => invoke('jam_end'),
+  jamPermissions: (permissions) => invoke('jam_permissions', { permissions }),
+  jamRemoveGuest: (guestId) => invoke('jam_remove_guest', { guestId }),
+  jamAnswer: (requestId, allow) => invoke<boolean>('jam_answer', { requestId, allow }),
+  onJam: (cb) => listen<JamView | null>('remote://jam', (e) => cb(e.payload)),
   async checkForUpdate(): Promise<UpdateInfo | null> {
     pendingUpdate = await check();
     return pendingUpdate ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? null } : null;

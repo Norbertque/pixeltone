@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { jam } from '../jam.svelte';
   import { NAV_ITEMS, router, type Section } from '../router.svelte';
   import Icon from './Icon.svelte';
   import Logo from './Logo.svelte';
@@ -35,6 +36,18 @@
     {/each}
   </ul>
   <ul class="bottom">
+    <li>
+      <!-- Not a screen: the Jam dialog, here so a jam can start before anything is queued. -->
+      <button
+        class={['item', { live: jam.running }]}
+        aria-label={jam.running ? 'Jam (running)' : 'Jam'}
+        onclick={() => (jam.dialogOpen = true)}
+      >
+        <span class="indicator"></span>
+        <span class="icon"><Icon name="groups" fill={jam.running} /></span>
+        <span class="label label-medium">Jam</span>
+      </button>
+    </li>
     {#each BOTTOM_ITEMS as entry (entry.id)}
       {@render item(entry)}
     {/each}
@@ -115,6 +128,20 @@
   }
   .active .label {
     font-weight: 700;
+  }
+  .live .icon {
+    position: relative;
+    color: var(--md-sys-color-primary);
+  }
+  .live .icon::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--md-sys-color-error);
   }
   .item:focus-visible {
     outline: none;
