@@ -363,6 +363,11 @@ class ScreensTest {
     }
 
     @Test
+    fun nowPlayingSleep() = shot("now-playing-sleep") {
+        NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = false, sleep = "Stops in 23:41")
+    }
+
+    @Test
     fun miniPlayer() = shot("mini-player") {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             MiniPlayer(playing.current!!, isPlaying = true, onToggle = {}, onOpen = {}, playingOn = "BIG-ONE")

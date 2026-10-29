@@ -1,6 +1,7 @@
 package io.github.norbertque.pixeltone.ui.player
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Usb
@@ -37,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -59,6 +62,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.playback.PlaybackState
+import io.github.norbertque.pixeltone.playback.Sleep
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.playback.PlayerControls
 import io.github.norbertque.pixeltone.playback.nextRepeatMode
@@ -80,12 +84,14 @@ fun NowPlayingScreen(
     onFavourite: () -> Unit = {},
     onAddToPlaylist: (() -> Unit)? = null,
     onLyrics: () -> Unit = {},
+    sleep: Sleep = Sleep.Off,
+    onSleep: () -> Unit = {},
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
     NowPlayingContent(
         state, position, player, onBack, onQueue, playingOn, outputBadge, onPlayOn, onJam,
-        favourite, onFavourite, onAddToPlaylist, onLyrics,
+        favourite, onFavourite, onAddToPlaylist, onLyrics, sleepText(sleep), onSleep,
     )
 }
 
@@ -109,6 +115,9 @@ fun NowPlayingContent(
     onFavourite: () -> Unit = {},
     onAddToPlaylist: (() -> Unit)? = null,
     onLyrics: () -> Unit = {},
+    /** What the sleep timer will do ("Stops in 23:41"); null while it's off. */
+    sleep: String? = null,
+    onSleep: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -120,13 +129,15 @@ fun NowPlayingContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onSleep) {
+                        Icon(
+                            Icons.Default.Bedtime,
+                            stringResource(R.string.sleep_timer),
+                            tint = if (sleep != null) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        )
+                    }
                     IconButton(onClick = onLyrics) {
                         Icon(Icons.Default.Lyrics, stringResource(R.string.lyrics))
-                    }
-                    if (onAddToPlaylist != null) {
-                        IconButton(onClick = onAddToPlaylist) {
-                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist))
-                        }
                     }
                     if (onJam != null) {
                         IconButton(onClick = onJam) {
@@ -163,6 +174,11 @@ fun NowPlayingContent(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (onAddToPlaylist != null) {
+                        IconButton(onClick = onAddToPlaylist) {
+                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist))
+                        }
+                    }
                     if (favourite != null) {
                         IconToggleButton(checked = favourite, onCheckedChange = { onFavourite() }) {
                             if (favourite) {
@@ -197,6 +213,14 @@ fun NowPlayingContent(
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Controls(state, controls, onHint = { hint = Hint(it, (hint?.id ?: 0) + 1) })
                 HintLine(hint)
+                if (sleep != null) {
+                    Text(
+                        sleep,
+                        Modifier.clickable(onClick = onSleep).padding(4.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         }
     }

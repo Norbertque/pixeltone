@@ -44,6 +44,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -133,6 +134,8 @@ class PlaybackService : MediaSessionService() {
         scope.launch { app.remote.connection.session.collect(::follow) }
         scope.launch { app.usb.sessionLost.collect { lostDac() } }
         scope.launch { app.usb.state.collect(::followUsb) }
+        scope.launch { app.sleep.state.collectLatest(::sleep) }
+        pc.addListener(stopAfterPcTrack)
         scope.launch { restore() }
     }
 
@@ -155,6 +158,36 @@ class PlaybackService : MediaSessionService() {
         local.release()
         scope.cancel()
         super.onDestroy()
+    }
+
+    /* ------------------------------- Sleep timer ------------------------------- */
+
+    private suspend fun sleep(sleep: Sleep) {
+        local.pauseAtEndOfMediaItems = sleep is Sleep.EndOfTrack
+        if (sleep is Sleep.At) {
+            delay((sleep.endsAt - System.currentTimeMillis()).coerceAtLeast(0))
+            session?.player?.pause()
+            app.sleep.cancel()
+        }
+    }
+
+    /** At the end of the track, the phone's player stops by itself ([ExoPlayer.setPauseAtEndOfMediaItems]). */
+    private val stopAfterLocalTrack = object : Player.Listener {
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM && app.sleep.state.value == Sleep.EndOfTrack) {
+                app.sleep.cancel()
+            }
+        }
+    }
+
+    /** A PC goes on to its next track: pause it there. */
+    private val stopAfterPcTrack = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && app.sleep.state.value == Sleep.EndOfTrack && session?.player === pc) {
+                pc.pause()
+                app.sleep.cancel()
+            }
+        }
     }
 
     /* ------------------------------ Phone output ------------------------------ */
@@ -187,6 +220,8 @@ class PlaybackService : MediaSessionService() {
             .also {
                 it.addListener(saver)
                 it.addListener(counting)
+                it.addListener(stopAfterLocalTrack)
+                it.pauseAtEndOfMediaItems = app.sleep.state.value == Sleep.EndOfTrack
             }
     }
 
@@ -231,6 +266,7 @@ class PlaybackService : MediaSessionService() {
         session?.let { if (it.player !== pc) it.player = localForSession() }
         old.removeListener(saver)
         old.removeListener(counting)
+        old.removeListener(stopAfterLocalTrack)
         old.release()
     }
 

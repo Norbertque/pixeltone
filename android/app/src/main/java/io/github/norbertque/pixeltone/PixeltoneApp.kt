@@ -11,6 +11,7 @@ import io.github.norbertque.pixeltone.library.MediaStoreLibrary
 import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.lyrics.LyricsFinder
 import io.github.norbertque.pixeltone.playback.PlayerConnection
+import io.github.norbertque.pixeltone.playback.SleepTimer
 import io.github.norbertque.pixeltone.remote.PcCoverFetcher
 import io.github.norbertque.pixeltone.remote.PcCoverKeyer
 import io.github.norbertque.pixeltone.remote.RemoteControl
@@ -33,6 +34,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val lists: UserLists by lazy { UserLists(File(filesDir, "lists.json")) }
     val history: History by lazy { History(File(filesDir, "history.jsonl")) }
     val lyrics: LyricsFinder by lazy { LyricsFinder(this) }
+    val sleep = SleepTimer()
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

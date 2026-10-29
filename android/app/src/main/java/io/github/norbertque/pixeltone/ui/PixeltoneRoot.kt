@@ -75,6 +75,7 @@ import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.QueueScreen
+import io.github.norbertque.pixeltone.ui.player.SleepSheet
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsScreen
 import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
@@ -134,6 +135,8 @@ private fun Navigation() {
     var menuFor by remember { mutableStateOf<Track?>(null) }
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     var naming by remember { mutableStateOf<List<Track>?>(null) }
+    var sleeping by remember { mutableStateOf(false) }
+    val sleep by app.sleep.state.collectAsStateWithLifecycle()
     val messages = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
@@ -218,6 +221,8 @@ private fun Navigation() {
                         onFavourite = { playingTrack?.let { app.lists.setFavourite(it, !lists.isFavourite(it)) } },
                         onAddToPlaylist = playingTrack?.let { { adding = listOf(it) } },
                         onLyrics = { nav.navigate(LYRICS) },
+                        sleep = sleep,
+                        onSleep = { sleeping = true },
                     )
                 }
                 composable(LYRICS) {
@@ -233,6 +238,15 @@ private fun Navigation() {
         }
     }
     if (choosing) PlayOnSheet(remote, onDismiss = { choosing = false })
+    if (sleeping) {
+        SleepSheet(
+            sleep = sleep,
+            onMinutes = app.sleep::inMinutes,
+            onEndOfTrack = app.sleep::atEndOfTrack,
+            onCancel = app.sleep::cancel,
+            onDismiss = { sleeping = false },
+        )
+    }
     menuFor?.let { track ->
         val album = albumKey(track)?.let { index?.album(it) }
         val artist = track.artist?.let { index?.artistNamed(it) }

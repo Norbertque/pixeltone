@@ -214,6 +214,17 @@
     <string name="lyrics_online">Find lyrics online</string>
     <string name="lyrics_online_text">Asks LRCLIB (lrclib.net) by the track’s title, artist, album and length when the file has none.</string>
 
+    <!-- Sleep timer -->
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_end_of_track">At the end of the track</string>
+    <string name="sleep_off">Turn the timer off</string>
+    <string name="sleep_after_track">Stops after this track</string>
+    <string name="sleep_in">Stops in %1$s</string>
+    <plurals name="sleep_minutes">
+        <item quantity="one">In %d minute</item>
+        <item quantity="other">In %d minutes</item>
+    </plurals>
+
     <plurals name="tracks_count">
         <item quantity="one">%d track</item>
         <item quantity="other">%d tracks</item>
