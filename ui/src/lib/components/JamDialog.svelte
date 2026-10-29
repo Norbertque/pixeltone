@@ -42,10 +42,12 @@
   }
 </script>
 
+<!-- A click outside closes it, like Done (the jam goes on). -->
 <dialog
   bind:this={dialog}
   class={['dialog', { running: view }]}
   aria-labelledby="jam-title"
+  closedby="any"
   onclose={() => (jam.dialogOpen = false)}
 >
   {#if view && qr}
