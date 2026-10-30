@@ -4,13 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -19,18 +16,15 @@ import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.norbertque.pixeltone.PixeltoneApp
 import io.github.norbertque.pixeltone.R
-import io.github.norbertque.pixeltone.ui.BackButton
 import io.github.norbertque.pixeltone.usb.UsbExclusiveState
 import io.github.norbertque.pixeltone.usb.UsbRememberedDevice
 import io.github.norbertque.pixeltone.usb.bestFormat
@@ -69,7 +62,7 @@ data class UsbPanel(
 )
 
 @Composable
-fun SettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
+fun UsbSettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val usb = app.usb
     val settings = app.usbSettings
     val state by usb.state.collectAsStateWithLifecycle()
@@ -77,13 +70,12 @@ fun SettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val fixed by settings.fixedVolumeOutput.collectAsStateWithLifecycle()
     val acknowledged by settings.maxVolumeAcknowledged.collectAsStateWithLifecycle()
     val softwareDb by usb.softwareVolumeDb.collectAsStateWithLifecycle()
-    val lyricsOnline by app.lyrics.online.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var hardware by remember { mutableStateOf<Float?>(null) }
     val session = usb.activeSession
     // The DAC's volume is asked over USB: off the main thread, again for each new session.
     LaunchedEffect(session) { hardware = withContext(Dispatchers.IO) { usb.hardwareVolumeFraction() } }
-    SettingsContent(
+    UsbSettingsContent(
         usb = UsbPanel(enabled, state, softwareDb, hardware, fixed, acknowledged),
         onBack = onBack,
         onEnabled = settings::setExclusiveEnabled,
@@ -100,14 +92,12 @@ fun SettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
         onSoftwareVolume = { usb.setSoftwareVolumeDb(it) },
         onAcknowledgeLoudness = { settings.setMaxVolumeAcknowledged(true) },
         onFixedVolume = settings::setFixedVolumeOutput,
-        lyricsOnline = lyricsOnline,
-        onLyricsOnline = app.lyrics::setOnline,
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Exclusive USB output: on or off, the DAC's state, and its volume once it's ready. */
 @Composable
-fun SettingsContent(
+fun UsbSettingsContent(
     usb: UsbPanel,
     onBack: () -> Unit,
     onEnabled: (Boolean) -> Unit,
@@ -116,49 +106,26 @@ fun SettingsContent(
     onSoftwareVolume: (Float) -> Unit,
     onAcknowledgeLoudness: () -> Unit,
     onFixedVolume: (Boolean) -> Unit,
-    lyricsOnline: Boolean = true,
-    onLyricsOnline: (Boolean) -> Unit = {},
 ) {
-    Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.settings)) }, navigationIcon = { BackButton(onBack) }) },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            SectionTitle(stringResource(R.string.usb_title))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.usb_exclusive)) },
-                supportingContent = { Text(stringResource(R.string.usb_exclusive_text)) },
-                trailingContent = { Switch(checked = usb.enabled, onCheckedChange = onEnabled) },
-            )
-            if (usb.enabled) {
-                Status(usb.state, onRetry)
-                val ready = usb.state is UsbExclusiveState.Ready || usb.state is UsbExclusiveState.Active
-                if (ready) Volume(usb, onHardwareVolume, onSoftwareVolume, onAcknowledgeLoudness, onFixedVolume)
+    SettingsScaffold(stringResource(R.string.usb_title), onBack) {
+        item { SwitchRow(stringResource(R.string.usb_exclusive), stringResource(R.string.usb_exclusive_text), usb.enabled, onEnabled) }
+        if (usb.enabled) {
+            item { Status(usb.state, onRetry) }
+            val ready = usb.state is UsbExclusiveState.Ready || usb.state is UsbExclusiveState.Active
+            if (ready) item { Column { Volume(usb, onHardwareVolume, onSoftwareVolume, onAcknowledgeLoudness, onFixedVolume) } }
+        }
+        item {
+            Column {
+                HorizontalDivider(Modifier.padding(top = 16.dp))
+                Text(
+                    stringResource(R.string.usb_licence),
+                    Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            SectionTitle(stringResource(R.string.lyrics))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.lyrics_online)) },
-                supportingContent = { Text(stringResource(R.string.lyrics_online_text)) },
-                trailingContent = { Switch(checked = lyricsOnline, onCheckedChange = onLyricsOnline) },
-            )
-            HorizontalDivider(Modifier.padding(top = 16.dp))
-            Text(
-                stringResource(R.string.usb_licence),
-                Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text,
-        Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-    )
 }
 
 @Composable

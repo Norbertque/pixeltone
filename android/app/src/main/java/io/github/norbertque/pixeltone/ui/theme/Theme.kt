@@ -11,12 +11,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 
 /**
- * Pixeltone's theme: colours from [seed] (the playing album's cover, else Pixeltone's lilac),
- * gliding from one cover's to the next as on Windows; Google Sans Flex type.
+ * Pixeltone's theme: colours from [seed] (the playing album's cover, else Pixeltone's lilac) in
+ * [style], gliding from one cover's to the next as on Windows; Google Sans Flex type.
  */
 @Composable
-fun PixeltoneTheme(dark: Boolean = isSystemInDarkTheme(), seed: Int? = null, content: @Composable () -> Unit) {
-    val target = remember(seed, dark) { colorSchemeFor(seed ?: DEFAULT_SEED, dark) }
+fun PixeltoneTheme(
+    dark: Boolean = isSystemInDarkTheme(),
+    seed: Int? = null,
+    style: PaletteStyle = PaletteStyle.TonalSpot,
+    contrast: Double = 0.0,
+    content: @Composable () -> Unit,
+) {
+    val target = remember(seed, dark, style, contrast) { colorSchemeFor(seed ?: DEFAULT_SEED, dark, style, contrast) }
     // The shape scale is Material's own, as on Windows (4, 8, 12, 16, 28 px).
     MaterialTheme(colorScheme = target.animated(), typography = PixeltoneTypography, content = content)
 }

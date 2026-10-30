@@ -17,18 +17,38 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** The phone's music as MediaStore knows it, read again whenever MediaStore changes. */
-class MediaStoreLibrary(private val context: Context) {
+/**
+ * The phone's music as MediaStore knows it, read again whenever MediaStore changes, less what
+ * [settings] leave out.
+ */
+class MediaStoreLibrary(private val context: Context, settings: LibrarySettings) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val changes = Channel<Unit>(Channel.CONFLATED)
-    private val current = MutableStateFlow<LibraryIndex?>(null)
+    private val read = MutableStateFlow<List<Track>?>(null)
     private var started = false
 
+    /** Every audio file MediaStore lists as music, left-out ones too; null until the first read is done. */
+    val allTracks: StateFlow<List<Track>?> = read.asStateFlow()
+
     /** Null until the first read is done. */
-    val index: StateFlow<LibraryIndex?> = current.asStateFlow()
+    val index: StateFlow<LibraryIndex?> =
+        combine(read, settings.shortestMs, settings.hiddenFolders) { tracks, shortest, hidden ->
+            tracks?.let { LibraryIndex(shownTracks(it, shortest, hidden)) }
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /** Reads MediaStore again (after files were added without MediaStore saying so). */
+    fun refresh() {
+        changes.trySend(Unit)
+    }
 
     /** Starts reading; call once the app may read audio files. */
     @MainThread
@@ -47,7 +67,7 @@ class MediaStoreLibrary(private val context: Context) {
         changes.trySend(Unit)
         scope.launch {
             for (change in changes) {
-                current.value = LibraryIndex(readTracks())
+                read.value = readTracks()
                 // MediaStore reports changes in bursts while it scans: read at most once a second.
                 delay(1_000)
             }

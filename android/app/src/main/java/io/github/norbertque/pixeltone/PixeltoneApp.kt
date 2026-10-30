@@ -7,16 +7,19 @@ import io.github.norbertque.pixeltone.jam.JamControl
 import io.github.norbertque.pixeltone.library.AlbumCoverFetcher
 import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
 import io.github.norbertque.pixeltone.library.History
+import io.github.norbertque.pixeltone.library.LibrarySettings
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
 import io.github.norbertque.pixeltone.library.Mixes
 import io.github.norbertque.pixeltone.library.mixesOf
 import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.lyrics.LyricsFinder
+import io.github.norbertque.pixeltone.playback.PlaybackSettings
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.playback.SleepTimer
 import io.github.norbertque.pixeltone.remote.PcCoverFetcher
 import io.github.norbertque.pixeltone.remote.PcCoverKeyer
 import io.github.norbertque.pixeltone.remote.RemoteControl
+import io.github.norbertque.pixeltone.ui.theme.AppearanceSettings
 import io.github.norbertque.pixeltone.update.Updater
 import io.github.norbertque.pixeltone.usb.PreferencesUsbSettings
 import io.github.norbertque.pixeltone.usb.UsbDeviceManager
@@ -32,7 +35,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 class PixeltoneApp : Application(), ImageLoaderFactory {
-    val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this) }
+    val librarySettings: LibrarySettings by lazy { LibrarySettings(this) }
+    val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this, librarySettings) }
+    val playbackSettings: PlaybackSettings by lazy { PlaybackSettings(this) }
     val player: PlayerConnection by lazy { PlayerConnection(this) }
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }
@@ -45,6 +50,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
         mixesOf(library.index, history.listens, lists.lists)
             .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.WhileSubscribed(5_000), null)
     }
+    val appearance: AppearanceSettings by lazy { AppearanceSettings(this) }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

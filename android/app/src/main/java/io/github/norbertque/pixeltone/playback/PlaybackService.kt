@@ -168,6 +168,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch { app.usb.sessionLost.collect { lostDac() } }
         scope.launch { app.usb.state.collect(::followUsb) }
         scope.launch { app.sleep.state.collectLatest(::sleep) }
+        scope.launch { app.playbackSettings.pauseOnUnplug.collect { local.setHandleAudioBecomingNoisy(usbInUse == null && it) } }
         pc.addListener(stopAfterPcTrack)
         pc.addListener(widget)
         scope.launch { restore() }
@@ -177,7 +178,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         save()
-        super.onTaskRemoved(rootIntent)
+        if (app.playbackSettings.stopWhenSwipedAway.value) {
+            pauseAllPlayersAndStopSelf()
+        } else {
+            super.onTaskRemoved(rootIntent)
+        }
     }
 
     override fun onDestroy() {
@@ -248,7 +253,7 @@ class PlaybackService : MediaSessionService() {
             )
             // Pause when headphones come out; a DAC played into directly isn't one of Android's
             // outputs (its unplugging pauses through the USB controller instead).
-            .setHandleAudioBecomingNoisy(usb == null)
+            .setHandleAudioBecomingNoisy(usb == null && app.playbackSettings.pauseOnUnplug.value)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
             .also {

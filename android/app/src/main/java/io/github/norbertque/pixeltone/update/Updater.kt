@@ -2,6 +2,7 @@ package io.github.norbertque.pixeltone.update
 
 import android.app.PendingIntent
 import android.content.Context
+import androidx.core.content.edit
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
@@ -70,19 +71,38 @@ private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
  */
 class Updater(private val context: Context, private val feedUrl: String, private val versionCode: Int) {
     private val scope = MainScope()
+    private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
     private val current = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    private val looking = MutableStateFlow(prefs.getBoolean(AUTOMATIC, true))
     private var checked = false
 
     val state: StateFlow<UpdateState> = current.asStateFlow()
 
+    /** Whether Pixeltone looks for a newer build each time it starts. */
+    val automatic: StateFlow<Boolean> = looking.asStateFlow()
+
+    fun setAutomatic(on: Boolean) {
+        prefs.edit { putBoolean(AUTOMATIC, on) }
+        looking.value = on
+    }
+
     /** Looks for a newer build once per start of the app; quietly gives up when offline. */
     fun checkOnce() {
-        if (checked || feedUrl.isEmpty()) return
+        if (checked || feedUrl.isEmpty() || !looking.value) return
         checked = true
         scope.launch {
             val info = runCatching { withContext(Dispatchers.IO) { fetch() } }.getOrNull() ?: return@launch
             if (info.versionCode > versionCode) current.value = UpdateState.Available(info)
         }
+    }
+
+    /** Looks now: true when a newer build is offered, false when this is the newest, null when the feed can't be read. */
+    suspend fun checkNow(): Boolean? {
+        if (feedUrl.isEmpty()) return null
+        val info = runCatching { withContext(Dispatchers.IO) { fetch() } }.getOrNull() ?: return null
+        if (info.versionCode <= versionCode) return false
+        current.value = UpdateState.Available(info)
+        return true
     }
 
     fun dismiss() {
@@ -182,3 +202,5 @@ class Updater(private val context: Context, private val feedUrl: String, private
         }
     }
 }
+
+private const val AUTOMATIC = "automatic"

@@ -67,7 +67,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
-import io.github.norbertque.pixeltone.ui.settings.SettingsContent
+import io.github.norbertque.pixeltone.ui.settings.AppearanceContent
+import io.github.norbertque.pixeltone.ui.settings.LibraryFolder
+import io.github.norbertque.pixeltone.ui.settings.LibrarySettingsContent
+import io.github.norbertque.pixeltone.ui.settings.PcsContent
+import io.github.norbertque.pixeltone.ui.settings.PlaybackContent
+import io.github.norbertque.pixeltone.ui.settings.SettingsHome
+import io.github.norbertque.pixeltone.ui.settings.UsbSettingsContent
+import io.github.norbertque.pixeltone.ui.theme.Appearance
+import io.github.norbertque.pixeltone.ui.theme.ColorSource
+import io.github.norbertque.pixeltone.ui.theme.PaletteStyle
 import io.github.norbertque.pixeltone.ui.settings.UsbPanel
 import io.github.norbertque.pixeltone.usb.DAC
 import io.github.norbertque.pixeltone.usb.SAMPLE_DAC
@@ -324,7 +333,37 @@ class ScreensTest {
 
     @Composable
     private fun Settings(usb: UsbPanel) =
-        SettingsContent(usb, onBack = {}, onEnabled = {}, onRetry = {}, onHardwareVolume = {}, onSoftwareVolume = {}, onAcknowledgeLoudness = {}, onFixedVolume = {})
+        UsbSettingsContent(usb, onBack = {}, onEnabled = {}, onRetry = {}, onHardwareVolume = {}, onSoftwareVolume = {}, onAcknowledgeLoudness = {}, onFixedVolume = {})
+
+    @Test
+    fun settings() = shot("settings") { SettingsHome(onPage = {}, onBack = {}) }
+
+    @Test
+    fun appearance() = shot("settings-appearance") { AppearanceContent(Appearance(), onChange = {}, onBack = {}) }
+
+    @Test
+    fun appearanceDark() = shot("settings-appearance-dark", dark = true) {
+        AppearanceContent(Appearance(source = ColorSource.Custom, seed = 0xFF00897B.toInt(), style = PaletteStyle.Vibrant, contrast = 0.5), onChange = {}, onBack = {})
+    }
+
+    @Test
+    fun playbackSettings() = shot("settings-playback") { PlaybackContent(true, {}, false, {}, false, {}, onBack = {}) }
+
+    @Test
+    fun librarySettings() = shot("settings-library") {
+        val folders = listOf(
+            LibraryFolder("Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/", 214),
+            LibraryFolder("Music/Kryštof/Rubikon/", 12),
+            LibraryFolder("Music/The Beatles/1/", 27),
+            LibraryFolder("Recordings/", 9),
+        )
+        LibrarySettingsContent(30_000, {}, folders, hidden = setOf(folders[0].path, folders[3].path), onHidden = { _, _ -> }, onRefresh = {}, onBack = {})
+    }
+
+    @Test
+    fun pcs() = shot("settings-pcs") {
+        PcsContent(listOf(PairedPc("1", "BIG-ONE", "192.168.1.20", 47123, "ab", "secret")), onForget = {}, onBack = {})
+    }
 
     @Test
     fun playlistsTab() = shot("library-playlists") {

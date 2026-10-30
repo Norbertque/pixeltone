@@ -276,4 +276,87 @@
         <item quantity="one">%,d album</item>
         <item quantity="other">%,d albums</item>
     </plurals>
+    <!-- Settings' pages -->
+    <string name="appearance">Appearance</string>
+    <string name="appearance_summary">Light or dark, colours from the covers, palette style</string>
+    <string name="playback">Playback</string>
+    <string name="playback_summary">Headphones, closing Pixeltone, the panel under Now Playing</string>
+    <string name="library_summary">Short files, folders, reading the library again</string>
+    <string name="lyrics_summary">Finding them online</string>
+    <string name="usb_summary">Bit-perfect playback straight to a USB DAC</string>
+    <string name="your_pcs">Your PCs</string>
+    <string name="your_pcs_summary">The PCs this phone plays on</string>
+    <string name="updates">Updates</string>
+    <string name="updates_summary">New builds of Pixeltone</string>
+    <string name="about">About</string>
+    <string name="about_summary">Version, source code, licences</string>
+
+    <string name="theme">Theme</string>
+    <string name="theme_text">Follow the phone, or always light or dark.</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="colour_source">Colour source</string>
+    <string name="colour_source_text">Album art recolours the app for every track, like Material You.</string>
+    <string name="album_art">Album art</string>
+    <string name="custom">Custom</string>
+    <string name="fallback_colour">Fallback colour</string>
+    <string name="fallback_colour_text">Used when nothing is playing or a track has no artwork.</string>
+    <string name="seed_colour">Seed colour</string>
+    <string name="seed_colour_text">The colour every palette is built from.</string>
+    <string name="palette_style">Palette style</string>
+    <string name="palette_style_text">How colourful the palette made from it is.</string>
+    <string name="style_tonal_spot">Tonal spot</string>
+    <string name="style_expressive">Expressive</string>
+    <string name="style_vibrant">Vibrant</string>
+    <string name="style_fidelity">Fidelity</string>
+    <string name="style_content">Content</string>
+    <string name="style_rainbow">Rainbow</string>
+    <string name="style_fruit_salad">Fruit salad</string>
+    <string name="style_neutral">Neutral</string>
+    <string name="style_monochrome">Monochrome</string>
+    <string name="contrast">Contrast</string>
+    <string name="contrast_standard">Standard</string>
+    <string name="contrast_medium">Medium</string>
+    <string name="contrast_high">High</string>
+
+    <string name="panel_first">Pull up first</string>
+    <string name="panel_first_text">What the panel under Now Playing shows when it comes up.</string>
+    <string name="pause_on_unplug">Pause when headphones come out</string>
+    <string name="pause_on_unplug_text">So the music doesn’t carry on out loud.</string>
+    <string name="stop_when_swiped">Stop when swiped away</string>
+    <string name="stop_when_swiped_text">Swiping Pixeltone away from the recent apps stops the music; otherwise it plays on.</string>
+
+    <string name="leave_out_short">Leave out short files</string>
+    <string name="leave_out_short_text">Voice notes and ringtones aren’t music.</string>
+    <string name="off">Off</string>
+    <string name="seconds_short">%1$d s</string>
+    <string name="read_library_again">Read the library again</string>
+    <string name="read_library_again_text">Picks up music Android hasn’t told Pixeltone about yet.</string>
+    <string name="read_library_again_done">Reading it again…</string>
+    <string name="folders">Folders</string>
+    <string name="folders_text">Turn a folder off to leave its files out of the library.</string>
+
+    <string name="forget_lyrics">Forget found lyrics</string>
+    <string name="forget_lyrics_text">Lyrics found online (and those that weren’t) are looked for again.</string>
+    <string name="forget_lyrics_done">Forgotten.</string>
+
+    <string name="no_pcs">No PCs yet. Pair one from Play on: scan the code Pixeltone on the PC shows.</string>
+    <string name="forget_pc">Forget %1$s?</string>
+    <string name="forget_pc_text">To play on it again, pair it again with its code.</string>
+
+    <string name="this_build">Pixeltone %1$s</string>
+    <string name="this_build_text">The build on this phone.</string>
+    <string name="look_for_builds">Look for new builds</string>
+    <string name="look_for_builds_text">Each time Pixeltone starts, it asks GitHub for a newer build.</string>
+    <string name="look_now">Look now</string>
+    <string name="look_now_text">Ask GitHub for a newer build.</string>
+    <string name="looking">Looking…</string>
+    <string name="newer_build">There’s a newer build.</string>
+    <string name="newest_build">This is the newest build.</string>
+    <string name="feed_offline">GitHub can’t be reached right now.</string>
+
+    <string name="about_version">Version %1$s (build %2$d)</string>
+    <string name="source_code">Source code</string>
+    <string name="made_with">Made with</string>
 </resources>

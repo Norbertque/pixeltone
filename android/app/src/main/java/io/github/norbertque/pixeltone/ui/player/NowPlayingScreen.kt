@@ -118,12 +118,13 @@ fun NowPlayingScreen(
     onSleep: () -> Unit = {},
     queueEditable: Boolean = true,
     lyrics: @Composable () -> Unit = {},
+    firstPanel: NowPlayingPanel = NowPlayingPanel.Lyrics,
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
     NowPlayingContent(
         state, position, player, onBack, playingOn, outputBadge, onPlayOn, onJam,
-        favourite, onFavourite, onAddToPlaylist, sleepText(sleep), onSleep, queueEditable, lyrics,
+        favourite, onFavourite, onAddToPlaylist, sleepText(sleep), onSleep, queueEditable, lyrics, firstPanel = firstPanel,
     )
 }
 
@@ -168,13 +169,15 @@ fun NowPlayingContent(
     lyrics: @Composable () -> Unit = {},
     /** The panel that's up from the start (a screenshot's); null: it waits at the bottom. */
     opened: NowPlayingPanel? = null,
+    /** What the panel shows when it's first pulled up. */
+    firstPanel: NowPlayingPanel = NowPlayingPanel.Lyrics,
 ) {
     val scope = rememberCoroutineScope()
     val sheet = rememberStandardBottomSheetState(
         initialValue = if (opened != null) SheetValue.Expanded else SheetValue.PartiallyExpanded,
         skipHiddenState = true,
     )
-    var panel by rememberSaveable { mutableStateOf(opened ?: NowPlayingPanel.Lyrics) }
+    var panel by rememberSaveable { mutableStateOf(opened ?: firstPanel) }
     val raised = sheet.currentValue == SheetValue.Expanded || sheet.targetValue == SheetValue.Expanded
     val open: (NowPlayingPanel) -> Unit = remember(scope, sheet) {
         { which ->

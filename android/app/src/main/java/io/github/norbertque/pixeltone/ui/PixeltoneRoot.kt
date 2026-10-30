@@ -6,7 +6,13 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -84,15 +90,27 @@ import io.github.norbertque.pixeltone.ui.library.TrackMenu
 import io.github.norbertque.pixeltone.ui.library.ArtistScreen
 import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
+import io.github.norbertque.pixeltone.ui.player.NowPlayingPanel
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
 import io.github.norbertque.pixeltone.ui.player.SleepSheet
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsBody
 import io.github.norbertque.pixeltone.ui.lyrics.rememberLyricsNow
-import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
+import io.github.norbertque.pixeltone.ui.settings.AboutScreen
+import io.github.norbertque.pixeltone.ui.settings.AppearanceScreen
+import io.github.norbertque.pixeltone.ui.settings.LibrarySettingsScreen
+import io.github.norbertque.pixeltone.ui.settings.LyricsSettingsScreen
+import io.github.norbertque.pixeltone.ui.settings.PcsScreen
+import io.github.norbertque.pixeltone.ui.settings.PlaybackScreen
+import io.github.norbertque.pixeltone.ui.settings.SettingsHome
+import io.github.norbertque.pixeltone.ui.settings.SettingsPage
+import io.github.norbertque.pixeltone.ui.settings.UpdatesScreen
+import io.github.norbertque.pixeltone.ui.settings.UsbSettingsScreen
 import io.github.norbertque.pixeltone.ui.home.HomeScreen
 import io.github.norbertque.pixeltone.ui.search.SearchScreen
+import io.github.norbertque.pixeltone.ui.theme.ColorSource
 import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
+import io.github.norbertque.pixeltone.ui.theme.ThemeMode
 import io.github.norbertque.pixeltone.ui.theme.seedOf
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -124,15 +142,40 @@ private const val STATS = "stats"
 fun PixeltoneRoot() {
     val context = LocalContext.current
     val app = remember { context.applicationContext as PixeltoneApp }
-    PixeltoneTheme(seed = rememberCoverSeed(app)) { Root() }
+    val look by app.appearance.appearance.collectAsStateWithLifecycle()
+    val dark = when (look.mode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    SystemBars(dark)
+    val cover = rememberCoverSeed(app, enabled = look.source == ColorSource.AlbumArt)
+    PixeltoneTheme(dark, seed = cover ?: look.seed, style = look.style, contrast = look.contrast) { Root() }
 }
+
+/** The status and navigation bars' icons, light or dark with the app rather than the phone. */
+@Composable
+private fun SystemBars(dark: Boolean) {
+    val activity = LocalActivity.current as? ComponentActivity ?: return
+    DisposableEffect(activity, dark) {
+        activity.enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT) { dark },
+            navigationBarStyle = SystemBarStyle.auto(LIGHT_SCRIM, DARK_SCRIM) { dark },
+        )
+        onDispose {}
+    }
+}
+
+/** What Android puts behind three-button navigation, as `enableEdgeToEdge` does by itself. */
+private const val LIGHT_SCRIM = 0xE6FFFFFF.toInt()
+private const val DARK_SCRIM = 0x801B1B1B.toInt()
 
 /** The seed colour of the cover that plays, as on Windows: the whole app takes its colours from it. */
 @Composable
-private fun rememberCoverSeed(app: PixeltoneApp): Int? {
+private fun rememberCoverSeed(app: PixeltoneApp, enabled: Boolean): Int? {
     val context = LocalContext.current
     val playback by app.player.state.collectAsStateWithLifecycle()
-    val cover = playback.current?.cover
+    val cover = playback.current?.cover?.takeIf { enabled }
     var seed by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(cover) {
         if (cover == null) {
@@ -185,6 +228,7 @@ private fun Navigation() {
     val lists by app.lists.lists.collectAsStateWithLifecycle()
     val index by app.library.index.collectAsStateWithLifecycle()
     val mixes by app.mixes.collectAsStateWithLifecycle()
+    val queueFirst by app.playbackSettings.queueFirst.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
     /** The track whose menu is open; tracks waiting for a playlist; a new playlist's tracks. */
     var menuFor by remember { mutableStateOf<Track?>(null) }
@@ -303,7 +347,20 @@ private fun Navigation() {
                     PlaylistScreen(app, id = entry.arguments?.getString("id")?.toLongOrNull() ?: -1L, onBack = { nav.popBackStack() })
                 }
                 composable(SETTINGS) {
-                    SettingsScreen(app, onBack = { nav.popBackStack() })
+                    SettingsHome(onPage = { nav.navigate("settings/${it.name}") }, onBack = { nav.popBackStack() })
+                }
+                composable("settings/{page}") { entry ->
+                    val back: () -> Unit = { nav.popBackStack() }
+                    when (SettingsPage.entries.firstOrNull { it.name == entry.arguments?.getString("page") }) {
+                        SettingsPage.Appearance -> AppearanceScreen(app, back)
+                        SettingsPage.Playback -> PlaybackScreen(app, back)
+                        SettingsPage.Library -> LibrarySettingsScreen(app, back)
+                        SettingsPage.Lyrics -> LyricsSettingsScreen(app, back)
+                        SettingsPage.Usb -> UsbSettingsScreen(app, back)
+                        SettingsPage.Pcs -> PcsScreen(app, back)
+                        SettingsPage.Updates -> UpdatesScreen(app, back)
+                        SettingsPage.About, null -> AboutScreen(back)
+                    }
                 }
                 composable("album/{key}") { entry ->
                     AlbumScreen(
@@ -340,6 +397,7 @@ private fun Navigation() {
                         sleep = sleep,
                         onSleep = { sleeping = true },
                         queueEditable = onPc == null,
+                        firstPanel = if (queueFirst) NowPlayingPanel.Queue else NowPlayingPanel.Lyrics,
                         lyrics = {
                             val now = rememberLyricsNow(app)
                             LyricsBody(now.state, now.online, now.positionMs, player::seekTo)

@@ -83,6 +83,11 @@ class LyricsFinder(private val context: Context) {
         allowed.value = on
     }
 
+    /** Forgets the lyrics found online (and that some weren't), so they're looked for again. */
+    suspend fun forget() = withContext(Dispatchers.IO) {
+        cache.listFiles()?.forEach { it.delete() }
+    }
+
     suspend fun find(request: LyricsRequest): Lyrics? = withContext(Dispatchers.IO) {
         request.uri?.let { runCatching { embedded(it) }.getOrNull() }?.let { return@withContext it }
         val file = File(cache, sha1(request.key) + ".json")

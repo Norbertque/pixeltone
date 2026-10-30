@@ -13,6 +13,13 @@ import com.materialkolor.dynamiccolor.MaterialDynamicColors
 import com.materialkolor.hct.Hct
 import com.materialkolor.quantize.QuantizerCelebi
 import com.materialkolor.scheme.DynamicScheme
+import com.materialkolor.scheme.SchemeContent
+import com.materialkolor.scheme.SchemeExpressive
+import com.materialkolor.scheme.SchemeFidelity
+import com.materialkolor.scheme.SchemeFruitSalad
+import com.materialkolor.scheme.SchemeMonochrome
+import com.materialkolor.scheme.SchemeNeutral
+import com.materialkolor.scheme.SchemeRainbow
 import com.materialkolor.scheme.SchemeTonalSpot
 import com.materialkolor.scheme.SchemeVibrant
 import com.materialkolor.score.Score
@@ -20,12 +27,27 @@ import com.materialkolor.score.Score
 /** Pixeltone's own colour when nothing plays: "Lilac", as on Windows. */
 const val DEFAULT_SEED: Int = 0xFF7E57C2.toInt()
 
-/**
- * The colour scheme for a seed colour, built like the Windows app's (`ui/src/lib/theme/scheme.ts`):
- * tonal spot, the 2025 colour spec.
- */
-fun colorSchemeFor(seed: Int, dark: Boolean): ColorScheme {
-    val scheme = SchemeTonalSpot(Hct.fromInt(seed), dark, 0.0, ColorSpec.SpecVersion.SPEC_2025, DynamicScheme.Platform.PHONE)
+/** Material's scheme for a seed colour, as the Windows app builds it (`buildScheme`): the 2025 colour spec. */
+fun dynamicScheme(seed: Int, dark: Boolean, style: PaletteStyle = PaletteStyle.TonalSpot, contrast: Double = 0.0): DynamicScheme {
+    val hct = Hct.fromInt(seed)
+    val spec = ColorSpec.SpecVersion.SPEC_2025
+    val phone = DynamicScheme.Platform.PHONE
+    return when (style) {
+        PaletteStyle.TonalSpot -> SchemeTonalSpot(hct, dark, contrast, spec, phone)
+        PaletteStyle.Expressive -> SchemeExpressive(hct, dark, contrast, spec, phone)
+        PaletteStyle.Vibrant -> SchemeVibrant(hct, dark, contrast, spec, phone)
+        PaletteStyle.Fidelity -> SchemeFidelity(hct, dark, contrast, spec, phone)
+        PaletteStyle.Content -> SchemeContent(hct, dark, contrast, spec, phone)
+        PaletteStyle.Rainbow -> SchemeRainbow(hct, dark, contrast, spec, phone)
+        PaletteStyle.FruitSalad -> SchemeFruitSalad(hct, dark, contrast, spec, phone)
+        PaletteStyle.Neutral -> SchemeNeutral(hct, dark, contrast, spec, phone)
+        PaletteStyle.Monochrome -> SchemeMonochrome(hct, dark, contrast, spec, phone)
+    }
+}
+
+/** The colour scheme for a seed colour, built like the Windows app's (`ui/src/lib/theme/scheme.ts`). */
+fun colorSchemeFor(seed: Int, dark: Boolean, style: PaletteStyle = PaletteStyle.TonalSpot, contrast: Double = 0.0): ColorScheme {
+    val scheme = dynamicScheme(seed, dark, style, contrast)
     val roles = MaterialDynamicColors()
     fun c(color: DynamicColor) = Color(color.getArgb(scheme))
     val primary = c(roles.primary())
@@ -123,13 +145,7 @@ private const val SEED_SIZE = 112
 fun genreColors(name: String, dark: Boolean): Pair<Color, Color> {
     var h = 0L
     for (c in name) h = (h * 31 + c.code) and 0xFFFFFFFFL
-    val scheme = SchemeVibrant(
-        Hct.fromInt(argbOfHsl((h % 360).toFloat(), 0.65f, 0.5f)),
-        dark,
-        0.0,
-        ColorSpec.SpecVersion.SPEC_2025,
-        DynamicScheme.Platform.PHONE,
-    )
+    val scheme = dynamicScheme(argbOfHsl((h % 360).toFloat(), 0.65f, 0.5f), dark, PaletteStyle.Vibrant)
     val roles = MaterialDynamicColors()
     return Color(roles.primaryContainer().getArgb(scheme)) to Color(roles.onPrimaryContainer().getArgb(scheme))
 }
