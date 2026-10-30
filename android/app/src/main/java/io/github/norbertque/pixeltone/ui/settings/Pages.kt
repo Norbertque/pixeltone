@@ -2,6 +2,22 @@ package io.github.norbertque.pixeltone.ui.settings
 
 import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -29,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.norbertque.pixeltone.BuildConfig
 import io.github.norbertque.pixeltone.PixeltoneApp
 import io.github.norbertque.pixeltone.R
+import io.github.norbertque.pixeltone.library.DEFAULT_ARTIST_SEPARATORS
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.remote.PairedPc
 import kotlinx.coroutines.launch
@@ -70,8 +87,19 @@ fun LibrarySettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val all by app.library.allTracks.collectAsStateWithLifecycle()
     val shortest by settings.shortestMs.collectAsStateWithLifecycle()
     val hidden by settings.hiddenFolders.collectAsStateWithLifecycle()
+    val separators by settings.artistSeparators.collectAsStateWithLifecycle()
     val folders = remember(all) { libraryFolders(all.orEmpty()) }
-    LibrarySettingsContent(shortest, settings::setShortest, folders, hidden, settings::setHidden, onRefresh = app.library::refresh, onBack = onBack)
+    LibrarySettingsContent(
+        shortestMs = shortest,
+        onShortest = settings::setShortest,
+        folders = folders,
+        hidden = hidden,
+        onHidden = settings::setHidden,
+        onRefresh = app.library::refresh,
+        onBack = onBack,
+        separators = separators,
+        onSeparators = settings::setArtistSeparators,
+    )
 }
 
 @Composable
@@ -83,6 +111,8 @@ fun LibrarySettingsContent(
     onHidden: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
+    separators: List<String> = DEFAULT_ARTIST_SEPARATORS,
+    onSeparators: (List<String>) -> Unit = {},
 ) {
     var refreshed by remember { mutableStateOf(false) }
     SettingsScaffold(stringResource(R.string.library), onBack) {
@@ -105,6 +135,8 @@ fun LibrarySettingsContent(
                 },
             )
         }
+        item { SectionTitle(stringResource(R.string.artist_separators)) }
+        item { Separators(separators, onSeparators) }
         if (folders.isNotEmpty()) {
             item { SectionTitle(stringResource(R.string.folders)) }
             item {
@@ -122,6 +154,53 @@ fun LibrarySettingsContent(
                     checked = folder.path !in hidden,
                 ) { shown -> onHidden(folder.path, !shown) }
             }
+        }
+    }
+}
+
+/**
+ * What artist tags are split on, as chips (a space shows as ␣: " feat. " isn't "feat."), a field
+ * to add one, and Windows' list back.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Separators(separators: List<String>, onChange: (List<String>) -> Unit) {
+    var draft by rememberSaveable { mutableStateOf("") }
+    // Spaces count (" feat. "), so only an empty one is turned away.
+    val add = {
+        if (draft.isNotEmpty() && draft !in separators) onChange(separators + draft)
+        draft = ""
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Text(
+            stringResource(R.string.artist_separators_text),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            separators.forEach { separator ->
+                InputChip(
+                    selected = false,
+                    onClick = { onChange(separators - separator) },
+                    label = { Text(separator.replace(' ', '␣'), fontFamily = FontFamily.Monospace) },
+                    trailingIcon = { Icon(Icons.Default.Close, stringResource(R.string.remove_separator, separator), Modifier.size(16.dp)) },
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(stringResource(R.string.add_separator)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { add() }),
+            )
+            TextButton(onClick = add, enabled = draft.isNotEmpty()) { Text(stringResource(R.string.add)) }
+        }
+        TextButton(onClick = { onChange(DEFAULT_ARTIST_SEPARATORS) }, enabled = separators != DEFAULT_ARTIST_SEPARATORS) {
+            Text(stringResource(R.string.reset_to_defaults))
         }
     }
 }

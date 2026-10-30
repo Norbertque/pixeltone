@@ -69,9 +69,17 @@ data class SearchResult(
     val genres: List<Genre> = emptyList(),
 )
 
-/** The library arranged for browsing: tracks, albums, artists and genres, sorted for [locale]. */
-class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
+/**
+ * The library arranged for browsing: tracks, albums, artists and genres, sorted for [locale].
+ * Artist tags are split on [separators] ("A feat. B" is A and B).
+ */
+class LibraryIndex(
+    tracks: List<Track>,
+    locale: Locale = Locale.getDefault(),
+    private val separators: List<String> = DEFAULT_ARTIST_SEPARATORS,
+) {
     private val collator = Collator.getInstance(locale).apply { strength = Collator.SECONDARY }
+    private val splits = HashMap<String, List<String>>()
 
     val tracks: List<Track> = tracks.sortedWith(compareBy(collator, Track::title))
     val albums: List<Album>
@@ -94,10 +102,14 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
             spellings.getOrPut(key) { HashMap() }.merge(name, 1) { a, b -> a + b }
             return key
         }
-        for (track in this.tracks) track.artist?.let { ownTracks.getOrPut(note(it)) { ArrayList() }.add(track) }
+        for (track in this.tracks) {
+            for (name in artistNames(track.artist)) ownTracks.getOrPut(note(name)) { ArrayList() }.add(track)
+        }
         for (album in albums) {
-            album.artist?.let { albumsOf.getOrPut(note(it)) { LinkedHashSet() }.add(album) }
-            for (track in album.tracks) track.artist?.let { albumsOf.getOrPut(fold(it)) { LinkedHashSet() }.add(album) }
+            for (name in artistNames(album.artist)) albumsOf.getOrPut(note(name)) { LinkedHashSet() }.add(album)
+            for (track in album.tracks) {
+                for (name in artistNames(track.artist)) albumsOf.getOrPut(fold(name)) { LinkedHashSet() }.add(album)
+            }
         }
         val oldestFirst = compareBy<Album> { it.year ?: Int.MAX_VALUE }.then(compareBy(collator, Album::title))
         artists = spellings
@@ -154,8 +166,12 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
 
     fun artist(key: String): Artist? = artistsByKey[key]
 
-    /** The artist written as [name] on a track or album. */
-    fun artistNamed(name: String): Artist? = artistsByKey[fold(name)]
+    /** The artist written as [name] on a track or album: the first of them when it names several. */
+    fun artistNamed(name: String): Artist? = artistsByKey[fold(name)] ?: artistNames(name).firstNotNullOfOrNull { artistsByKey[fold(it)] }
+
+    /** The artists an artist tag names ([splitArtists] on this library's separators). */
+    fun artistNames(tag: String?): List<String> =
+        if (tag == null) emptyList() else synchronized(splits) { splits.getOrPut(tag) { splitArtists(tag, separators) } }
 
     fun genre(key: String): Genre? = genresByKey[key]
 
@@ -174,7 +190,8 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
 
     private fun album(key: String, tracks: List<Track>): Album {
         val tagged = tracks.firstNotNullOfOrNull { it.albumArtist }
-        val trackArtists = tracks.mapNotNull { it.artist }.distinctBy(::fold)
+        // "A" and "A feat. B" on one album are still A's album.
+        val trackArtists = tracks.mapNotNull { artistNames(it.artist).firstOrNull() }.distinctBy(::fold)
         return Album(
             key = key,
             title = checkNotNull(tracks.first().album),

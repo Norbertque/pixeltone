@@ -332,6 +332,12 @@
     <string name="read_library_again">Read the library again</string>
     <string name="read_library_again_text">Picks up music Android hasn’t told Pixeltone about yet.</string>
     <string name="read_library_again_done">Reading it again…</string>
+    <string name="artist_separators">Artist separators</string>
+    <string name="artist_separators_text">Split “A feat. B” or “A; B” into separate artists. “&amp;” and “,” are off by default so band names stay whole.</string>
+    <string name="add_separator">Add…</string>
+    <string name="add">Add</string>
+    <string name="remove_separator">Remove the separator “%1$s”</string>
+    <string name="reset_to_defaults">Reset to defaults</string>
     <string name="folders">Folders</string>
     <string name="folders_text">Turn a folder off to leave its files out of the library.</string>
 

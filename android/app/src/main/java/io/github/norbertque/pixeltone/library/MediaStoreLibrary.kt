@@ -39,8 +39,8 @@ class MediaStoreLibrary(private val context: Context, settings: LibrarySettings)
 
     /** Null until the first read is done. */
     val index: StateFlow<LibraryIndex?> =
-        combine(read, settings.shortestMs, settings.hiddenFolders) { tracks, shortest, hidden ->
-            tracks?.let { LibraryIndex(shownTracks(it, shortest, hidden)) }
+        combine(read, settings.shortestMs, settings.hiddenFolders, settings.artistSeparators) { tracks, shortest, hidden, separators ->
+            tracks?.let { LibraryIndex(shownTracks(it, shortest, hidden), separators = separators) }
         }
             .flowOn(Dispatchers.Default)
             .stateIn(scope, SharingStarted.Eagerly, null)

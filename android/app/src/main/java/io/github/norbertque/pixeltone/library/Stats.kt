@@ -17,9 +17,15 @@ data class ListeningStats(
 
 /**
  * The listens since [since] (epoch ms; null: all time), summed up: the most played tracks,
- * artists and albums, [top] of each. Names are matched ignoring case and accents.
+ * artists and albums, [top] of each. Names are matched ignoring case and accents; [artistsOf]
+ * splits an artist tag into its artists (each gets the listen).
  */
-fun listeningStats(listens: List<Listen>, since: Long?, top: Int = 10): ListeningStats {
+fun listeningStats(
+    listens: List<Listen>,
+    since: Long?,
+    top: Int = 10,
+    artistsOf: (String) -> List<String> = { listOf(it) },
+): ListeningStats {
     val shown = if (since == null) listens else listens.filter { it.startedAt >= since }
     fun <K, T> rank(key: (Listen) -> K?, item: (List<Listen>) -> T): List<Ranked<T>> =
         shown.groupBy { key(it) }
@@ -31,9 +37,15 @@ fun listeningStats(listens: List<Listen>, since: Long?, top: Int = 10): Listenin
         heardMs = shown.sumOf(Listen::heardMs),
         plays = shown.size,
         tracks = rank({ it.track.file }) { it.last().track },
-        artists = rank({ it.track.artist?.let(::fold) }) { group -> mostCommon(group.mapNotNull { it.track.artist }) },
-        albums = rank({ l -> l.track.album?.let { fold(it) + "|" + fold(l.track.artist.orEmpty()) } }) { group ->
-            AlbumName(mostCommon(group.mapNotNull { it.track.album }), group.firstNotNullOfOrNull { it.track.artist })
+        artists = shown
+            .flatMap { listen -> listen.track.artist?.let(artistsOf).orEmpty().map { it to listen } }
+            .groupBy { fold(it.first) }
+            .map { (_, heard) -> Ranked(mostCommon(heard.map { it.first }), heard.size, heard.sumOf { it.second.heardMs }) }
+            .sortedWith(compareByDescending<Ranked<String>> { it.plays }.thenByDescending { it.heardMs })
+            .take(top),
+        // An album is its title and its first artist: "A" and "A feat. B" share it.
+        albums = rank({ l -> l.track.album?.let { fold(it) + "|" + fold(l.track.artist?.let(artistsOf)?.firstOrNull().orEmpty()) } }) { group ->
+            AlbumName(mostCommon(group.mapNotNull { it.track.album }), group.firstNotNullOfOrNull { it.track.artist?.let(artistsOf)?.firstOrNull() })
         },
         recent = shown.asReversed().take(RECENT),
     )

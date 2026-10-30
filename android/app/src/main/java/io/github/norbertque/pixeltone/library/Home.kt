@@ -24,11 +24,11 @@ fun dailyMix(
     val inPool = if (pool === index.tracks) null else pool.mapTo(HashSet(), Track::id)
     fun heardSince(since: Long) = listens.filter { it.startedAt >= since }.map { it.track.file }.toSet()
     val topArtists = listens.filter { it.startedAt >= now - 60 * DAY_MS }
-        .mapNotNull { it.track.artist?.let(::fold) }
+        .flatMap { listen -> index.artistNames(listen.track.artist).map(::fold) }
         .groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(8).map { it.key }.toSet()
     val recent = heardSince(now - 2 * DAY_MS)
-    val fromArtists = pool.filter { t -> t.artist?.let(::fold) in topArtists && t.fileKey !in recent }.shuffled(random)
+    val fromArtists = pool.filter { t -> index.artistNames(t.artist).any { fold(it) in topArtists } && t.fileKey !in recent }.shuffled(random)
     val week = heardSince(now - 7 * DAY_MS)
     val loved = favourites.filter { it.file !in week }
         .mapNotNull { index.trackByFile(it.file) }
@@ -65,7 +65,7 @@ fun recentlyPlayedAlbums(index: LibraryIndex, listens: List<Listen>, limit: Int 
 /** The artists listened to most since [since], with their plays (Home's "Your artists this month"). */
 fun topArtists(index: LibraryIndex, listens: List<Listen>, since: Long, limit: Int = 10): List<Pair<Artist, Int>> =
     listens.filter { it.startedAt >= since }
-        .mapNotNull { it.track.artist }
+        .flatMap { index.artistNames(it.track.artist) }
         .groupingBy(::fold).eachCount()
         .entries.sortedByDescending { it.value }
         .mapNotNull { (key, plays) -> index.artist(key)?.let { it to plays } }

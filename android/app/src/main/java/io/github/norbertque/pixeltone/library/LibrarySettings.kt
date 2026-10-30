@@ -5,18 +5,32 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 /** What the library leaves out, as chosen in Settings; kept in the app's preferences. */
 class LibrarySettings(context: Context) {
     private val prefs = context.getSharedPreferences("library", Context.MODE_PRIVATE)
     private val shortest = MutableStateFlow(prefs.getLong(SHORTEST, 0))
     private val hidden = MutableStateFlow(prefs.getStringSet(HIDDEN, emptySet()).orEmpty().toSet())
+    private val separators = MutableStateFlow(
+        prefs.getString(SEPARATORS, null)?.let { runCatching { Json.decodeFromString(LIST, it) }.getOrNull() } ?: DEFAULT_ARTIST_SEPARATORS,
+    )
 
     /** Files shorter than this aren't music (voice notes, ringtones); 0 keeps everything. */
     val shortestMs: StateFlow<Long> = shortest.asStateFlow()
 
     /** Folders ([Track.folder]) whose files stay out of the library. */
     val hiddenFolders: StateFlow<Set<String>> = hidden.asStateFlow()
+
+    /** What artist tags are split on ([splitArtists]); Windows' by default. */
+    val artistSeparators: StateFlow<List<String>> = separators.asStateFlow()
+
+    fun setArtistSeparators(list: List<String>) {
+        prefs.edit { putString(SEPARATORS, Json.encodeToString(LIST, list)) }
+        separators.value = list
+    }
 
     fun setShortest(ms: Long) {
         prefs.edit { putLong(SHORTEST, ms) }
@@ -32,6 +46,8 @@ class LibrarySettings(context: Context) {
     private companion object {
         const val SHORTEST = "shortest_ms"
         const val HIDDEN = "hidden_folders"
+        const val SEPARATORS = "artist_separators"
+        val LIST = ListSerializer(String.serializer())
     }
 }
 

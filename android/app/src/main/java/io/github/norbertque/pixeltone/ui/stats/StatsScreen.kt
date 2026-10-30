@@ -48,12 +48,13 @@ fun StatsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val index by app.library.index.collectAsStateWithLifecycle()
     var period by rememberSaveable { mutableIntStateOf(1) }
     val now = remember(listens) { System.currentTimeMillis() }
-    val stats = remember(listens, period) {
-        listeningStats(listens, since = when (period) {
+    val stats = remember(listens, period, index) {
+        val since = when (period) {
             0 -> now - 7 * DAY_MS
             1 -> now - 30 * DAY_MS
             else -> null
-        })
+        }
+        listeningStats(listens, since, artistsOf = { index?.artistNames(it) ?: listOf(it) })
     }
     StatsContent(
         stats = stats,
