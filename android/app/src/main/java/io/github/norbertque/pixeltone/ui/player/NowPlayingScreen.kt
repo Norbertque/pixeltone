@@ -315,7 +315,7 @@ fun NowPlayingContent(
                             outputBadge != null -> Output(outputBadge)
                         }
                     }
-                    SeekBar(positionMs, state.durationMs, state.isPlaying, controls::seekTo)
+                    SeekBar(positionMs, state.durationMs, state.isPlaying, controls::seekTo, state.format?.label)
                     // What a toggle now does, shown for a moment under the controls.
                     var hint by remember { mutableStateOf<Hint?>(null) }
                     LaunchedEffect(hint) {
@@ -461,8 +461,9 @@ private fun Extra(icon: ImageVector, label: String, on: Boolean, onClick: () -> 
     }
 }
 
+/** The wavy bar, the times at its ends, and the file's format between them. */
 @Composable
-private fun SeekBar(positionMs: Long, durationMs: Long, playing: Boolean, onSeek: (Long) -> Unit) {
+private fun SeekBar(positionMs: Long, durationMs: Long, playing: Boolean, onSeek: (Long) -> Unit, format: String?) {
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     Column(Modifier.fillMaxWidth()) {
         WavySeekBar(
@@ -471,9 +472,17 @@ private fun SeekBar(positionMs: Long, durationMs: Long, playing: Boolean, onSeek
             onSeek = { if (durationMs > 0) onSeek((it * durationMs).toLong()) },
             label = stringResource(R.string.seek),
         )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(formatDuration(positionMs.coerceAtMost(durationMs)), style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.weight(1f))
+            Text(
+                format.orEmpty(),
+                Modifier.weight(1f).padding(horizontal = 8.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(formatDuration(durationMs), style = MaterialTheme.typography.labelLarge)
         }
     }

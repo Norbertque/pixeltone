@@ -148,6 +148,7 @@ class PlayerConnection(private val context: Context) : PlayerControls {
             durationMs = c.duration.takeIf { it != C.TIME_UNSET } ?: 0L,
             repeatMode = c.repeatMode,
             shuffle = c.shuffleModeEnabled,
+            format = trackFormatOf(c.currentTracks),
         )
     }
 }

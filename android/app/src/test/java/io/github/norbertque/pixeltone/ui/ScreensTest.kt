@@ -18,6 +18,7 @@ import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.playback.PlaybackState
 import io.github.norbertque.pixeltone.playback.PlayerControls
 import io.github.norbertque.pixeltone.playback.QueueEntry
+import io.github.norbertque.pixeltone.playback.TrackFormat
 import io.github.norbertque.pixeltone.ui.library.AlbumContent
 import io.github.norbertque.pixeltone.ui.library.ArtistContent
 import io.github.norbertque.pixeltone.ui.library.LibraryContent
@@ -119,6 +120,7 @@ class ScreensTest {
         durationMs = 247_000,
         repeatMode = Player.REPEAT_MODE_ALL,
         shuffle = false,
+        format = TrackFormat("FLAC", 24, 96_000),
     )
 
     // The clock runs by hand: some screens animate for as long as they show (the seek bar's wave).
