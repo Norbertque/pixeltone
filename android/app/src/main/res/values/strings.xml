@@ -280,7 +280,7 @@
     <string name="appearance">Appearance</string>
     <string name="appearance_summary">Light or dark, colours from the covers, palette style</string>
     <string name="playback">Playback</string>
-    <string name="playback_summary">Headphones, closing Pixeltone, the panel under Now Playing</string>
+    <string name="playback_summary">Headphones, closing Pixeltone</string>
     <string name="library_summary">Short files, folders, reading the library again</string>
     <string name="lyrics_summary">Finding them online</string>
     <string name="usb_summary">Bit-perfect playback straight to a USB DAC</string>
@@ -320,8 +320,6 @@
     <string name="contrast_medium">Medium</string>
     <string name="contrast_high">High</string>
 
-    <string name="panel_first">Pull up first</string>
-    <string name="panel_first_text">What the panel under Now Playing shows when it comes up.</string>
     <string name="pause_on_unplug">Pause when headphones come out</string>
     <string name="pause_on_unplug_text">So the music doesn’t carry on out loud.</string>
     <string name="stop_when_swiped">Stop when swiped away</string>

@@ -228,7 +228,7 @@ private fun Navigation() {
     val lists by app.lists.lists.collectAsStateWithLifecycle()
     val index by app.library.index.collectAsStateWithLifecycle()
     val mixes by app.mixes.collectAsStateWithLifecycle()
-    val queueFirst by app.playbackSettings.queueFirst.collectAsStateWithLifecycle()
+    val queueInPanel by app.playbackSettings.queueInPanel.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
     /** The track whose menu is open; tracks waiting for a playlist; a new playlist's tracks. */
     var menuFor by remember { mutableStateOf<Track?>(null) }
@@ -397,7 +397,8 @@ private fun Navigation() {
                         sleep = sleep,
                         onSleep = { sleeping = true },
                         queueEditable = onPc == null,
-                        firstPanel = if (queueFirst) NowPlayingPanel.Queue else NowPlayingPanel.Lyrics,
+                        firstPanel = if (queueInPanel) NowPlayingPanel.Queue else NowPlayingPanel.Lyrics,
+                        onPanel = { app.playbackSettings.setQueueInPanel(it == NowPlayingPanel.Queue) },
                         lyrics = {
                             val now = rememberLyricsNow(app)
                             LyricsBody(now.state, now.online, now.positionMs, player::seekTo)

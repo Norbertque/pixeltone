@@ -38,8 +38,7 @@ fun PlaybackScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val settings = app.playbackSettings
     val unplug by settings.pauseOnUnplug.collectAsStateWithLifecycle()
     val swiped by settings.stopWhenSwipedAway.collectAsStateWithLifecycle()
-    val queueFirst by settings.queueFirst.collectAsStateWithLifecycle()
-    PlaybackContent(unplug, settings::setPauseOnUnplug, swiped, settings::setStopWhenSwipedAway, queueFirst, settings::setQueueFirst, onBack)
+    PlaybackContent(unplug, settings::setPauseOnUnplug, swiped, settings::setStopWhenSwipedAway, onBack)
 }
 
 @Composable
@@ -48,20 +47,9 @@ fun PlaybackContent(
     onPauseOnUnplug: (Boolean) -> Unit,
     stopWhenSwipedAway: Boolean,
     onStopWhenSwipedAway: (Boolean) -> Unit,
-    queueFirst: Boolean,
-    onQueueFirst: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     SettingsScaffold(stringResource(R.string.playback), onBack) {
-        item {
-            ChoiceRow(
-                stringResource(R.string.panel_first),
-                stringResource(R.string.panel_first_text),
-                listOf(false to stringResource(R.string.lyrics), true to stringResource(R.string.queue)),
-                queueFirst,
-                onQueueFirst,
-            )
-        }
         item { SwitchRow(stringResource(R.string.pause_on_unplug), stringResource(R.string.pause_on_unplug_text), pauseOnUnplug, onPauseOnUnplug) }
         item {
             SwitchRow(stringResource(R.string.stop_when_swiped), stringResource(R.string.stop_when_swiped_text), stopWhenSwipedAway, onStopWhenSwipedAway)

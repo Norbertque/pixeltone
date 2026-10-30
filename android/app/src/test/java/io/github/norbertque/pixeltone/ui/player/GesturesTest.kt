@@ -124,6 +124,23 @@ class GesturesTest {
     }
 
     @Test
+    fun thePanelComesUpWhereItWasLeft() {
+        val picked = mutableListOf<NowPlayingPanel>()
+        compose.setContent {
+            PixeltoneTheme {
+                NowPlayingContent(state, 0, controls, {}, lyrics = { Text("The lyrics") }, firstPanel = NowPlayingPanel.Queue, onPanel = { picked += it })
+            }
+        }
+        compose.onRoot().performTouchInput { swipeUp(startY = height * 0.6f, endY = height * 0.2f) }
+        compose.waitForIdle()
+        compose.onNodeWithText("2 tracks").assertIsDisplayed()
+        compose.onNodeWithText("Lyrics").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("The lyrics").assertIsDisplayed()
+        assertThat(picked.last()).isEqualTo(NowPlayingPanel.Lyrics)
+    }
+
+    @Test
     fun theMiniPlayerSkipsSidewaysAndOpensUpwards() {
         var opened = false
         compose.setContent {

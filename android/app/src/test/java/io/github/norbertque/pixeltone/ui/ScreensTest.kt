@@ -347,7 +347,7 @@ class ScreensTest {
     }
 
     @Test
-    fun playbackSettings() = shot("settings-playback") { PlaybackContent(true, {}, false, {}, false, {}, onBack = {}) }
+    fun playbackSettings() = shot("settings-playback") { PlaybackContent(true, {}, false, {}, onBack = {}) }
 
     @Test
     fun librarySettings() = shot("settings-library") {
