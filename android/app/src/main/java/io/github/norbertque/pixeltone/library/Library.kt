@@ -62,6 +62,12 @@ data class Genre(
     val albums: List<Album>,
 )
 
+/** A folder inside the one listed, and how many tracks it holds all the way down. */
+data class FolderEntry(val path: String, val name: String, val tracks: Int)
+
+/** A folder of the library: its folders, then its own tracks (by file name). */
+data class FolderListing(val path: String, val name: String, val folders: List<FolderEntry>, val tracks: List<Track>)
+
 data class SearchResult(
     val tracks: List<Track>,
     val albums: List<Album>,
@@ -174,6 +180,54 @@ class LibraryIndex(
         if (tag == null) emptyList() else synchronized(splits) { splits.getOrPut(tag) { splitArtists(tag, separators) } }
 
     fun genre(key: String): Genre? = genresByKey[key]
+
+    // Each folder's own tracks, by its path without slashes at either end ("Music/Kryštof/Rubikon").
+    private val folderTracks: Map<String, List<Track>> = this.tracks
+        .groupBy { it.folder.trim('/') }
+        .mapValues { (_, list) -> list.sortedWith(compareBy(collator, Track::fileName)) }
+
+    /**
+     * Where the folders start: the first folder that holds tracks or more than one folder, so a
+     * path all files share ("storage/emulated/0" before Android 10) isn't clicked through.
+     */
+    val rootFolder: String by lazy {
+        var path = ""
+        while (true) {
+            val here = folder(path)
+            if (here.tracks.isNotEmpty() || here.folders.size != 1) break
+            path = here.folders.single().path
+        }
+        path
+    }
+
+    /** Every folder with music in it or under it, by path. */
+    val everyFolder: List<FolderEntry> by lazy {
+        val counts = HashMap<String, Int>()
+        for ((folder, list) in folderTracks) {
+            val parts = folder.split('/').filter(String::isNotEmpty)
+            for (i in parts.indices) counts.merge(parts.take(i + 1).joinToString("/"), list.size) { a, b -> a + b }
+        }
+        counts.map { (path, count) -> FolderEntry(path, path.substringAfterLast('/'), count) }.sortedWith(compareBy(collator, FolderEntry::path))
+    }
+
+    /** The folder at [path] ("" for the top). */
+    fun folder(path: String): FolderListing {
+        val prefix = if (path.isEmpty()) "" else "$path/"
+        val counts = LinkedHashMap<String, Int>()
+        for ((folder, list) in folderTracks) {
+            if (!folder.startsWith(prefix)) continue
+            val rest = folder.removePrefix(prefix)
+            if (rest.isEmpty()) continue
+            val child = rest.substringBefore('/')
+            counts.merge(child, list.size) { a, b -> a + b }
+        }
+        return FolderListing(
+            path = path,
+            name = path.substringAfterLast('/'),
+            folders = counts.map { (name, count) -> FolderEntry(prefix + name, name, count) }.sortedWith(compareBy(collator, FolderEntry::name)),
+            tracks = folderTracks[path].orEmpty(),
+        )
+    }
 
     /** Everything whose words contain every word of [query], ignoring case and accents. */
     fun search(query: String): SearchResult {

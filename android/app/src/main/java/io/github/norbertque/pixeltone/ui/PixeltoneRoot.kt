@@ -79,6 +79,7 @@ import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.library.albumKey
 import io.github.norbertque.pixeltone.ui.library.AddToPlaylistDialog
 import io.github.norbertque.pixeltone.ui.library.AlbumScreen
+import io.github.norbertque.pixeltone.ui.library.FolderScreen
 import io.github.norbertque.pixeltone.ui.library.GenreScreen
 import io.github.norbertque.pixeltone.ui.library.MixScreen
 import io.github.norbertque.pixeltone.ui.library.LocalAddToPlaylist
@@ -323,6 +324,15 @@ private fun Navigation() {
                         onGenre = { nav.navigate("genre/${Uri.encode(it)}") },
                         mixes = mixes,
                         onMix = { nav.navigate("mix/${Uri.encode(it)}") },
+                        onFolder = { nav.navigate("folder/${Uri.encode(it)}") },
+                    )
+                }
+                composable("folder/{path}") { entry ->
+                    FolderScreen(
+                        path = entry.arguments?.getString("path").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        onFolder = { nav.navigate("folder/${Uri.encode(it)}") },
+                        onPlay = player::play,
                     )
                 }
                 composable("genre/{key}") { entry ->

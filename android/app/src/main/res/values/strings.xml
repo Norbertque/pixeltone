@@ -164,6 +164,7 @@
     <!-- Favourites and playlists -->
     <string name="tab_playlists">Playlists</string>
     <string name="tab_genres">Genres</string>
+    <string name="tab_folders">Folders</string>
     <string name="genre">Genre</string>
     <string name="genre_gone">This genre is no longer in your library.</string>
     <string name="no_genres">Your tracks have no genres in their tags.</string>

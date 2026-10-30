@@ -58,6 +58,7 @@ import io.github.norbertque.pixeltone.ui.home.HomeContent
 import io.github.norbertque.pixeltone.ui.home.HomeData
 import io.github.norbertque.pixeltone.library.Mix
 import io.github.norbertque.pixeltone.library.Mixes
+import io.github.norbertque.pixeltone.ui.library.FolderPage
 import io.github.norbertque.pixeltone.ui.library.GenreContent
 import io.github.norbertque.pixeltone.ui.library.MixContent
 import io.github.norbertque.pixeltone.ui.search.SearchContent
@@ -372,7 +373,7 @@ class ScreensTest {
         LibraryContent(
             results = index.search(""),
             query = "",
-            tab = 4,
+            tab = 5,
             searching = false,
             onTab = {},
             onSearching = {},
@@ -397,6 +398,28 @@ class ScreensTest {
             daily = Mix(Mix.DAILY, null, index.tracks.take(10)),
             genres = listOf("rock", "pop rock", "electronic", "classical").map { Mix(Mix.keyOf(genre(it)), genre(it), genre(it).tracks) },
         )
+    }
+
+    @Test
+    fun foldersTab() = shot("library-folders") {
+        LibraryContent(
+            results = index.search(""),
+            query = "",
+            tab = 4,
+            searching = false,
+            onTab = {},
+            onSearching = {},
+            onQuery = {},
+            onAlbum = {},
+            onArtist = {},
+            onPlay = { _, _ -> },
+            folders = index.folder(index.rootFolder),
+        )
+    }
+
+    @Test
+    fun folder() = shot("folder") {
+        FolderPage(index.folder("Music/Rubikon") to index.rootFolder, onBack = {}, onFolder = {}, onPlay = { _, _ -> })
     }
 
     @Test

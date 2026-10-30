@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -71,21 +72,32 @@ import io.github.norbertque.pixeltone.library.SearchResult
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
+import io.github.norbertque.pixeltone.library.FolderEntry
+import io.github.norbertque.pixeltone.library.FolderListing
 import io.github.norbertque.pixeltone.library.Lists
 import io.github.norbertque.pixeltone.library.Mixes
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
 /** The library's tabs, in Windows' order. */
-private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists, R.string.tab_genres, R.string.tab_playlists)
+private val TABS = listOf(
+    R.string.tab_tracks,
+    R.string.tab_albums,
+    R.string.tab_artists,
+    R.string.tab_genres,
+    R.string.tab_folders,
+    R.string.tab_playlists,
+)
 private val TAB_ICONS = listOf(
     Icons.Default.MusicNote,
     Icons.Default.Album,
     Icons.Default.Person,
     Icons.Default.Category,
+    Icons.Default.Folder,
     Icons.AutoMirrored.Filled.QueueMusic,
 )
 private const val GENRES_TAB = 3
-private const val PLAYLISTS_TAB = 4
+private const val FOLDERS_TAB = 4
+private const val PLAYLISTS_TAB = 5
 
 @Composable
 fun LibraryScreen(
@@ -102,9 +114,12 @@ fun LibraryScreen(
     onGenre: (String) -> Unit = {},
     mixes: Mixes? = null,
     onMix: (String) -> Unit = {},
+    onFolder: (String) -> Unit = {},
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
+    val index by vm.index.collectAsStateWithLifecycle()
+    val top = remember(index) { index?.let { it.folder(it.rootFolder) } }
     val query by vm.query.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -132,6 +147,9 @@ fun LibraryScreen(
         onGenre = onGenre,
         mixes = mixes,
         onMix = onMix,
+        folders = top,
+        everyFolder = { index?.everyFolder.orEmpty() },
+        onFolder = onFolder,
     )
 }
 
@@ -159,6 +177,10 @@ fun LibraryContent(
     onGenre: (String) -> Unit = {},
     mixes: Mixes? = null,
     onMix: (String) -> Unit = {},
+    /** Where the folders start, for the Folders tab. */
+    folders: FolderListing? = null,
+    everyFolder: () -> List<FolderEntry> = { emptyList() },
+    onFolder: (String) -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     var menu by remember { mutableStateOf(false) }
@@ -240,6 +262,7 @@ fun LibraryContent(
                 tab == 0 -> Tracks(results.tracks, query, onPlay)
                 tab == 1 -> Albums(results.albums, query, onAlbum)
                 tab == GENRES_TAB -> GenresTab(results.genres, query, onGenre)
+                tab == FOLDERS_TAB -> folders?.let { FoldersTab(it, everyFolder, query, onFolder, onPlay) } ?: Loading()
                 else -> Artists(results.artists, query, onArtist)
             }
         }
