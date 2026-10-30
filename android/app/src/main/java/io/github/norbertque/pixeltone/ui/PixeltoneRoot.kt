@@ -8,6 +8,15 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,10 +83,10 @@ import io.github.norbertque.pixeltone.ui.library.ArtistScreen
 import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
-import io.github.norbertque.pixeltone.ui.player.QueueScreen
 import io.github.norbertque.pixeltone.ui.player.SleepSheet
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
-import io.github.norbertque.pixeltone.ui.lyrics.LyricsScreen
+import io.github.norbertque.pixeltone.ui.lyrics.LyricsBody
+import io.github.norbertque.pixeltone.ui.lyrics.rememberLyricsNow
 import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
 import io.github.norbertque.pixeltone.ui.home.HomeScreen
 import io.github.norbertque.pixeltone.ui.search.SearchScreen
@@ -104,12 +113,10 @@ private const val HOME = "home"
 private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val NOW_PLAYING = "now-playing"
-private const val QUEUE = "queue"
 private const val JAM = "jam"
 private const val SETTINGS = "settings"
 private const val FAVOURITES = "favourites"
 private const val STATS = "stats"
-private const val LYRICS = "lyrics"
 
 @Composable
 fun PixeltoneRoot() {
@@ -189,22 +196,26 @@ private fun Navigation() {
     val nav = rememberNavController()
     JamNews(onPc?.jam, messages, onOpen = { nav.navigate(JAM) { launchSingleTop = true } })
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
+    // Until Now Playing has slid away, the bars stay hidden under it.
+    val shown by nav.visibleEntries.collectAsStateWithLifecycle()
+    val bars = shown.none { it.destination.route in FULL_SCREEN }
     // The phone's own track that plays (a PC's tracks aren't the phone's to list).
     val playingTrack = playback.current?.trackId?.takeIf { onPc == null && it >= 0 }?.let { index?.track(it) }
     CompositionLocalProvider(LocalTrackMenu provides { menuFor = it }, LocalAddToPlaylist provides { adding = it }) {
         Scaffold(
             snackbarHost = { SnackbarHost(messages) },
             bottomBar = {
-                if (route !in FULL_SCREEN) {
+                AnimatedVisibility(bars, enter = slideInVertically { it } + fadeIn(), exit = ExitTransition.None) {
                     Column {
                         playback.current?.let { entry ->
                             MiniPlayer(
                                 entry,
                                 playback.isPlaying,
                                 onToggle = player::toggle,
-                                onOpen = { nav.navigate(NOW_PLAYING) },
+                                onOpen = { nav.navigate(NOW_PLAYING) { launchSingleTop = true } },
                                 playingOn = onPc?.pc?.name,
                                 onNext = player::next,
+                                onPrevious = player::previous,
                             )
                         }
                         BottomNavigation(route) { target ->
@@ -220,7 +231,18 @@ private fun Navigation() {
             // The screens inside handle the system bars themselves; this one only adds the mini player.
             contentWindowInsets = WindowInsets(0),
         ) { padding ->
-            NavHost(nav, startDestination = HOME, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
+            NavHost(
+                nav,
+                startDestination = HOME,
+                modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                enterTransition = { fadeIn(tween(FADE_MS)) },
+                // Now Playing slides up over the screen it was opened from, and back down to it.
+                exitTransition = {
+                    if (targetState.destination.route == NOW_PLAYING) ExitTransition.KeepUntilTransitionsFinished else fadeOut(tween(FADE_MS))
+                },
+                popEnterTransition = { if (initialState.destination.route == NOW_PLAYING) EnterTransition.None else fadeIn(tween(FADE_MS)) },
+                popExitTransition = { fadeOut(tween(FADE_MS)) },
+            ) {
                 composable(HOME) {
                     HomeScreen(
                         app,
@@ -281,11 +303,14 @@ private fun Navigation() {
                         onPlay = player::play,
                     )
                 }
-                composable(NOW_PLAYING) {
+                composable(
+                    NOW_PLAYING,
+                    enterTransition = { slideInVertically(tween(SLIDE_MS, easing = Decelerate)) { it } },
+                    popExitTransition = { slideOutVertically(tween(SLIDE_MS, easing = Accelerate)) { it } },
+                ) {
                     NowPlayingScreen(
                         player,
                         onBack = { nav.popBackStack() },
-                        onQueue = { nav.navigate(QUEUE) },
                         playingOn = onPc?.pc?.name,
                         outputBadge = if (onPc != null) onPc?.state?.output?.badge?.label else usbBadge(usb),
                         onPlayOn = { choosing = true },
@@ -293,19 +318,17 @@ private fun Navigation() {
                         favourite = playingTrack?.let { lists.isFavourite(it) },
                         onFavourite = { playingTrack?.let { app.lists.setFavourite(it, !lists.isFavourite(it)) } },
                         onAddToPlaylist = playingTrack?.let { { adding = listOf(it) } },
-                        onLyrics = { nav.navigate(LYRICS) },
                         sleep = sleep,
                         onSleep = { sleeping = true },
+                        queueEditable = onPc == null,
+                        lyrics = {
+                            val now = rememberLyricsNow(app)
+                            LyricsBody(now.state, now.online, now.positionMs, player::seekTo)
+                        },
                     )
-                }
-                composable(LYRICS) {
-                    LyricsScreen(app, onBack = { nav.popBackStack() })
                 }
                 composable(JAM) {
                     OwnerJamScreen(app, onBack = { nav.popBackStack() })
-                }
-                composable(QUEUE) {
-                    QueueScreen(player, onBack = { nav.popBackStack() }, editable = onPc == null)
                 }
             }
         }
@@ -378,7 +401,14 @@ private fun Navigation() {
 }
 
 /** Screens that take the whole height: no mini player or navigation under them. */
-private val FULL_SCREEN = setOf(NOW_PLAYING, QUEUE, JAM, LYRICS)
+private val FULL_SCREEN = setOf(NOW_PLAYING, JAM)
+
+private const val FADE_MS = 300
+private const val SLIDE_MS = 350
+
+/** Material's emphasized easing: in fast and settle, or set off slowly and leave fast. */
+private val Decelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+private val Accelerate = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
 /** Home, Search and Library, as on Windows. */
 @Composable

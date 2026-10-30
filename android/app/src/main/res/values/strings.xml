@@ -231,6 +231,7 @@
 
     <!-- Home and navigation -->
     <string name="home">Home</string>
+    <string name="clear">Clear</string>
     <string name="playing_from">Playing from</string>
     <string name="seek">Seek</string>
     <string name="library">Library</string>

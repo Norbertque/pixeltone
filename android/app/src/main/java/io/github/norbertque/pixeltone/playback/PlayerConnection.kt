@@ -115,6 +115,12 @@ class PlayerConnection(private val context: Context) : PlayerControls {
 
     override fun remove(index: Int) = command { removeMediaItem(index) }
 
+    override fun clearQueue() = command {
+        val current = currentMediaItemIndex
+        if (current + 1 < mediaItemCount) removeMediaItems(current + 1, mediaItemCount)
+        if (current > 0) removeMediaItems(0, current)
+    }
+
     override fun cycleRepeat() = command { repeatMode = nextRepeatMode(repeatMode) }
 
     override fun toggleShuffle() = command { shuffleModeEnabled = !shuffleModeEnabled }

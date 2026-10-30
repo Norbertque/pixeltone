@@ -51,6 +51,9 @@ interface PlayerControls {
     fun jumpTo(index: Int)
     fun move(from: Int, to: Int)
     fun remove(index: Int)
+
+    /** Everything but the track that plays leaves the queue. */
+    fun clearQueue() {}
     fun cycleRepeat()
     fun toggleShuffle()
 }

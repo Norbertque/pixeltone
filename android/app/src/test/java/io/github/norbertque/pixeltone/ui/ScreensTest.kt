@@ -23,7 +23,7 @@ import io.github.norbertque.pixeltone.ui.library.ArtistContent
 import io.github.norbertque.pixeltone.ui.library.LibraryContent
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingContent
-import io.github.norbertque.pixeltone.ui.player.QueueContent
+import io.github.norbertque.pixeltone.ui.player.NowPlayingPanel
 import io.github.norbertque.pixeltone.remote.FoundPc
 import io.github.norbertque.pixeltone.jam.Uploads
 import io.github.norbertque.pixeltone.remote.GuestPermissions
@@ -50,7 +50,7 @@ import io.github.norbertque.pixeltone.library.listeningStats
 import io.github.norbertque.pixeltone.ui.stats.StatsContent
 import io.github.norbertque.pixeltone.lyrics.Lyrics
 import io.github.norbertque.pixeltone.lyrics.parseLrc
-import io.github.norbertque.pixeltone.ui.lyrics.LyricsContent
+import io.github.norbertque.pixeltone.ui.lyrics.LyricsBody
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsState
 import io.github.norbertque.pixeltone.widget.PlayerWidget
 import io.github.norbertque.pixeltone.ui.home.HomeContent
@@ -169,24 +169,24 @@ class ScreensTest {
     fun access() = shot("access") { AccessScreen(onAllowed = {}) }
 
     @Test
-    fun nowPlaying() = shot("now-playing") { NowPlayingContent(playing, 95_000, NoControls, onBack = {}, onQueue = {}) }
+    fun nowPlaying() = shot("now-playing") { NowPlayingContent(playing, 95_000, NoControls, onBack = {}) }
 
     @Test
     fun nowPlayingDark() = shot("now-playing-dark", dark = true) {
-        NowPlayingContent(playing.copy(isPlaying = false, shuffle = true, repeatMode = Player.REPEAT_MODE_ONE), 0, NoControls, {}, {})
+        NowPlayingContent(playing.copy(isPlaying = false, shuffle = true, repeatMode = Player.REPEAT_MODE_ONE), 0, NoControls, {})
     }
 
     @Test
     fun repeatHint() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { PixeltoneTheme { NowPlayingContent(playing, 95_000, NoControls, onBack = {}, onQueue = {}) } }
+        compose.setContent { PixeltoneTheme { NowPlayingContent(playing, 95_000, NoControls, onBack = {}) } }
         compose.onNodeWithContentDescription("Repeat: all").performClick()
         compose.mainClock.advanceTimeBy(1_000)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/now-playing-repeat-hint.png")
     }
 
     @Test
-    fun queue() = shot("queue") { QueueContent(playing, NoControls, onBack = {}) }
+    fun queue() = shot("now-playing-queue") { NowPlayingContent(playing, 95_000, NoControls, onBack = {}, opened = NowPlayingPanel.Queue) }
 
     @Test
     fun updateOffered() = shot("update-offered") {
@@ -219,11 +219,13 @@ class ScreensTest {
 
     @Test
     fun nowPlayingOnPc() = shot("now-playing-on-pc") {
-        NowPlayingContent(playing, 95_000, NoControls, {}, {}, playingOn = "BIG-ONE", outputBadge = "Exclusive • 24-bit/96 kHz • Bit-perfect")
+        NowPlayingContent(playing, 95_000, NoControls, {}, playingOn = "BIG-ONE", outputBadge = "Exclusive • 24-bit/96 kHz • Bit-perfect")
     }
 
     @Test
-    fun queueOnPc() = shot("queue-on-pc") { QueueContent(playing, NoControls, onBack = {}, editable = false) }
+    fun queueOnPc() = shot("now-playing-queue-on-pc", dark = true) {
+        NowPlayingContent(playing, 95_000, NoControls, {}, playingOn = "BIG-ONE", queueEditable = false, opened = NowPlayingPanel.Queue)
+    }
 
     @Test
     fun jamJoin() = shot("jam-join") {
@@ -313,7 +315,7 @@ class ScreensTest {
 
     @Test
     fun nowPlayingUsb() = shot("now-playing-usb") {
-        NowPlayingContent(playing, 95_000, NoControls, {}, {}, outputBadge = "USB • 24-bit/96 kHz • Bit-perfect")
+        NowPlayingContent(playing, 95_000, NoControls, {}, outputBadge = "USB • 24-bit/96 kHz • Bit-perfect")
     }
 
     @Composable
@@ -352,7 +354,7 @@ class ScreensTest {
 
     @Test
     fun nowPlayingFavourite() = shot("now-playing-favourite", dark = true) {
-        NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = true, onAddToPlaylist = {})
+        NowPlayingContent(playing, 95_000, NoControls, {}, favourite = true, onAddToPlaylist = {})
     }
 
     @Test
@@ -368,17 +370,21 @@ class ScreensTest {
     fun lyricsSynced() = shot("lyrics-synced", dark = true) {
         val lrc = (0 until 24).joinToString("\n") { i -> "[%02d:%02d.00]Line number ${i + 1} of the song".format(i * 4 / 60, i * 4 % 60) }
         val (lines, _) = parseLrc(lrc)
-        LyricsContent("Ty a já", "Kryštof", LyricsState.Found(Lyrics(lines, true, Lyrics.Source.LRCLIB)), true, 41_000, {}, {})
+        NowPlayingContent(playing, 41_000, NoControls, {}, opened = NowPlayingPanel.Lyrics, lyrics = {
+            LyricsBody(LyricsState.Found(Lyrics(lines, true, Lyrics.Source.LRCLIB)), true, 41_000, {})
+        })
     }
 
     @Test
     fun lyricsMissing() = shot("lyrics-missing") {
-        LyricsContent("Ty a já", "Kryštof", LyricsState.Missing, online = false, positionMs = 0, onSeek = {}, onBack = {})
+        NowPlayingContent(playing, 0, NoControls, {}, opened = NowPlayingPanel.Lyrics, lyrics = {
+            LyricsBody(LyricsState.Missing, online = false, positionMs = 0, onSeek = {})
+        })
     }
 
     @Test
     fun nowPlayingSleep() = shot("now-playing-sleep") {
-        NowPlayingContent(playing, 95_000, NoControls, {}, {}, favourite = false, sleep = "Stops in 23:41")
+        NowPlayingContent(playing, 95_000, NoControls, {}, favourite = false, sleep = "Stops in 23:41")
     }
 
     @Test

@@ -9,11 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.norbertque.pixeltone.PixeltoneApp
@@ -33,7 +29,6 @@ import io.github.norbertque.pixeltone.library.trackUri
 import io.github.norbertque.pixeltone.lyrics.LyricLine
 import io.github.norbertque.pixeltone.lyrics.Lyrics
 import io.github.norbertque.pixeltone.lyrics.LyricsRequest
-import io.github.norbertque.pixeltone.ui.BackButton
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
 
@@ -46,9 +41,12 @@ sealed interface LyricsState {
     data object Missing : LyricsState
 }
 
-/** The lyrics of what plays now, on the phone or on a PC. */
+/** What Now Playing's panel shows: the lyrics of what plays now, as they're found. */
+class LyricsNow(val title: String, val artist: String?, val state: LyricsState, val online: Boolean, val positionMs: Long)
+
+/** The lyrics of what plays now, on the phone or on a PC, looked for again when the track changes. */
 @Composable
-fun LyricsScreen(app: PixeltoneApp, onBack: () -> Unit) {
+fun rememberLyricsNow(app: PixeltoneApp): LyricsNow {
     val playback by app.player.state.collectAsStateWithLifecycle()
     val position by app.player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
     val index by app.library.index.collectAsStateWithLifecycle()
@@ -69,49 +67,22 @@ fun LyricsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     LaunchedEffect(request?.key, online) {
         state = request?.let { app.lyrics.find(it) }?.let { LyricsState.Found(it) } ?: LyricsState.Missing
     }
-    LyricsContent(
-        title = entry?.title.orEmpty(),
-        artist = entry?.artist,
-        state = state,
-        online = online,
-        positionMs = position,
-        onSeek = app.player::seekTo,
-        onBack = onBack,
-    )
+    return LyricsNow(entry?.title.orEmpty(), entry?.artist, state, online, position)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** The lyrics themselves: synced ones follow [positionMs] (a tap on a line seeks), plain ones scroll. */
 @Composable
-fun LyricsContent(
-    title: String,
-    artist: String?,
-    state: LyricsState,
-    online: Boolean,
-    positionMs: Long,
-    onSeek: (Long) -> Unit,
-    onBack: () -> Unit,
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(listOfNotNull(title, artist).joinToString(" · "), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = { BackButton(onBack) },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (state) {
-                LyricsState.Looking -> Loading()
-                LyricsState.Missing -> Message(stringResource(if (online) R.string.lyrics_missing else R.string.lyrics_missing_offline))
-                is LyricsState.Found -> {
-                    val lyrics = state.lyrics
-                    when {
-                        lyrics.instrumental -> Message(stringResource(R.string.lyrics_instrumental))
-                        lyrics.synced -> Synced(lyrics.lines, lyrics.source, positionMs, onSeek)
-                        else -> Plain(lyrics.lines, lyrics.source)
-                    }
+fun LyricsBody(state: LyricsState, online: Boolean, positionMs: Long, onSeek: (Long) -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize()) {
+        when (state) {
+            LyricsState.Looking -> Loading()
+            LyricsState.Missing -> Message(stringResource(if (online) R.string.lyrics_missing else R.string.lyrics_missing_offline))
+            is LyricsState.Found -> {
+                val lyrics = state.lyrics
+                when {
+                    lyrics.instrumental -> Message(stringResource(R.string.lyrics_instrumental))
+                    lyrics.synced -> Synced(lyrics.lines, lyrics.source, positionMs, onSeek)
+                    else -> Plain(lyrics.lines, lyrics.source)
                 }
             }
         }
