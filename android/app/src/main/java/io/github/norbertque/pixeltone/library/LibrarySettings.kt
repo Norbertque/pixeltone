@@ -24,6 +24,25 @@ class LibrarySettings(context: Context) {
     /** Folders ([Track.folder]) whose files stay out of the library. */
     val hiddenFolders: StateFlow<Set<String>> = hidden.asStateFlow()
 
+    private val tracksBy = MutableStateFlow(enumValues<TrackSort>().firstOrNull { it.name == prefs.getString(TRACK_SORT, null) } ?: TrackSort.Title)
+    private val albumsBy = MutableStateFlow(enumValues<AlbumSort>().firstOrNull { it.name == prefs.getString(ALBUM_SORT, null) } ?: AlbumSort.Title)
+
+    /** The Tracks tab's order. */
+    val trackSort: StateFlow<TrackSort> = tracksBy.asStateFlow()
+
+    /** The Albums tab's order. */
+    val albumSort: StateFlow<AlbumSort> = albumsBy.asStateFlow()
+
+    fun setTrackSort(sort: TrackSort) {
+        prefs.edit { putString(TRACK_SORT, sort.name) }
+        tracksBy.value = sort
+    }
+
+    fun setAlbumSort(sort: AlbumSort) {
+        prefs.edit { putString(ALBUM_SORT, sort.name) }
+        albumsBy.value = sort
+    }
+
     /** What artist tags are split on ([splitArtists]); Windows' by default. */
     val artistSeparators: StateFlow<List<String>> = separators.asStateFlow()
 
@@ -47,6 +66,8 @@ class LibrarySettings(context: Context) {
         const val SHORTEST = "shortest_ms"
         const val HIDDEN = "hidden_folders"
         const val SEPARATORS = "artist_separators"
+        const val TRACK_SORT = "track_sort"
+        const val ALBUM_SORT = "album_sort"
         val LIST = ListSerializer(String.serializer())
     }
 }

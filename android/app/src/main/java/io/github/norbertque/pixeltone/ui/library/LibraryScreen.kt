@@ -32,12 +32,19 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import io.github.norbertque.pixeltone.ui.theme.Emphasized
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.FilterChip
@@ -74,7 +81,9 @@ import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
 import io.github.norbertque.pixeltone.library.FolderEntry
 import io.github.norbertque.pixeltone.library.FolderListing
+import io.github.norbertque.pixeltone.library.AlbumSort
 import io.github.norbertque.pixeltone.library.Lists
+import io.github.norbertque.pixeltone.library.TrackSort
 import io.github.norbertque.pixeltone.library.Mixes
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
@@ -119,6 +128,8 @@ fun LibraryScreen(
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
     val index by vm.index.collectAsStateWithLifecycle()
+    val trackSort by vm.trackSort.collectAsStateWithLifecycle()
+    val albumSort by vm.albumSort.collectAsStateWithLifecycle()
     val top = remember(index) { index?.let { it.folder(it.rootFolder) } }
     val query by vm.query.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -150,6 +161,10 @@ fun LibraryScreen(
         folders = top,
         everyFolder = { index?.everyFolder.orEmpty() },
         onFolder = onFolder,
+        trackSort = trackSort,
+        onTrackSort = vm::setTrackSort,
+        albumSort = albumSort,
+        onAlbumSort = vm::setAlbumSort,
     )
 }
 
@@ -181,6 +196,10 @@ fun LibraryContent(
     folders: FolderListing? = null,
     everyFolder: () -> List<FolderEntry> = { emptyList() },
     onFolder: (String) -> Unit = {},
+    trackSort: TrackSort = TrackSort.Title,
+    onTrackSort: (TrackSort) -> Unit = {},
+    albumSort: AlbumSort = AlbumSort.Title,
+    onAlbumSort: (AlbumSort) -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     var menu by remember { mutableStateOf(false) }
@@ -259,8 +278,8 @@ fun LibraryContent(
                 tab == PLAYLISTS_TAB -> PlaylistsTab(lists, query, onFavourites, onPlaylist, onNewPlaylist, mixes, onMix)
                 results == null -> Loading()
                 query.isBlank() && results.tracks.isEmpty() -> Message(stringResource(R.string.empty_library))
-                tab == 0 -> Tracks(results.tracks, query, onPlay)
-                tab == 1 -> Albums(results.albums, query, onAlbum)
+                tab == 0 -> Tracks(results.tracks, query, onPlay, trackSort, onTrackSort)
+                tab == 1 -> Albums(results.albums, query, onAlbum, albumSort, onAlbumSort)
                 tab == GENRES_TAB -> GenresTab(results.genres, query, onGenre)
                 tab == FOLDERS_TAB -> folders?.let { FoldersTab(it, everyFolder, query, onFolder, onPlay) } ?: Loading()
                 else -> Artists(results.artists, query, onArtist)
@@ -269,19 +288,37 @@ fun LibraryContent(
     }
 }
 
+private val TRACK_SORTS = listOf(
+    TrackSort.Title to R.string.sort_title,
+    TrackSort.Artist to R.string.sort_artist,
+    TrackSort.Album to R.string.sort_album,
+    TrackSort.Year to R.string.sort_year,
+    TrackSort.Added to R.string.sort_added,
+    TrackSort.Duration to R.string.sort_longest,
+)
+private val ALBUM_SORTS = listOf(
+    AlbumSort.Title to R.string.sort_title,
+    AlbumSort.Artist to R.string.sort_artist,
+    AlbumSort.Year to R.string.sort_year,
+    AlbumSort.Added to R.string.sort_added,
+)
+
 @Composable
-private fun Tracks(tracks: List<Track>, query: String, onPlay: (List<Track>, Int) -> Unit) {
+private fun Tracks(tracks: List<Track>, query: String, onPlay: (List<Track>, Int) -> Unit, sort: TrackSort, onSort: (TrackSort) -> Unit) {
     if (tracks.isEmpty()) {
         NoMatch(query)
         return
     }
     LazyColumn(Modifier.fillMaxSize()) {
+        item(key = "sort") {
+            SortBar(pluralStringResource(R.plurals.tracks_count, tracks.size, tracks.size), TRACK_SORTS, sort, onSort, Modifier.padding(horizontal = 8.dp))
+        }
         itemsIndexed(tracks, key = { _, track -> track.id }) { i, track -> TrackRow(track, onClick = { onPlay(tracks, i) }) }
     }
 }
 
 @Composable
-private fun Albums(albums: List<Album>, query: String, onAlbum: (String) -> Unit) {
+private fun Albums(albums: List<Album>, query: String, onAlbum: (String) -> Unit, sort: AlbumSort, onSort: (AlbumSort) -> Unit) {
     if (albums.isEmpty()) {
         NoMatch(query)
         return
@@ -289,11 +326,42 @@ private fun Albums(albums: List<Album>, query: String, onAlbum: (String) -> Unit
     LazyVerticalGrid(
         columns = GridCells.Adaptive(152.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item(key = "sort", span = { GridItemSpan(maxLineSpan) }) {
+            SortBar(pluralStringResource(R.plurals.albums_count, albums.size, albums.size), ALBUM_SORTS, sort, onSort)
+        }
         gridItems(albums, key = Album::key) { album -> AlbumCard(album, onClick = { onAlbum(album.key) }) }
+    }
+}
+
+/** How many there are, and the order they're in (a menu of the others), as on Windows. */
+@Composable
+private fun <T> SortBar(count: String, sorts: List<Pair<T, Int>>, sort: T, onSort: (T) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    Row(modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(count, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box {
+            TextButton(onClick = { open = true }) {
+                Icon(Icons.AutoMirrored.Filled.Sort, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(sorts.first { it.first == sort }.second))
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                sorts.forEach { (option, label) ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(label)) },
+                        trailingIcon = { if (option == sort) Icon(Icons.Default.Check, null) },
+                        onClick = {
+                            open = false
+                            onSort(option)
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 

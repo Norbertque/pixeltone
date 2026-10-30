@@ -165,6 +165,12 @@
     <string name="tab_playlists">Playlists</string>
     <string name="tab_genres">Genres</string>
     <string name="tab_folders">Folders</string>
+    <string name="sort_title">Title</string>
+    <string name="sort_artist">Artist</string>
+    <string name="sort_album">Album</string>
+    <string name="sort_year">Year</string>
+    <string name="sort_added">Recently added</string>
+    <string name="sort_longest">Longest</string>
     <string name="genre">Genre</string>
     <string name="genre_gone">This genre is no longer in your library.</string>
     <string name="no_genres">Your tracks have no genres in their tags.</string>
