@@ -4,11 +4,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBar
@@ -40,11 +36,10 @@ fun MixScreen(app: PixeltoneApp, key: String, onBack: () -> Unit) {
         onBack = onBack,
         onPlay = app.player::play,
         onShuffle = app.player::shuffle,
-        onSave = LocalAddToPlaylist.current,
     )
 }
 
-/** A mix's tracks under its card; they can be kept as a playlist of the user's. */
+/** A mix's tracks under its card; its menu keeps them as a playlist of the user's. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MixContent(
@@ -53,9 +48,16 @@ fun MixContent(
     onBack: () -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     onShuffle: (List<Track>) -> Unit,
-    onSave: (List<Track>) -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = {}, navigationIcon = { BackButton(onBack) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {},
+                navigationIcon = { BackButton(onBack) },
+                actions = { if (mix != null) ListMenuButton(TrackList(mixName(mix), mix.tracks)) },
+            )
+        },
+    ) { padding ->
         when {
             loading -> Loading(Modifier.padding(padding))
             mix == null || mix.tracks.isEmpty() -> Message(stringResource(R.string.mix_gone), Modifier.padding(padding))
@@ -74,11 +76,6 @@ fun MixContent(
                             ?: (MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer),
                         onPlay = { onPlay(mix.tracks, 0) },
                         onShuffle = { onShuffle(mix.tracks) },
-                        more = {
-                            IconButton(onClick = { onSave(mix.tracks) }) {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.save_as_playlist))
-                            }
-                        },
                     )
                 }
                 itemsIndexed(mix.tracks, key = { _, track -> track.id }) { i, track ->

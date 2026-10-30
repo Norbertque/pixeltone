@@ -70,6 +70,7 @@ fun ArtistContent(
             TopAppBar(
                 title = {},
                 navigationIcon = { BackButton(onBack) },
+                actions = { if (artist != null) ListMenuButton(TrackList(artist.name, artist.tracks)) },
             )
         },
     ) { padding ->

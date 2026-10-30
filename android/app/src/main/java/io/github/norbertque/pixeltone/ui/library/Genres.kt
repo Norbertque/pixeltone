@@ -126,7 +126,15 @@ fun GenreContent(
     onPlay: (List<Track>, Int) -> Unit,
     onShuffle: (List<Track>) -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = {}, navigationIcon = { BackButton(onBack) }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {},
+                navigationIcon = { BackButton(onBack) },
+                actions = { if (genre != null) ListMenuButton(TrackList(genre.name, genre.tracks)) },
+            )
+        },
+    ) { padding ->
         when {
             loading -> Loading(Modifier.padding(padding))
             genre == null -> Message(stringResource(R.string.genre_gone), Modifier.padding(padding))
@@ -162,7 +170,7 @@ fun GenreContent(
 
 /**
  * The big card on top of a genre or a mix, as on Windows: what it is, its name, how much there
- * is, then Play and Shuffle (and [more]), all in [colors] (a container and what goes on it).
+ * is, then Play and Shuffle, all in [colors] (a container and what goes on it).
  */
 @Composable
 internal fun Hero(
@@ -172,7 +180,6 @@ internal fun Hero(
     colors: Pair<Color, Color>,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
-    more: @Composable () -> Unit = {},
 ) {
     val (container, content) = colors
     Surface(
@@ -203,7 +210,6 @@ internal fun Hero(
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.shuffle))
                 }
-                more()
             }
         }
     }

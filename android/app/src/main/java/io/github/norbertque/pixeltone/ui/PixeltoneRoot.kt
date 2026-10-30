@@ -82,7 +82,11 @@ import io.github.norbertque.pixeltone.ui.library.AlbumScreen
 import io.github.norbertque.pixeltone.ui.library.FolderScreen
 import io.github.norbertque.pixeltone.ui.library.GenreScreen
 import io.github.norbertque.pixeltone.ui.library.MixScreen
+import io.github.norbertque.pixeltone.ui.library.ListAction
+import io.github.norbertque.pixeltone.ui.library.ListMenu
 import io.github.norbertque.pixeltone.ui.library.LocalAddToPlaylist
+import io.github.norbertque.pixeltone.ui.library.LocalListMenu
+import io.github.norbertque.pixeltone.ui.library.TrackList
 import io.github.norbertque.pixeltone.ui.library.LocalTrackMenu
 import io.github.norbertque.pixeltone.ui.library.NameDialog
 import io.github.norbertque.pixeltone.ui.library.PlaylistScreen
@@ -235,6 +239,7 @@ private fun Navigation() {
     var menuFor by remember { mutableStateOf<Track?>(null) }
     var adding by remember { mutableStateOf<List<Track>?>(null) }
     var naming by remember { mutableStateOf<List<Track>?>(null) }
+    var listMenuFor by remember { mutableStateOf<TrackList?>(null) }
     var sleeping by remember { mutableStateOf(false) }
     val sleep by app.sleep.state.collectAsStateWithLifecycle()
     val messages = remember { SnackbarHostState() }
@@ -249,7 +254,15 @@ private fun Navigation() {
     val bars = shown.none { it.destination.route in FULL_SCREEN }
     // The phone's own track that plays (a PC's tracks aren't the phone's to list).
     val playingTrack = playback.current?.trackId?.takeIf { onPc == null && it >= 0 }?.let { index?.track(it) }
-    CompositionLocalProvider(LocalTrackMenu provides { menuFor = it }, LocalAddToPlaylist provides { adding = it }) {
+    // Play next and Add to queue say so, as nothing on screen changes.
+    fun queued(next: Boolean, what: String) {
+        scope.launch { messages.showSnackbar(resources.getString(if (next) R.string.queued_next else R.string.queued, what)) }
+    }
+    CompositionLocalProvider(
+        LocalTrackMenu provides { menuFor = it },
+        LocalAddToPlaylist provides { adding = it },
+        LocalListMenu provides { listMenuFor = it },
+    ) {
         Scaffold(
             snackbarHost = { SnackbarHost(messages) },
             bottomBar = {
@@ -441,15 +454,44 @@ private fun Navigation() {
             hasArtist = artist != null,
             onAction = { action ->
                 when (action) {
-                    TrackAction.PlayNext -> player.playNext(listOf(track))
-                    TrackAction.AddToQueue -> player.addToQueue(listOf(track))
+                    TrackAction.PlayNext -> {
+                        player.playNext(listOf(track))
+                        queued(next = true, track.title)
+                    }
+                    TrackAction.AddToQueue -> {
+                        player.addToQueue(listOf(track))
+                        queued(next = false, track.title)
+                    }
                     TrackAction.AddToPlaylist -> adding = listOf(track)
                     TrackAction.Favourite -> app.lists.setFavourite(track, !lists.isFavourite(track))
                     TrackAction.Album -> album?.let { nav.navigate("album/${Uri.encode(it.key)}") }
                     TrackAction.Artist -> artist?.let { nav.navigate("artist/${Uri.encode(it.key)}") }
+                    TrackAction.Folder -> nav.navigate("folder/${Uri.encode(track.folder.trim('/'))}")
                 }
             },
             onDismiss = { menuFor = null },
+        )
+    }
+    listMenuFor?.let { list ->
+        ListMenu(
+            list = list,
+            onAction = { action ->
+                when (action) {
+                    ListAction.Play -> player.play(list.tracks, 0)
+                    ListAction.Shuffle -> player.shuffle(list.tracks)
+                    ListAction.PlayNext -> {
+                        player.playNext(list.tracks)
+                        queued(next = true, list.title)
+                    }
+                    ListAction.AddToQueue -> {
+                        player.addToQueue(list.tracks)
+                        queued(next = false, list.title)
+                    }
+                    ListAction.AddToPlaylist -> adding = list.tracks
+                    ListAction.Album -> list.albumKey?.let { nav.navigate("album/${Uri.encode(it)}") }
+                }
+            },
+            onDismiss = { listMenuFor = null },
         )
     }
     adding?.let { tracks ->

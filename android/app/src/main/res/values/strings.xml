@@ -165,6 +165,9 @@
     <string name="tab_playlists">Playlists</string>
     <string name="tab_genres">Genres</string>
     <string name="tab_folders">Folders</string>
+    <string name="show_in_folder">Show in folder</string>
+    <string name="queued_next">Plays next: %1$s</string>
+    <string name="queued">Added to the queue: %1$s</string>
     <string name="sort_title">Title</string>
     <string name="sort_artist">Artist</string>
     <string name="sort_album">Album</string>
@@ -178,7 +181,6 @@
     <string name="genre_mixes">Genre mixes</string>
     <string name="new_every_day">New every day</string>
     <string name="mix_gone">This mix isn’t made today: there are new ones every day.</string>
-    <string name="save_as_playlist">Save as playlist</string>
     <string name="favourites">Favourites</string>
     <string name="favourite">Add to favourites</string>
     <string name="unfavourite">Remove from favourites</string>

@@ -104,9 +104,19 @@ fun TrackRow(
     )
 }
 
+/** An album's cover and names; a long press opens its menu (as Windows' right click). */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.clip(MaterialTheme.shapes.large).clickable(onClick = onClick)) {
+    val menu = LocalListMenu.current
+    Column(
+        modifier
+            .clip(MaterialTheme.shapes.large)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menu(TrackList(album.title, album.tracks, withPlay = true, albumKey = album.key)) },
+            ),
+    ) {
         Cover(album.coverId, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
         Text(
             album.title,

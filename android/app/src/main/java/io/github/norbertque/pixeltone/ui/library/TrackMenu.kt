@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,7 +35,7 @@ val LocalTrackMenu = staticCompositionLocalOf<(Track) -> Unit> { {} }
 /** Asks which playlist the tracks go to; does nothing where it isn't set up. */
 val LocalAddToPlaylist = staticCompositionLocalOf<(List<Track>) -> Unit> { {} }
 
-enum class TrackAction { PlayNext, AddToQueue, AddToPlaylist, Favourite, Album, Artist }
+enum class TrackAction { PlayNext, AddToQueue, AddToPlaylist, Favourite, Album, Artist, Folder }
 
 /** What can be done with one track; [hasAlbum] / [hasArtist]: whether those pages exist. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,22 +66,23 @@ fun TrackMenu(
                 onDismiss()
                 onAction(action)
             }
-            Action(Icons.Default.SkipNext, stringResource(R.string.play_next)) { pick(TrackAction.PlayNext) }
-            Action(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.add_to_queue)) { pick(TrackAction.AddToQueue) }
-            Action(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist)) { pick(TrackAction.AddToPlaylist) }
+            MenuAction(Icons.Default.SkipNext, stringResource(R.string.play_next)) { pick(TrackAction.PlayNext) }
+            MenuAction(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.add_to_queue)) { pick(TrackAction.AddToQueue) }
+            MenuAction(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist)) { pick(TrackAction.AddToPlaylist) }
             if (favourite) {
-                Action(Icons.Default.Favorite, stringResource(R.string.unfavourite)) { pick(TrackAction.Favourite) }
+                MenuAction(Icons.Default.Favorite, stringResource(R.string.unfavourite)) { pick(TrackAction.Favourite) }
             } else {
-                Action(Icons.Default.FavoriteBorder, stringResource(R.string.favourite)) { pick(TrackAction.Favourite) }
+                MenuAction(Icons.Default.FavoriteBorder, stringResource(R.string.favourite)) { pick(TrackAction.Favourite) }
             }
-            if (hasAlbum) Action(Icons.Default.Album, stringResource(R.string.go_to_album)) { pick(TrackAction.Album) }
-            if (hasArtist) Action(Icons.Default.Person, stringResource(R.string.go_to_artist)) { pick(TrackAction.Artist) }
+            if (hasAlbum) MenuAction(Icons.Default.Album, stringResource(R.string.go_to_album)) { pick(TrackAction.Album) }
+            if (hasArtist) MenuAction(Icons.Default.Person, stringResource(R.string.go_to_artist)) { pick(TrackAction.Artist) }
+            MenuAction(Icons.Default.FolderOpen, stringResource(R.string.show_in_folder)) { pick(TrackAction.Folder) }
         }
     }
 }
 
 @Composable
-private fun Action(icon: ImageVector, label: String, onClick: () -> Unit) {
+internal fun MenuAction(icon: ImageVector, label: String, onClick: () -> Unit) {
     ListItem(
         headlineContent = { Text(label) },
         leadingContent = { Icon(icon, null) },

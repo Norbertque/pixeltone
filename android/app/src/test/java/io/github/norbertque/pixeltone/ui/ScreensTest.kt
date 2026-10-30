@@ -433,12 +433,12 @@ class ScreensTest {
 
     @Test
     fun genreMix() = shot("mix-genre", dark = true) {
-        MixContent(mixes.mix("genre:pop rock"), loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {}, onSave = {})
+        MixContent(mixes.mix("genre:pop rock"), loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {})
     }
 
     @Test
     fun todaysMix() = shot("mix-today") {
-        MixContent(mixes.daily, loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {}, onSave = {})
+        MixContent(mixes.daily, loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {})
     }
 
     @Test

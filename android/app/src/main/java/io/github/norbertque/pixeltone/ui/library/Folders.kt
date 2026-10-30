@@ -80,6 +80,10 @@ fun FolderPage(folder: Pair<FolderListing, String>?, onBack: () -> Unit, onFolde
             TopAppBar(
                 title = { Text(folder?.first?.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = { BackButton(onBack) },
+                actions = {
+                    val listing = folder?.first
+                    if (listing != null && listing.tracks.isNotEmpty()) ListMenuButton(TrackList(listing.name, listing.tracks, withPlay = true))
+                },
             )
         },
     ) { padding ->
