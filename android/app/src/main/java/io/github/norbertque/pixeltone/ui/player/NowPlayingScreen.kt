@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -131,8 +133,8 @@ fun NowPlayingScreen(
 /** What the panel pulled up from under Now Playing shows. */
 enum class NowPlayingPanel { Lyrics, Queue }
 
-/** The panel's tabs, above the navigation bar while it's down. */
-private val PANEL_PEEK = 72.dp
+/** The panel's handle and tabs, above the navigation bar while it's down. */
+private val PANEL_PEEK = 54.dp
 
 /** How far a swipe down closes Now Playing, and a swipe up pulls up the panel. */
 private val CLOSE_AT = 120.dp
@@ -206,6 +208,7 @@ fun NowPlayingContent(
         },
         scaffoldState = rememberBottomSheetScaffoldState(sheet),
         sheetPeekHeight = PANEL_PEEK + navigationBar,
+        sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         sheetContainerColor = MaterialTheme.colorScheme.surfaceContainer,
         sheetDragHandle = null,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -284,28 +287,14 @@ fun NowPlayingContent(
                         ShapeXlPlus,
                     )
                     Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // As wide as the heart: the title sits in the middle of the screen.
-                            if (favourite != null) Spacer(Modifier.width(48.dp))
-                            Text(
-                                entry.title,
-                                Modifier.weight(1f, fill = false),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = Emphasized,
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (favourite != null) {
-                                IconToggleButton(checked = favourite, onCheckedChange = { onFavourite() }) {
-                                    if (favourite) {
-                                        Icon(Icons.Default.Favorite, stringResource(R.string.unfavourite), tint = MaterialTheme.colorScheme.primary)
-                                    } else {
-                                        Icon(Icons.Default.FavoriteBorder, stringResource(R.string.favourite))
-                                    }
-                                }
-                            }
-                        }
+                        Text(
+                            entry.title,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = Emphasized,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(
                             entry.artist ?: stringResource(R.string.unknown_artist),
                             style = MaterialTheme.typography.titleLarge,
@@ -331,6 +320,14 @@ fun NowPlayingContent(
                     Controls(state, controls, onHint = { hint = Hint(it, (hint?.id ?: 0) + 1) })
                     HintLine(hint)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (favourite != null) {
+                            Extra(
+                                if (favourite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                stringResource(if (favourite) R.string.unfavourite else R.string.favourite),
+                                on = favourite,
+                                onClick = onFavourite,
+                            )
+                        }
                         Extra(Icons.Default.Devices, stringResource(R.string.play_on), on = playingOn != null, onClick = onPlayOn)
                         if (onJam != null) Extra(Icons.Default.Groups, stringResource(R.string.jam), on = false, onClick = onJam)
                         if (onAddToPlaylist != null) {
@@ -392,14 +389,14 @@ private fun Panel(
     Column(modifier.fillMaxWidth().fillMaxHeight(0.9f)) {
         Box(
             Modifier
-                .padding(top = 10.dp, bottom = 6.dp)
+                .padding(top = 6.dp, bottom = 4.dp)
                 .size(width = 32.dp, height = 4.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 .align(Alignment.CenterHorizontally),
         )
         Row(
-            Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             NowPlayingPanel.entries.forEach { which ->
@@ -407,6 +404,7 @@ private fun Panel(
                 TextButton(
                     onClick = { onPick(which) },
                     modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
                     colors = ButtonDefaults.textButtonColors(
                         containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                         contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
