@@ -17,6 +17,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,8 +142,23 @@ fun albumArtistName(album: Album): String =
     album.artist ?: stringResource(if (album.isCompilation) R.string.various_artists else R.string.unknown_artist)
 
 @Composable
-private fun counts(albums: Int, tracks: Int): String =
+internal fun counts(albums: Int, tracks: Int): String =
     listOfNotNull(
         pluralStringResource(R.plurals.albums_count, albums, albums).takeIf { albums > 0 },
         pluralStringResource(R.plurals.tracks_count, tracks, tracks).takeIf { tracks > 0 },
     ).joinToString(" · ")
+
+/** Two by two covers, as on Windows (`Mosaic.svelte`); fewer covers leave the bars showing. */
+@Composable
+fun Mosaic(albumIds: List<Long>, modifier: Modifier = Modifier) {
+    Column(modifier.clip(MaterialTheme.shapes.large)) {
+        for (row in 0 until 2) {
+            Row(Modifier.weight(1f)) {
+                for (column in 0 until 2) {
+                    val id = albumIds.getOrNull(row * 2 + column) ?: albumIds.firstOrNull() ?: -1
+                    Cover(id, Modifier.weight(1f).aspectRatio(1f), shape = RectangleShape)
+                }
+            }
+        }
+    }
+}

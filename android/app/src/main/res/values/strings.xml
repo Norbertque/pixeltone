@@ -163,6 +163,15 @@
 
     <!-- Favourites and playlists -->
     <string name="tab_playlists">Playlists</string>
+    <string name="tab_genres">Genres</string>
+    <string name="genre">Genre</string>
+    <string name="genre_gone">This genre is no longer in your library.</string>
+    <string name="no_genres">Your tracks have no genres in their tags.</string>
+    <string name="genre_mix">%1$s mix</string>
+    <string name="genre_mixes">Genre mixes</string>
+    <string name="new_every_day">New every day</string>
+    <string name="mix_gone">This mix isn’t made today: there are new ones every day.</string>
+    <string name="save_as_playlist">Save as playlist</string>
     <string name="favourites">Favourites</string>
     <string name="favourite">Add to favourites</string>
     <string name="unfavourite">Remove from favourites</string>

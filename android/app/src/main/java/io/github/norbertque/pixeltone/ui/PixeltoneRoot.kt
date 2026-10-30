@@ -73,6 +73,8 @@ import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.library.albumKey
 import io.github.norbertque.pixeltone.ui.library.AddToPlaylistDialog
 import io.github.norbertque.pixeltone.ui.library.AlbumScreen
+import io.github.norbertque.pixeltone.ui.library.GenreScreen
+import io.github.norbertque.pixeltone.ui.library.MixScreen
 import io.github.norbertque.pixeltone.ui.library.LocalAddToPlaylist
 import io.github.norbertque.pixeltone.ui.library.LocalTrackMenu
 import io.github.norbertque.pixeltone.ui.library.NameDialog
@@ -182,6 +184,7 @@ private fun Navigation() {
     val usb by app.usb.state.collectAsStateWithLifecycle()
     val lists by app.lists.lists.collectAsStateWithLifecycle()
     val index by app.library.index.collectAsStateWithLifecycle()
+    val mixes by app.mixes.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
     /** The track whose menu is open; tracks waiting for a playlist; a new playlist's tracks. */
     var menuFor by remember { mutableStateOf<Track?>(null) }
@@ -251,6 +254,7 @@ private fun Navigation() {
                         onAlbums = { nav.navigate(LIBRARY) },
                         onStats = { nav.navigate(STATS) },
                         onSettings = { nav.navigate(SETTINGS) },
+                        onMix = { nav.navigate("mix/${Uri.encode(it)}") },
                     )
                 }
                 composable(SEARCH) {
@@ -272,7 +276,22 @@ private fun Navigation() {
                         onPlaylist = { nav.navigate("playlist/$it") },
                         onNewPlaylist = { naming = emptyList() },
                         onStats = { nav.navigate(STATS) },
+                        onGenre = { nav.navigate("genre/${Uri.encode(it)}") },
+                        mixes = mixes,
+                        onMix = { nav.navigate("mix/${Uri.encode(it)}") },
                     )
+                }
+                composable("genre/{key}") { entry ->
+                    GenreScreen(
+                        key = entry.arguments?.getString("key").orEmpty(),
+                        onBack = { nav.popBackStack() },
+                        onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
+                        onPlay = player::play,
+                        onShuffle = player::shuffle,
+                    )
+                }
+                composable("mix/{key}") { entry ->
+                    MixScreen(app, key = entry.arguments?.getString("key").orEmpty(), onBack = { nav.popBackStack() })
                 }
                 composable(STATS) {
                     StatsScreen(app, onBack = { nav.popBackStack() })

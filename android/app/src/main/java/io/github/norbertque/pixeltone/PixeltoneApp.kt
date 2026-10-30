@@ -8,6 +8,8 @@ import io.github.norbertque.pixeltone.library.AlbumCoverFetcher
 import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
 import io.github.norbertque.pixeltone.library.History
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
+import io.github.norbertque.pixeltone.library.Mixes
+import io.github.norbertque.pixeltone.library.mixesOf
 import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.lyrics.LyricsFinder
 import io.github.norbertque.pixeltone.playback.PlayerConnection
@@ -25,6 +27,9 @@ import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 
 class PixeltoneApp : Application(), ImageLoaderFactory {
     val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this) }
@@ -35,6 +40,11 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val history: History by lazy { History(File(filesDir, "history.jsonl")) }
     val lyrics: LyricsFinder by lazy { LyricsFinder(this) }
     val sleep = SleepTimer()
+    /** Today's mix and the genres' mixes; null until the library has been read. */
+    val mixes: StateFlow<Mixes?> by lazy {
+        mixesOf(library.index, history.listens, lists.lists)
+            .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.WhileSubscribed(5_000), null)
+    }
     val updater: Updater by lazy { Updater(this, BuildConfig.UPDATE_FEED, BuildConfig.VERSION_CODE) }
     val usbSettings: UsbSettings by lazy { PreferencesUsbSettings(this) }
 

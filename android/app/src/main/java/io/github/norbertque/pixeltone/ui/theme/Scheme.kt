@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.scale
+import kotlin.math.roundToInt
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.materialkolor.dynamiccolor.DynamicColor
 import com.materialkolor.dynamiccolor.MaterialDynamicColors
@@ -13,6 +14,7 @@ import com.materialkolor.hct.Hct
 import com.materialkolor.quantize.QuantizerCelebi
 import com.materialkolor.scheme.DynamicScheme
 import com.materialkolor.scheme.SchemeTonalSpot
+import com.materialkolor.scheme.SchemeVibrant
 import com.materialkolor.score.Score
 
 /** Pixeltone's own colour when nothing plays: "Lilac", as on Windows. */
@@ -113,3 +115,30 @@ fun seedOf(picture: Bitmap): Int? {
 }
 
 private const val SEED_SIZE = 112
+
+/**
+ * A genre's own colours, as on Windows (`GenreCard.svelte`): a hue worked out from its name, made
+ * vibrant; its container and what goes on it.
+ */
+fun genreColors(name: String, dark: Boolean): Pair<Color, Color> {
+    var h = 0L
+    for (c in name) h = (h * 31 + c.code) and 0xFFFFFFFFL
+    val scheme = SchemeVibrant(
+        Hct.fromInt(argbOfHsl((h % 360).toFloat(), 0.65f, 0.5f)),
+        dark,
+        0.0,
+        ColorSpec.SpecVersion.SPEC_2025,
+        DynamicScheme.Platform.PHONE,
+    )
+    val roles = MaterialDynamicColors()
+    return Color(roles.primaryContainer().getArgb(scheme)) to Color(roles.onPrimaryContainer().getArgb(scheme))
+}
+
+private fun argbOfHsl(h: Float, s: Float, l: Float): Int {
+    val a = s * minOf(l, 1 - l)
+    fun f(n: Int): Int {
+        val k = (n + h / 30) % 12
+        return ((l - a * maxOf(-1f, minOf(k - 3, 9 - k, 1f))) * 255).roundToInt()
+    }
+    return (0xFF shl 24) or (f(0) shl 16) or (f(8) shl 8) or f(4)
+}

@@ -55,6 +55,10 @@ import io.github.norbertque.pixeltone.ui.lyrics.LyricsState
 import io.github.norbertque.pixeltone.widget.PlayerWidget
 import io.github.norbertque.pixeltone.ui.home.HomeContent
 import io.github.norbertque.pixeltone.ui.home.HomeData
+import io.github.norbertque.pixeltone.library.Mix
+import io.github.norbertque.pixeltone.library.Mixes
+import io.github.norbertque.pixeltone.ui.library.GenreContent
+import io.github.norbertque.pixeltone.ui.library.MixContent
 import io.github.norbertque.pixeltone.ui.search.SearchContent
 import io.github.norbertque.pixeltone.widget.WidgetState
 import android.widget.FrameLayout
@@ -327,7 +331,7 @@ class ScreensTest {
         LibraryContent(
             results = index.search(""),
             query = "",
-            tab = 3,
+            tab = 4,
             searching = false,
             onTab = {},
             onSearching = {},
@@ -342,7 +346,35 @@ class ScreensTest {
                     Playlist(2, "Late night", index.tracks.drop(5).take(8).map(ListedTrack::of)),
                 ),
             ),
+            mixes = mixes,
         )
+    }
+
+    private val mixes by lazy {
+        val genre = { key: String -> index.genre(key)!! }
+        Mixes(
+            daily = Mix(Mix.DAILY, null, index.tracks.take(10)),
+            genres = listOf("rock", "pop rock", "electronic", "classical").map { Mix(Mix.keyOf(genre(it)), genre(it), genre(it).tracks) },
+        )
+    }
+
+    @Test
+    fun genresTab() = shot("library-genres") { Library(tab = 3) }
+
+    @Test
+    fun genresTabDark() = shot("library-genres-dark", dark = true) { Library(tab = 3) }
+
+    @Test
+    fun genre() = shot("genre") { GenreContent(index.genre("rock"), loading = false, onBack = {}, onAlbum = {}, onPlay = { _, _ -> }, onShuffle = {}) }
+
+    @Test
+    fun genreMix() = shot("mix-genre", dark = true) {
+        MixContent(mixes.mix("genre:pop rock"), loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {}, onSave = {})
+    }
+
+    @Test
+    fun todaysMix() = shot("mix-today") {
+        MixContent(mixes.daily, loading = false, onBack = {}, onPlay = { _, _ -> }, onShuffle = {}, onSave = {})
     }
 
     @Test
@@ -411,6 +443,7 @@ class ScreensTest {
             recentlyPlayed = index.albums.take(4),
             topArtists = index.artists.take(4).mapIndexed { i, a -> a to 24 - i * 3 },
             recentlyAdded = index.albums.takeLast(4),
+            genreMixes = mixes.genres,
         )
     }
 
@@ -468,20 +501,28 @@ private fun entry(track: Track) = QueueEntry(track.id, track.title, track.artist
 
 private var nextId = 1L
 
-private fun track(title: String, artist: String?, album: String?, number: Int?, ms: Long, albumArtist: String? = null, year: Int? = null) =
-    Track(nextId++, title, artist, albumArtist, album, nextId, ms, null, number, year, "Music/$album/")
+private fun track(
+    title: String,
+    artist: String?,
+    album: String?,
+    number: Int?,
+    ms: Long,
+    albumArtist: String? = null,
+    year: Int? = null,
+    genres: List<String> = emptyList(),
+) = Track(nextId++, title, artist, albumArtist, album, nextId, ms, null, number, year, "Music/$album/", genres = genres)
 
 private val SAMPLE = listOf(
-    track("Inzerát", "Kryštof", "Rubikon", 1, 214_000, year = 2004),
-    track("Ty a já", "Kryštof", "Rubikon", 2, 247_000, year = 2004),
-    track("Rubikon", "Kryštof", "Rubikon", 3, 263_000, year = 2004),
-    track("Cesta", "Kryštof", "Inzerát", 1, 236_000, year = 2003),
-    track("Hey Jude", "The Beatles", "1", 7, 431_000, year = 2000),
-    track("Let It Be", "The Beatles", "1", 25, 230_000, year = 2000),
-    track("Bohemian Rhapsody", "Queen", "A Night at the Opera", 11, 355_000, year = 1975),
-    track("A Very Long Title That Will Not Fit On One Line Of A Phone Screen", "Queen", "A Night at the Opera", 4, 189_000, year = 1975),
-    track("Clair de lune", "Claude Debussy", "Piano Works", 3, 301_000),
-    track("Summer Mix Opener", "DJ One", "Summer Mix", 1, 180_000),
-    track("Summer Mix Closer", "DJ Two", "Summer Mix", 2, 205_000),
+    track("Inzerát", "Kryštof", "Rubikon", 1, 214_000, year = 2004, genres = listOf("Pop rock", "Czech")),
+    track("Ty a já", "Kryštof", "Rubikon", 2, 247_000, year = 2004, genres = listOf("Pop rock", "Czech")),
+    track("Rubikon", "Kryštof", "Rubikon", 3, 263_000, year = 2004, genres = listOf("Pop rock", "Czech")),
+    track("Cesta", "Kryštof", "Inzerát", 1, 236_000, year = 2003, genres = listOf("Pop rock", "Czech")),
+    track("Hey Jude", "The Beatles", "1", 7, 431_000, year = 2000, genres = listOf("Rock")),
+    track("Let It Be", "The Beatles", "1", 25, 230_000, year = 2000, genres = listOf("Rock")),
+    track("Bohemian Rhapsody", "Queen", "A Night at the Opera", 11, 355_000, year = 1975, genres = listOf("Rock")),
+    track("A Very Long Title That Will Not Fit On One Line Of A Phone Screen", "Queen", "A Night at the Opera", 4, 189_000, year = 1975, genres = listOf("Rock")),
+    track("Clair de lune", "Claude Debussy", "Piano Works", 3, 301_000, genres = listOf("Classical")),
+    track("Summer Mix Opener", "DJ One", "Summer Mix", 1, 180_000, genres = listOf("Electronic")),
+    track("Summer Mix Closer", "DJ Two", "Summer Mix", 2, 205_000, genres = listOf("Electronic", "Dance")),
     track("Untagged recording", null, null, null, 61_000),
 )

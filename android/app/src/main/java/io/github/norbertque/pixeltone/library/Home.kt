@@ -2,12 +2,13 @@ package io.github.norbertque.pixeltone.library
 
 import kotlin.random.Random
 
-private const val DAY_MS = 86_400_000L
+internal const val DAY_MS = 86_400_000L
 
 /**
  * Today's mix, by the Windows rule (`pp-library` daily_mix): half from the artists played most
  * in the last 60 days (tracks not heard in the last 2 days), a quarter favourites not heard for
- * a week, the rest from anywhere; the same all day, another tomorrow ([day] seeds it).
+ * a week, the rest from anywhere; the same all day, another tomorrow ([day] seeds it). A genre's
+ * mix takes the same rule within its tracks ([pool]), seeded apart by [salt].
  */
 fun dailyMix(
     index: LibraryIndex,
@@ -16,18 +17,24 @@ fun dailyMix(
     day: Long,
     now: Long,
     limit: Int = 40,
+    pool: List<Track> = index.tracks,
+    salt: Int = 0,
 ): List<Track> {
-    val random = Random(day * 0x9E3779B97F4A7C15uL.toLong() or 1)
+    val random = Random((day * 0x9E3779B97F4A7C15uL.toLong() or 1) xor salt.toLong())
+    val inPool = if (pool === index.tracks) null else pool.mapTo(HashSet(), Track::id)
     fun heardSince(since: Long) = listens.filter { it.startedAt >= since }.map { it.track.file }.toSet()
     val topArtists = listens.filter { it.startedAt >= now - 60 * DAY_MS }
         .mapNotNull { it.track.artist?.let(::fold) }
         .groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(8).map { it.key }.toSet()
     val recent = heardSince(now - 2 * DAY_MS)
-    val fromArtists = index.tracks.filter { t -> t.artist?.let(::fold) in topArtists && t.fileKey !in recent }.shuffled(random)
+    val fromArtists = pool.filter { t -> t.artist?.let(::fold) in topArtists && t.fileKey !in recent }.shuffled(random)
     val week = heardSince(now - 7 * DAY_MS)
-    val loved = favourites.filter { it.file !in week }.mapNotNull { index.trackByFile(it.file) }.shuffled(random)
-    val anything = index.tracks.shuffled(random)
+    val loved = favourites.filter { it.file !in week }
+        .mapNotNull { index.trackByFile(it.file) }
+        .filter { inPool == null || it.id in inPool }
+        .shuffled(random)
+    val anything = pool.shuffled(random)
     val chosen = LinkedHashMap<Long, Track>()
     fun take(pool: List<Track>, n: Int) {
         var taken = 0

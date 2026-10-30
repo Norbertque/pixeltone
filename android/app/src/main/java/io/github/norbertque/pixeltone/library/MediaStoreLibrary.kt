@@ -54,14 +54,38 @@ class MediaStoreLibrary(private val context: Context) {
         }
     }
 
-    private fun readTracks(): List<Track> =
-        try {
+    private fun readTracks(): List<Track> {
+        val tracks = try {
             read(withAlbumArtist = true)
         } catch (_: IllegalArgumentException) {
             read(withAlbumArtist = false)
         } catch (_: SQLiteException) {
             read(withAlbumArtist = false)
         }
+        if (Build.VERSION.SDK_INT >= 30) return tracks
+        val genres = olderGenres()
+        return tracks.map { track -> genres[track.id]?.let { track.copy(genres = splitGenres(it)) } ?: track }
+    }
+
+    /** Before Android 11, genres are tables of their own: each genre and its tracks. */
+    @Suppress("DEPRECATION")
+    private fun olderGenres(): Map<Long, List<String>> {
+        val byTrack = HashMap<Long, MutableList<String>>()
+        val resolver = context.contentResolver
+        runCatching {
+            val genres = MediaStore.Audio.Genres.EXTERNAL_CONTENT_URI
+            resolver.query(genres, arrayOf(MediaStore.Audio.Genres._ID, MediaStore.Audio.Genres.NAME), null, null, null)?.use { g ->
+                while (g.moveToNext()) {
+                    val name = g.text(1) ?: continue
+                    val members = MediaStore.Audio.Genres.Members.getContentUri("external", g.getLong(0))
+                    resolver.query(members, arrayOf(MediaStore.Audio.Genres.Members.AUDIO_ID), null, null, null)?.use { m ->
+                        while (m.moveToNext()) byTrack.getOrPut(m.getLong(0)) { ArrayList() }.add(name)
+                    }
+                }
+            }
+        }
+        return byTrack
+    }
 
     @Suppress("DEPRECATION") // DATA is the only way to a file's folder before Android 10.
     private fun read(withAlbumArtist: Boolean): List<Track> {
@@ -79,6 +103,7 @@ class MediaStoreLibrary(private val context: Context) {
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATE_ADDED,
             ALBUM_ARTIST.takeIf { withAlbumArtist },
+            GENRE.takeIf { Build.VERSION.SDK_INT >= 30 },
         ).toTypedArray()
         val tracks = ArrayList<Track>()
         context.contentResolver
@@ -96,6 +121,7 @@ class MediaStoreLibrary(private val context: Context) {
                 val fileName = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val added = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val albumArtist = if (withAlbumArtist) c.getColumnIndexOrThrow(ALBUM_ARTIST) else -1
+                val genre = c.getColumnIndex(GENRE)
                 while (c.moveToNext()) {
                     // TRACK holds the disc in its thousands: 2005 is disc 2, track 5.
                     val discAndTrack = c.getInt(number)
@@ -114,6 +140,7 @@ class MediaStoreLibrary(private val context: Context) {
                         folder = if (relativePaths) place else File(place).parent.orEmpty(),
                         fileName = c.getString(fileName).orEmpty(),
                         addedAt = c.getLong(added),
+                        genres = if (genre >= 0) c.text(genre)?.let { splitGenres(listOf(it)) }.orEmpty() else emptyList(),
                     )
                 }
             }
@@ -123,6 +150,9 @@ class MediaStoreLibrary(private val context: Context) {
     private companion object {
         /** A public column since Android 11, already there (unlisted) in older MediaStores. */
         const val ALBUM_ARTIST = "album_artist"
+
+        /** A column since Android 11 (MediaStore.Audio.Media.GENRE). */
+        const val GENRE = "genre"
     }
 }
 

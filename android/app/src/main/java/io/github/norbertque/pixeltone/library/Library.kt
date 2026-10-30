@@ -22,6 +22,8 @@ data class Track(
     val fileName: String = "",
     /** When the file came onto the phone (epoch seconds; MediaStore's DATE_ADDED). */
     val addedAt: Long = 0,
+    /** Its genres, split as on Windows ([splitGenres]). */
+    val genres: List<String> = emptyList(),
 ) {
     /** The file, as folder and name: what playlists and favourites remember (MediaStore ids can change). */
     val fileKey: String get() = folder.trimEnd('/') + "/" + fileName
@@ -51,15 +53,30 @@ data class Artist(
     val tracks: List<Track>,
 )
 
-data class SearchResult(val tracks: List<Track>, val albums: List<Album>, val artists: List<Artist>)
+data class Genre(
+    val key: String,
+    val name: String,
+    /** By title. */
+    val tracks: List<Track>,
+    /** The albums its tracks are on, by title. */
+    val albums: List<Album>,
+)
 
-/** The library arranged for browsing: tracks, albums and artists, sorted for [locale]. */
+data class SearchResult(
+    val tracks: List<Track>,
+    val albums: List<Album>,
+    val artists: List<Artist>,
+    val genres: List<Genre> = emptyList(),
+)
+
+/** The library arranged for browsing: tracks, albums, artists and genres, sorted for [locale]. */
 class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
     private val collator = Collator.getInstance(locale).apply { strength = Collator.SECONDARY }
 
     val tracks: List<Track> = tracks.sortedWith(compareBy(collator, Track::title))
     val albums: List<Album>
     val artists: List<Artist>
+    val genres: List<Genre>
 
     init {
         val albumOrder = compareBy<Track>({ it.discNumber ?: 1 }, { it.trackNumber ?: Int.MAX_VALUE })
@@ -93,15 +110,40 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
                 )
             }
             .sortedWith(compareBy(collator, Artist::name))
+
+        // Genres too are told apart by their folded name and named by the spelling used most.
+        val genreSpellings = HashMap<String, HashMap<String, Int>>()
+        val genreTracks = HashMap<String, MutableList<Track>>()
+        for (track in this.tracks) {
+            for (name in track.genres) {
+                val key = fold(name)
+                genreSpellings.getOrPut(key) { HashMap() }.merge(name, 1) { a, b -> a + b }
+                genreTracks.getOrPut(key) { ArrayList() }.add(track)
+            }
+        }
+        val albumOf = HashMap<Long, Album>()
+        for (album in albums) for (track in album.tracks) albumOf[track.id] = album
+        genres = genreTracks
+            .map { (key, list) ->
+                Genre(
+                    key = key,
+                    name = genreSpellings.getValue(key).maxBy { it.value }.key,
+                    tracks = list,
+                    albums = list.mapNotNull { albumOf[it.id] }.distinctBy(Album::key).sortedWith(compareBy(collator, Album::title)),
+                )
+            }
+            .sortedWith(compareBy(collator, Genre::name))
     }
 
     private val tracksById = this.tracks.associateBy(Track::id)
     private val tracksByFile = this.tracks.associateBy(Track::fileKey)
     private val albumsByKey = albums.associateBy(Album::key)
     private val artistsByKey = artists.associateBy(Artist::key)
+    private val genresByKey = genres.associateBy(Genre::key)
     private val trackText = this.tracks.map { fold(listOfNotNull(it.title, it.artist, it.album, it.albumArtist).joinToString(" ")) }
     private val albumText = albums.map { fold(listOfNotNull(it.title, it.artist).joinToString(" ")) }
     private val artistText = artists.map { fold(it.name) }
+    private val genreText = genres.map(Genre::key)
 
     fun track(id: Long): Track? = tracksById[id]
 
@@ -115,15 +157,18 @@ class LibraryIndex(tracks: List<Track>, locale: Locale = Locale.getDefault()) {
     /** The artist written as [name] on a track or album. */
     fun artistNamed(name: String): Artist? = artistsByKey[fold(name)]
 
+    fun genre(key: String): Genre? = genresByKey[key]
+
     /** Everything whose words contain every word of [query], ignoring case and accents. */
     fun search(query: String): SearchResult {
         val words = fold(query).split(WHITESPACE).filter(String::isNotEmpty)
-        if (words.isEmpty()) return SearchResult(tracks, albums, artists)
+        if (words.isEmpty()) return SearchResult(tracks, albums, artists, genres)
         fun List<String>.matching() = indices.filter { i -> words.all { it in this[i] } }
         return SearchResult(
             tracks = trackText.matching().map(tracks::get),
             albums = albumText.matching().map(albums::get),
             artists = artistText.matching().map(artists::get),
+            genres = genreText.matching().map(genres::get),
         )
     }
 
@@ -148,6 +193,21 @@ private val WHITESPACE = Regex("\\s+")
 /** Lower case without accents, for matching: "Příběh" → "pribeh". */
 internal fun fold(text: String): String =
     MARKS.replace(Normalizer.normalize(text.trim(), Normalizer.Form.NFD), "").lowercase(Locale.ROOT)
+
+private val GENRE_SEPARATORS = Regex("[;/,\\\\\u0000]")
+private val ID3_NUMBER = Regex("^\\(\\d+\\)")
+
+/**
+ * Genres from the tags, split on the usual separators as on Windows (`split_genres`): "Rock;
+ * Pop/Indie" is Rock, Pop and Indie, each once. An old ID3 number ("(17)") names no genre.
+ */
+fun splitGenres(values: List<String>): List<String> {
+    val seen = HashSet<String>()
+    return values
+        .flatMap { it.split(GENRE_SEPARATORS) }
+        .map { ID3_NUMBER.replace(it.trim(), "").trim() }
+        .filter { it.isNotEmpty() && !it.all(Char::isDigit) && seen.add(fold(it)) }
+}
 
 /** Albums are told apart by title and album artist, else by title and folder, as on Windows. */
 internal fun albumKey(track: Track): String? {

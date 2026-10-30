@@ -26,9 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -39,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -73,10 +72,20 @@ import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
 import io.github.norbertque.pixeltone.library.Lists
+import io.github.norbertque.pixeltone.library.Mixes
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
-private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists, R.string.tab_playlists)
-private val TAB_ICONS = listOf(Icons.Default.MusicNote, Icons.Default.Album, Icons.Default.Person, Icons.AutoMirrored.Filled.QueueMusic)
+/** The library's tabs, in Windows' order. */
+private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists, R.string.tab_genres, R.string.tab_playlists)
+private val TAB_ICONS = listOf(
+    Icons.Default.MusicNote,
+    Icons.Default.Album,
+    Icons.Default.Person,
+    Icons.Default.Category,
+    Icons.AutoMirrored.Filled.QueueMusic,
+)
+private const val GENRES_TAB = 3
+private const val PLAYLISTS_TAB = 4
 
 @Composable
 fun LibraryScreen(
@@ -90,6 +99,9 @@ fun LibraryScreen(
     onPlaylist: (Long) -> Unit = {},
     onNewPlaylist: () -> Unit = {},
     onStats: () -> Unit = {},
+    onGenre: (String) -> Unit = {},
+    mixes: Mixes? = null,
+    onMix: (String) -> Unit = {},
     vm: LibraryViewModel = viewModel(),
 ) {
     val results by vm.results.collectAsStateWithLifecycle()
@@ -117,6 +129,9 @@ fun LibraryScreen(
         onPlaylist = onPlaylist,
         onNewPlaylist = onNewPlaylist,
         onStats = onStats,
+        onGenre = onGenre,
+        mixes = mixes,
+        onMix = onMix,
     )
 }
 
@@ -141,6 +156,9 @@ fun LibraryContent(
     onPlaylist: (Long) -> Unit = {},
     onNewPlaylist: () -> Unit = {},
     onStats: () -> Unit = {},
+    onGenre: (String) -> Unit = {},
+    mixes: Mixes? = null,
+    onMix: (String) -> Unit = {},
 ) {
     BackHandler(enabled = searching) { onSearching(false) }
     var menu by remember { mutableStateOf(false) }
@@ -216,11 +234,12 @@ fun LibraryContent(
             }
             when {
                 // Playlists can be looked at (and made) before the library is read, and without tracks.
-                tab == 3 -> PlaylistsTab(lists, query, onFavourites, onPlaylist, onNewPlaylist)
+                tab == PLAYLISTS_TAB -> PlaylistsTab(lists, query, onFavourites, onPlaylist, onNewPlaylist, mixes, onMix)
                 results == null -> Loading()
                 query.isBlank() && results.tracks.isEmpty() -> Message(stringResource(R.string.empty_library))
                 tab == 0 -> Tracks(results.tracks, query, onPlay)
                 tab == 1 -> Albums(results.albums, query, onAlbum)
+                tab == GENRES_TAB -> GenresTab(results.genres, query, onGenre)
                 else -> Artists(results.artists, query, onArtist)
             }
         }

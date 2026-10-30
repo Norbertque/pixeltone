@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +42,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -55,7 +58,7 @@ import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.Album
 import io.github.norbertque.pixeltone.library.Artist
 import io.github.norbertque.pixeltone.library.Track
-import io.github.norbertque.pixeltone.library.dailyMix
+import io.github.norbertque.pixeltone.library.Mix
 import io.github.norbertque.pixeltone.library.listeningStats
 import io.github.norbertque.pixeltone.library.recentlyAdded
 import io.github.norbertque.pixeltone.library.recentlyPlayedAlbums
@@ -63,6 +66,8 @@ import io.github.norbertque.pixeltone.library.topArtists
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.library.AlbumCard
 import io.github.norbertque.pixeltone.ui.library.Cover
+import io.github.norbertque.pixeltone.ui.library.Mosaic
+import io.github.norbertque.pixeltone.ui.library.rememberGenreColors
 import io.github.norbertque.pixeltone.ui.stats.listeningTime
 import io.github.norbertque.pixeltone.ui.theme.Emphasized
 import java.util.Calendar
@@ -75,14 +80,14 @@ data class HomeData(
     val albums: Int,
     val artists: Int,
     val durationMs: Long,
+    /** Today's mix. */
     val mix: List<Track>,
     val monthMs: Long,
     val recentlyPlayed: List<Album>,
     val topArtists: List<Pair<Artist, Int>>,
     val recentlyAdded: List<Album>,
+    val genreMixes: List<Mix> = emptyList(),
 )
-
-private const val DAY_MS = 86_400_000L
 
 @Composable
 fun HomeScreen(
@@ -92,12 +97,14 @@ fun HomeScreen(
     onAlbums: () -> Unit,
     onStats: () -> Unit,
     onSettings: () -> Unit,
+    onMix: (String) -> Unit,
 ) {
     val index by app.library.index.collectAsStateWithLifecycle()
     val listens by app.history.listens.collectAsStateWithLifecycle()
-    val lists by app.lists.lists.collectAsStateWithLifecycle()
-    val data by produceState<HomeData?>(null, index, listens, lists.favourites) {
+    val mixes by app.mixes.collectAsStateWithLifecycle()
+    val data by produceState<HomeData?>(null, index, listens, mixes) {
         val library = index ?: return@produceState
+        val made = mixes ?: return@produceState
         value = withContext(Dispatchers.Default) {
             val now = System.currentTimeMillis()
             val month = Calendar.getInstance().apply {
@@ -111,11 +118,12 @@ fun HomeScreen(
                 albums = library.albums.size,
                 artists = library.artists.size,
                 durationMs = library.tracks.sumOf { it.durationMs },
-                mix = dailyMix(library, listens, lists.favourites, day = now / DAY_MS, now = now),
+                mix = made.daily.tracks,
                 monthMs = listeningStats(listens, since = month).heardMs,
                 recentlyPlayed = recentlyPlayedAlbums(library, listens),
                 topArtists = topArtists(library, listens, since = month),
                 recentlyAdded = recentlyAdded(library),
+                genreMixes = made.genres,
             )
         }
     }
@@ -130,6 +138,8 @@ fun HomeScreen(
         onAlbums = onAlbums,
         onStats = onStats,
         onSettings = onSettings,
+        onOpenMix = onMix,
+        onPlayMix = { mix -> mix.tracks.takeIf { it.isNotEmpty() }?.let { app.player.play(it, 0) } },
     )
 }
 
@@ -144,6 +154,8 @@ fun HomeContent(
     onAlbums: () -> Unit,
     onStats: () -> Unit,
     onSettings: () -> Unit,
+    onOpenMix: (String) -> Unit = {},
+    onPlayMix: (Mix) -> Unit = {},
 ) {
     val greeting = stringResource(
         when {
@@ -198,8 +210,18 @@ fun HomeContent(
                     )
                 }
                 else -> {
-                    item { MixCard(data.mix, onMix) }
+                    item { MixCard(data.mix, onOpen = { onOpenMix(Mix.DAILY) }, onPlay = onMix) }
                     item { StatsCard(data.monthMs, onStats) }
+                    if (data.genreMixes.isNotEmpty()) {
+                        item { SectionTitle(stringResource(R.string.genre_mixes)) }
+                        item {
+                            LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                items(data.genreMixes, key = Mix::key) { mix ->
+                                    GenreMixCard(mix, onOpen = { onOpenMix(mix.key) }, onPlay = { onPlayMix(mix) })
+                                }
+                            }
+                        }
+                    }
                     if (data.recentlyPlayed.isNotEmpty()) {
                         item { SectionTitle(stringResource(R.string.recently_played)) }
                         item { AlbumRow(data.recentlyPlayed, onAlbum) }
@@ -226,12 +248,13 @@ fun HomeContent(
     }
 }
 
-/** Today's mix: four of its covers, what it is, and Play. */
+/** Today's mix: four of its covers, what it is, and Play; the card opens it. */
 @Composable
-private fun MixCard(mix: List<Track>, onPlay: () -> Unit) {
+private fun MixCard(mix: List<Track>, onOpen: () -> Unit, onPlay: () -> Unit) {
     val glow = MaterialTheme.colorScheme.primaryContainer
     Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
@@ -267,17 +290,36 @@ private fun MixCard(mix: List<Track>, onPlay: () -> Unit) {
     }
 }
 
-/** Two by two covers, as on Windows (`Mosaic.svelte`); fewer covers leave the bars showing. */
+/** A genre's mix in the genre's colour: its covers with Play on them; the card opens it. */
 @Composable
-private fun Mosaic(albumIds: List<Long>, modifier: Modifier) {
-    Column(modifier.clip(MaterialTheme.shapes.large)) {
-        for (row in 0 until 2) {
-            Row(Modifier.weight(1f)) {
-                for (column in 0 until 2) {
-                    val id = albumIds.getOrNull(row * 2 + column) ?: albumIds.firstOrNull() ?: -1
-                    Cover(id, Modifier.weight(1f).aspectRatio(1f), shape = androidx.compose.ui.graphics.RectangleShape)
+private fun GenreMixCard(mix: Mix, onOpen: () -> Unit, onPlay: () -> Unit) {
+    val genre = mix.genre ?: return
+    val (container, content) = rememberGenreColors(genre.name)
+    Surface(onClick = onOpen, modifier = Modifier.width(168.dp), shape = MaterialTheme.shapes.extraLarge, color = container, contentColor = content) {
+        Column(Modifier.padding(12.dp)) {
+            Box {
+                Mosaic(mix.tracks.map { it.albumId }.distinct().take(4), Modifier.fillMaxWidth().aspectRatio(1f))
+                FilledIconButton(
+                    onClick = onPlay,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = content, contentColor = container),
+                ) {
+                    Icon(Icons.Default.PlayArrow, stringResource(R.string.play))
                 }
             }
+            Text(
+                stringResource(R.string.genre_mix, genre.name),
+                Modifier.padding(top = 12.dp, start = 4.dp, end = 4.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = Emphasized,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                pluralStringResource(R.plurals.tracks_count, mix.tracks.size, mix.tracks.size),
+                Modifier.padding(horizontal = 4.dp).alpha(0.8f),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }

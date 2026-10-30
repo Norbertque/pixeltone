@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,10 +41,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.Lists
+import io.github.norbertque.pixeltone.library.Mixes
 import io.github.norbertque.pixeltone.library.Playlist
 import io.github.norbertque.pixeltone.library.fold
 
-/** The library's Playlists tab: Favourites first, then the playlists (filtered by [query]). */
+/**
+ * The library's Playlists tab: Favourites first, then the playlists, then the mixes the library
+ * makes every day (all filtered by [query]).
+ */
 @Composable
 fun PlaylistsTab(
     lists: Lists,
@@ -51,9 +56,14 @@ fun PlaylistsTab(
     onFavourites: () -> Unit,
     onPlaylist: (Long) -> Unit,
     onNew: () -> Unit,
+    mixes: Mixes? = null,
+    onMix: (String) -> Unit = {},
 ) {
     val words = fold(query).split(' ').filter(String::isNotEmpty)
     val shown = lists.playlists.filter { p -> words.all { it in fold(p.name) } }
+    val shownMixes = mixes?.let { listOf(it.daily) + it.genres }.orEmpty()
+        .map { it to mixName(it) }
+        .filter { (mix, name) -> mix.tracks.isNotEmpty() && words.all { it in fold(name) } }
     LazyColumn(Modifier.fillMaxSize()) {
         if (words.isEmpty()) {
             item {
@@ -74,6 +84,31 @@ fun PlaylistsTab(
                     headlineContent = { Text(stringResource(R.string.new_playlist)) },
                     leadingContent = { Tile(Icons.Default.Add) },
                     modifier = Modifier.clickable(onClick = onNew),
+                )
+            }
+        }
+        if (shownMixes.isNotEmpty()) {
+            item {
+                Text(
+                    stringResource(R.string.made_for_you),
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            items(shownMixes, key = { it.first.key }) { (mix, name) ->
+                ListItem(
+                    headlineContent = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = {
+                        Text(
+                            listOf(
+                                pluralStringResource(R.plurals.tracks_count, mix.tracks.size, mix.tracks.size),
+                                stringResource(R.string.new_every_day),
+                            ).joinToString(" · "),
+                        )
+                    },
+                    leadingContent = { Mosaic(mix.tracks.map { it.albumId }.distinct().take(4), Modifier.size(48.dp)) },
+                    modifier = Modifier.clickable { onMix(mix.key) },
                 )
             }
         }
