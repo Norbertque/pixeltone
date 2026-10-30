@@ -79,10 +79,29 @@ import io.github.norbertque.pixeltone.ui.player.SleepSheet
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsScreen
 import io.github.norbertque.pixeltone.ui.settings.SettingsScreen
+import io.github.norbertque.pixeltone.ui.home.HomeScreen
+import io.github.norbertque.pixeltone.ui.search.SearchScreen
+import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
+import io.github.norbertque.pixeltone.ui.theme.seedOf
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import io.github.norbertque.pixeltone.ui.stats.StatsScreen
 import io.github.norbertque.pixeltone.usb.usbBadge
 import kotlinx.coroutines.launch
 
+private const val HOME = "home"
+private const val SEARCH = "search"
 private const val LIBRARY = "library"
 private const val NOW_PLAYING = "now-playing"
 private const val QUEUE = "queue"
@@ -94,6 +113,32 @@ private const val LYRICS = "lyrics"
 
 @Composable
 fun PixeltoneRoot() {
+    val context = LocalContext.current
+    val app = remember { context.applicationContext as PixeltoneApp }
+    PixeltoneTheme(seed = rememberCoverSeed(app)) { Root() }
+}
+
+/** The seed colour of the cover that plays, as on Windows: the whole app takes its colours from it. */
+@Composable
+private fun rememberCoverSeed(app: PixeltoneApp): Int? {
+    val context = LocalContext.current
+    val playback by app.player.state.collectAsStateWithLifecycle()
+    val cover = playback.current?.cover
+    var seed by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(cover) {
+        if (cover == null) {
+            seed = null
+            return@LaunchedEffect
+        }
+        val request = ImageRequest.Builder(context).data(cover).size(112).allowHardware(false).build()
+        val picture = (context.imageLoader.execute(request) as? SuccessResult)?.drawable
+        seed = picture?.let { withContext(Dispatchers.Default) { seedOf(it.toBitmap()) } }
+    }
+    return seed
+}
+
+@Composable
+private fun Root() {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(context.mayReadAudio()) }
     // Access can be given in the system settings while the app waits in the background.
@@ -150,21 +195,49 @@ private fun Navigation() {
         Scaffold(
             snackbarHost = { SnackbarHost(messages) },
             bottomBar = {
-                val entry = playback.current
-                if (entry != null && route != NOW_PLAYING && route != QUEUE && route != JAM && route != LYRICS) {
-                    MiniPlayer(
-                        entry,
-                        playback.isPlaying,
-                        onToggle = player::toggle,
-                        onOpen = { nav.navigate(NOW_PLAYING) },
-                        playingOn = onPc?.pc?.name,
-                    )
+                if (route !in FULL_SCREEN) {
+                    Column {
+                        playback.current?.let { entry ->
+                            MiniPlayer(
+                                entry,
+                                playback.isPlaying,
+                                onToggle = player::toggle,
+                                onOpen = { nav.navigate(NOW_PLAYING) },
+                                playingOn = onPc?.pc?.name,
+                                onNext = player::next,
+                            )
+                        }
+                        BottomNavigation(route) { target ->
+                            nav.navigate(target) {
+                                popUpTo(HOME) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    }
                 }
             },
             // The screens inside handle the system bars themselves; this one only adds the mini player.
             contentWindowInsets = WindowInsets(0),
         ) { padding ->
-            NavHost(nav, startDestination = LIBRARY, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
+            NavHost(nav, startDestination = HOME, modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
+                composable(HOME) {
+                    HomeScreen(
+                        app,
+                        onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
+                        onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                        onAlbums = { nav.navigate(LIBRARY) },
+                        onStats = { nav.navigate(STATS) },
+                        onSettings = { nav.navigate(SETTINGS) },
+                    )
+                }
+                composable(SEARCH) {
+                    SearchScreen(
+                        onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
+                        onArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                        onPlay = player::play,
+                    )
+                }
                 composable(LIBRARY) {
                     LibraryScreen(
                         onAlbum = { nav.navigate("album/${Uri.encode(it)}") },
@@ -301,6 +374,28 @@ private fun Navigation() {
             },
             onDismiss = { naming = null },
         )
+    }
+}
+
+/** Screens that take the whole height: no mini player or navigation under them. */
+private val FULL_SCREEN = setOf(NOW_PLAYING, QUEUE, JAM, LYRICS)
+
+/** Home, Search and Library, as on Windows. */
+@Composable
+private fun BottomNavigation(route: String?, onGo: (String) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        listOf(
+            Triple(HOME, Icons.Default.Home, R.string.home),
+            Triple(SEARCH, Icons.Default.Search, R.string.search),
+            Triple(LIBRARY, Icons.Default.LibraryMusic, R.string.library),
+        ).forEach { (target, icon, label) ->
+            NavigationBarItem(
+                selected = route == target,
+                onClick = { onGo(target) },
+                icon = { Icon(icon, null) },
+                label = { Text(stringResource(label)) },
+            )
+        }
     }
 }
 

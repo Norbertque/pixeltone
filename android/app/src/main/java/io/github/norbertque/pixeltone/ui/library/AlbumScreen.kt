@@ -45,6 +45,10 @@ import io.github.norbertque.pixeltone.ui.BackButton
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.Message
 import io.github.norbertque.pixeltone.ui.formatDuration
+import io.github.norbertque.pixeltone.ui.theme.Emphasized
+import io.github.norbertque.pixeltone.ui.theme.ShapeXlPlus
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun AlbumScreen(
@@ -117,9 +121,13 @@ private fun AlbumHeader(album: Album, onArtist: (() -> Unit)?, onPlay: () -> Uni
         Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Cover(album.coverId, Modifier.fillMaxWidth(0.7f).aspectRatio(1f), MaterialTheme.shapes.large)
+        Cover(
+            album.coverId,
+            Modifier.fillMaxWidth(0.72f).aspectRatio(1f).shadow(16.dp, ShapeXlPlus, spotColor = Color.Black.copy(alpha = 0.25f)),
+            ShapeXlPlus,
+        )
         Spacer(Modifier.height(20.dp))
-        Text(album.title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Text(album.title, style = MaterialTheme.typography.headlineMedium, fontWeight = Emphasized, textAlign = TextAlign.Center)
         val artist = Modifier.clip(MaterialTheme.shapes.small)
         Text(
             albumArtistName(album),

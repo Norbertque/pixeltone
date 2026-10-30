@@ -43,9 +43,21 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import io.github.norbertque.pixeltone.ui.theme.ShapeXlPlus
+import io.github.norbertque.pixeltone.ui.theme.Emphasized
+import io.github.norbertque.pixeltone.ui.WavySeekBar
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -119,140 +131,161 @@ fun NowPlayingContent(
     sleep: String? = null,
     onSleep: () -> Unit = {},
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.now_playing)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.close_player))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onSleep) {
-                        Icon(
-                            Icons.Default.Bedtime,
-                            stringResource(R.string.sleep_timer),
-                            tint = if (sleep != null) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                        )
-                    }
-                    IconButton(onClick = onLyrics) {
-                        Icon(Icons.Default.Lyrics, stringResource(R.string.lyrics))
-                    }
-                    if (onJam != null) {
-                        IconButton(onClick = onJam) {
-                            Icon(Icons.Default.Groups, stringResource(R.string.jam))
-                        }
-                    }
-                    IconButton(onClick = onPlayOn) {
-                        Icon(Icons.Default.Devices, stringResource(R.string.play_on))
-                    }
-                    IconButton(onClick = onQueue) {
-                        Icon(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.queue))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        val entry = state.current
-        if (entry == null) {
-            Message(stringResource(R.string.queue_empty), Modifier.padding(padding))
-            return@Scaffold
-        }
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Cover(entry.cover, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
-            Column(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+    val glow = MaterialTheme.colorScheme.primaryContainer
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            // The cover's colour glows in from the top, as on Windows.
+            .drawBehind {
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(glow.copy(alpha = 0.75f), Color.Transparent),
+                        center = Offset(size.width * 0.15f, 0f),
+                        radius = size.maxDimension * 0.8f,
+                    ),
+                )
+            },
+    ) {
+        Column(Modifier.fillMaxSize().systemBarsPadding()) {
+            val entry = state.current
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, stringResource(R.string.close_player)) }
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        entry.title,
-                        Modifier.weight(1f),
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2,
+                        stringResource(R.string.playing_from).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        entry?.album ?: stringResource(R.string.now_playing),
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (onAddToPlaylist != null) {
-                        IconButton(onClick = onAddToPlaylist) {
-                            Icon(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist))
-                        }
-                    }
-                    if (favourite != null) {
-                        IconToggleButton(checked = favourite, onCheckedChange = { onFavourite() }) {
-                            if (favourite) {
-                                Icon(Icons.Default.Favorite, stringResource(R.string.unfavourite), tint = MaterialTheme.colorScheme.primary)
-                            } else {
-                                Icon(Icons.Default.FavoriteBorder, stringResource(R.string.favourite))
+                }
+                IconButton(onClick = onLyrics) { Icon(Icons.Default.Lyrics, stringResource(R.string.lyrics)) }
+                IconButton(onClick = onQueue) { Icon(Icons.AutoMirrored.Filled.QueueMusic, stringResource(R.string.queue)) }
+            }
+            if (entry == null) {
+                Message(stringResource(R.string.queue_empty))
+                return@Column
+            }
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Cover(
+                    entry.cover,
+                    Modifier
+                        .weight(1f, fill = false)
+                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                        .shadow(24.dp, ShapeXlPlus, ambientColor = glow, spotColor = Color.Black.copy(alpha = 0.3f)),
+                    ShapeXlPlus,
+                )
+                Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            entry.title,
+                            Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = Emphasized,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (favourite != null) {
+                            IconToggleButton(checked = favourite, onCheckedChange = { onFavourite() }) {
+                                if (favourite) {
+                                    Icon(Icons.Default.Favorite, stringResource(R.string.unfavourite), tint = MaterialTheme.colorScheme.primary)
+                                } else {
+                                    Icon(Icons.Default.FavoriteBorder, stringResource(R.string.favourite))
+                                }
                             }
                         }
                     }
+                    Text(
+                        entry.artist ?: stringResource(R.string.unknown_artist),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    when {
+                        playingOn != null -> PlayingOn(playingOn, outputBadge)
+                        outputBadge != null -> Output(outputBadge)
+                    }
                 }
-                Text(
-                    listOfNotNull(entry.artist ?: stringResource(R.string.unknown_artist), entry.album).joinToString(" · "),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                when {
-                    playingOn != null -> PlayingOn(playingOn, outputBadge)
-                    outputBadge != null -> Output(outputBadge)
+                SeekBar(positionMs, state.durationMs, state.isPlaying, controls::seekTo)
+                // What a toggle now does, shown for a moment under the controls.
+                var hint by remember { mutableStateOf<Hint?>(null) }
+                LaunchedEffect(hint) {
+                    if (hint != null) {
+                        delay(2_500)
+                        hint = null
+                    }
                 }
-            }
-            SeekBar(positionMs, state.durationMs, controls::seekTo)
-            // What a toggle now does, shown for a moment under the controls.
-            var hint by remember { mutableStateOf<Hint?>(null) }
-            LaunchedEffect(hint) {
-                if (hint != null) {
-                    delay(2_500)
-                    hint = null
-                }
-            }
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Controls(state, controls, onHint = { hint = Hint(it, (hint?.id ?: 0) + 1) })
                 HintLine(hint)
-                if (sleep != null) {
-                    Text(
-                        sleep,
-                        Modifier.clickable(onClick = onSleep).padding(4.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Extra(Icons.Default.Devices, stringResource(R.string.play_on), on = playingOn != null, onClick = onPlayOn)
+                    if (onJam != null) Extra(Icons.Default.Groups, stringResource(R.string.jam), on = false, onClick = onJam)
+                    if (onAddToPlaylist != null) {
+                        Extra(Icons.AutoMirrored.Filled.PlaylistAdd, stringResource(R.string.add_to_playlist), on = false, onClick = onAddToPlaylist)
+                    }
+                    Extra(Icons.Default.Bedtime, stringResource(R.string.sleep_timer), on = sleep != null, onClick = onSleep)
+                    if (sleep != null) {
+                        Text(
+                            sleep,
+                            Modifier.clickable(onClick = onSleep),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         }
     }
+    }
+}
+
+/** A secondary action under the controls: a tonal circle, filled while it's on. */
+@Composable
+private fun Extra(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+    FilledTonalIconButton(
+        onClick = onClick,
+        colors = if (on) {
+            IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        } else {
+            IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    ) {
+        Icon(icon, label)
+    }
 }
 
 @Composable
-private fun SeekBar(positionMs: Long, durationMs: Long, onSeek: (Long) -> Unit) {
-    // While the thumb is held, it shows where the track will continue, not where it is.
-    var held by remember { mutableStateOf<Float?>(null) }
-    val fraction = held ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+private fun SeekBar(positionMs: Long, durationMs: Long, playing: Boolean, onSeek: (Long) -> Unit) {
+    val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     Column(Modifier.fillMaxWidth()) {
-        Slider(
+        WavySeekBar(
             value = fraction,
-            onValueChange = { held = it },
-            onValueChangeFinished = {
-                held?.let { onSeek((it * durationMs).toLong()) }
-                held = null
-            },
-            enabled = durationMs > 0,
+            playing = playing,
+            onSeek = { if (durationMs > 0) onSeek((it * durationMs).toLong()) },
+            label = stringResource(R.string.seek),
         )
-        Row(Modifier.fillMaxWidth()) {
-            Text(
-                formatDuration((fraction * durationMs).toLong()),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+            Text(formatDuration(positionMs.coerceAtMost(durationMs)), style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.weight(1f))
-            Text(
-                formatDuration(durationMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(formatDuration(durationMs), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -274,18 +307,18 @@ private fun Controls(state: PlaybackState, controls: PlayerControls, onHint: (St
             controls.toggleShuffle()
             onHint(shuffleHints.getValue(!state.shuffle))
         }
-        IconButton(onClick = controls::previous, Modifier.size(56.dp)) {
-            Icon(Icons.Default.SkipPrevious, stringResource(R.string.previous), Modifier.size(36.dp))
+        FilledTonalIconButton(onClick = controls::previous, Modifier.size(width = 72.dp, height = 56.dp), shape = CircleShape) {
+            Icon(Icons.Default.SkipPrevious, stringResource(R.string.previous), Modifier.size(28.dp))
         }
-        FilledIconButton(onClick = controls::toggle, Modifier.size(80.dp)) {
+        FilledIconButton(onClick = controls::toggle, Modifier.size(96.dp), shape = CircleShape) {
             if (state.isPlaying) {
-                Icon(Icons.Default.Pause, stringResource(R.string.pause), Modifier.size(40.dp))
+                Icon(Icons.Default.Pause, stringResource(R.string.pause), Modifier.size(44.dp))
             } else {
-                Icon(Icons.Default.PlayArrow, stringResource(R.string.play), Modifier.size(40.dp))
+                Icon(Icons.Default.PlayArrow, stringResource(R.string.play), Modifier.size(44.dp))
             }
         }
-        IconButton(onClick = controls::next, Modifier.size(56.dp)) {
-            Icon(Icons.Default.SkipNext, stringResource(R.string.next), Modifier.size(36.dp))
+        FilledTonalIconButton(onClick = controls::next, Modifier.size(width = 72.dp, height = 56.dp), shape = CircleShape) {
+            Icon(Icons.Default.SkipNext, stringResource(R.string.next), Modifier.size(28.dp))
         }
         val (icon, label) = when (state.repeatMode) {
             Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne to R.string.repeat_one

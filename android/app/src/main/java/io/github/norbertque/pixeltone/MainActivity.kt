@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import io.github.norbertque.pixeltone.remote.parseJamLink
 import io.github.norbertque.pixeltone.ui.PixeltoneRoot
-import io.github.norbertque.pixeltone.ui.theme.PixeltoneTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,9 +16,8 @@ class MainActivity : ComponentActivity() {
         // Not again when the activity is recreated (rotation): the link was handled.
         if (savedInstanceState == null) openLink(intent)
         setContent {
-            PixeltoneTheme {
-                PixeltoneRoot()
-            }
+            // The theme takes its colours from what plays: PixeltoneRoot sets it up.
+            PixeltoneRoot()
         }
     }
 

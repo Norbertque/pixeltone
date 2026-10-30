@@ -15,6 +15,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import io.github.norbertque.pixeltone.ui.theme.Emphasized
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -56,7 +68,7 @@ fun ArtistContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(artist?.name.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = {},
                 navigationIcon = { BackButton(onBack) },
             )
         },
@@ -65,6 +77,27 @@ fun ArtistContent(
             loading -> Loading(Modifier.padding(padding))
             artist == null -> Message(stringResource(R.string.artist_gone), Modifier.padding(padding))
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+                item {
+                    // Their picture round, their name big, as on Windows.
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        val cover = artist.albums.firstOrNull()?.coverId ?: artist.tracks.firstOrNull()?.albumId ?: -1
+                        Cover(cover, Modifier.size(200.dp), CircleShape)
+                        Text(
+                            artist.name,
+                            Modifier.padding(top = 20.dp),
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = Emphasized,
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Button(onClick = { onPlay(artist.tracks.shuffled(), 0) }, enabled = artist.tracks.isNotEmpty(), modifier = Modifier.padding(top = 16.dp)) {
+                            Icon(Icons.Default.Shuffle, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.shuffle))
+                        }
+                    }
+                }
                 if (artist.albums.isNotEmpty()) {
                     item { Heading(pluralStringResource(R.plurals.albums_count, artist.albums.size, artist.albums.size)) }
                     item {
@@ -93,7 +126,8 @@ fun ArtistContent(
 private fun Heading(text: String) {
     Text(
         text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = Emphasized,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
     )
 }

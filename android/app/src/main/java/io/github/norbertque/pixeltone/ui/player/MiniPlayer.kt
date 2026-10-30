@@ -1,15 +1,15 @@
 package io.github.norbertque.pixeltone.ui.player
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,35 +25,43 @@ import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.playback.QueueEntry
 import io.github.norbertque.pixeltone.ui.library.Cover
 
-/** The playing track under the library screens; tap it for Now playing. */
+/** What plays, on a card above the navigation; a tap opens Now Playing. */
 @Composable
-fun MiniPlayer(entry: QueueEntry, isPlaying: Boolean, onToggle: () -> Unit, onOpen: () -> Unit, playingOn: String? = null) {
+fun MiniPlayer(
+    entry: QueueEntry,
+    isPlaying: Boolean,
+    onToggle: () -> Unit,
+    onOpen: () -> Unit,
+    playingOn: String? = null,
+    onNext: () -> Unit = {},
+) {
     Surface(
+        onClick = onOpen,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+        shadowElevation = 6.dp,
     ) {
-        Row(
-            Modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Cover(entry.cover, Modifier.size(48.dp))
+        Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Cover(entry.cover, Modifier.size(52.dp), MaterialTheme.shapes.large)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(entry.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(entry.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOfNotNull(playingOn, entry.artist ?: stringResource(R.string.unknown_artist)).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onToggle) {
+            FilledIconButton(onClick = onToggle, modifier = Modifier.size(48.dp)) {
                 if (isPlaying) {
                     Icon(Icons.Default.Pause, stringResource(R.string.pause))
                 } else {
                     Icon(Icons.Default.PlayArrow, stringResource(R.string.play))
                 }
             }
+            IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, stringResource(R.string.next)) }
         }
     }
 }

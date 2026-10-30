@@ -229,12 +229,41 @@
     <string name="widget_description">What plays, with play/pause and skip</string>
     <string name="widget_idle">Tap to open</string>
 
+    <!-- Home and navigation -->
+    <string name="home">Home</string>
+    <string name="playing_from">Playing from</string>
+    <string name="seek">Seek</string>
+    <string name="library">Library</string>
+    <string name="good_night">Good night</string>
+    <string name="good_morning">Good morning</string>
+    <string name="good_afternoon">Good afternoon</string>
+    <string name="good_evening">Good evening</string>
+    <string name="shuffle_all">Shuffle all</string>
+    <string name="made_for_you">Made for you</string>
+    <string name="todays_mix">Today’s mix</string>
+    <string name="stats_this_month">%1$s with your top artists this month</string>
+    <string name="stats_teaser">Your top tracks, artists and hours</string>
+    <string name="recently_played">Recently played</string>
+    <string name="your_artists_this_month">Your artists this month</string>
+    <string name="recently_added">Recently added</string>
+    <string name="all_albums">All albums</string>
+    <string name="search_prompt">Tracks, albums, artists</string>
+    <string name="search_start">Find tracks, albums and artists on this phone.</string>
+    <plurals name="mix_text">
+        <item quantity="one">%d track from the artists you play most, favourites you haven’t heard in a while, and a few you rarely play. New every day.</item>
+        <item quantity="other">%d tracks from the artists you play most, favourites you haven’t heard in a while, and a few you rarely play. New every day.</item>
+    </plurals>
+    <plurals name="artists_count">
+        <item quantity="one">%,d artist</item>
+        <item quantity="other">%,d artists</item>
+    </plurals>
+
     <plurals name="tracks_count">
-        <item quantity="one">%d track</item>
-        <item quantity="other">%d tracks</item>
+        <item quantity="one">%,d track</item>
+        <item quantity="other">%,d tracks</item>
     </plurals>
     <plurals name="albums_count">
-        <item quantity="one">%d album</item>
-        <item quantity="other">%d albums</item>
+        <item quantity="one">%,d album</item>
+        <item quantity="other">%,d albums</item>
     </plurals>
 </resources>

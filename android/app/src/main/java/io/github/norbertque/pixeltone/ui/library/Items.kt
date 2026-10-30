@@ -104,8 +104,8 @@ fun TrackRow(
 
 @Composable
 fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.clip(MaterialTheme.shapes.medium).clickable(onClick = onClick)) {
-        Cover(album.coverId, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.medium)
+    Column(modifier.clip(MaterialTheme.shapes.large).clickable(onClick = onClick)) {
+        Cover(album.coverId, Modifier.fillMaxWidth().aspectRatio(1f), MaterialTheme.shapes.extraLarge)
         Text(
             album.title,
             style = MaterialTheme.typography.titleSmall,

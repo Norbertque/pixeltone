@@ -34,6 +34,20 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import io.github.norbertque.pixeltone.ui.theme.Emphasized
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +76,7 @@ import io.github.norbertque.pixeltone.library.Lists
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
 private val TABS = listOf(R.string.tab_tracks, R.string.tab_albums, R.string.tab_artists, R.string.tab_playlists)
+private val TAB_ICONS = listOf(Icons.Default.MusicNote, Icons.Default.Album, Icons.Default.Person, Icons.AutoMirrored.Filled.QueueMusic)
 
 @Composable
 fun LibraryScreen(
@@ -131,52 +146,72 @@ fun LibraryContent(
     var menu by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    if (searching) SearchField(query, onQuery) else Text(stringResource(R.string.app_name))
-                },
-                actions = {
-                    if (searching) {
+            if (searching) {
+                TopAppBar(
+                    title = { SearchField(query, onQuery) },
+                    actions = {
                         IconButton(onClick = { onSearching(false) }) {
                             Icon(Icons.Default.Close, stringResource(R.string.close_search))
                         }
-                    } else {
+                    },
+                )
+            } else {
+                // A big title as on Windows, with the library's sections as chips under it.
+                Column(Modifier.statusBarsPadding().padding(start = 24.dp, end = 4.dp, top = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.library),
+                            Modifier.weight(1f),
+                            style = MaterialTheme.typography.displayMedium,
+                            fontWeight = Emphasized,
+                        )
                         IconButton(onClick = { onSearching(true) }) {
                             Icon(Icons.Default.Search, stringResource(R.string.search))
                         }
                         IconButton(onClick = onPlayOn) {
                             Icon(Icons.Default.Devices, stringResource(R.string.play_on))
                         }
-                        IconButton(onClick = { menu = true }) {
-                            Icon(Icons.Default.MoreVert, stringResource(R.string.more))
-                        }
-                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.listening_stats)) },
-                                leadingIcon = { Icon(Icons.Default.Insights, null) },
-                                onClick = {
-                                    menu = false
-                                    onStats()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.settings)) },
-                                leadingIcon = { Icon(Icons.Default.Settings, null) },
-                                onClick = {
-                                    menu = false
-                                    onSettings()
-                                },
-                            )
+                        Box {
+                            IconButton(onClick = { menu = true }) {
+                                Icon(Icons.Default.MoreVert, stringResource(R.string.more))
+                            }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.listening_stats)) },
+                                    leadingIcon = { Icon(Icons.Default.Insights, null) },
+                                    onClick = {
+                                        menu = false
+                                        onStats()
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, null) },
+                                    onClick = {
+                                        menu = false
+                                        onSettings()
+                                    },
+                                )
+                            }
                         }
                     }
-                },
-            )
+                }
+            }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryTabRow(selectedTabIndex = tab) {
+            Row(
+                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 TABS.forEachIndexed { i, label ->
-                    Tab(selected = tab == i, onClick = { onTab(i) }, text = { Text(stringResource(label)) })
+                    FilterChip(
+                        selected = tab == i,
+                        onClick = { onTab(i) },
+                        label = { Text(stringResource(label)) },
+                        leadingIcon = { Icon(TAB_ICONS[i], null, Modifier.size(18.dp)) },
+                        shape = MaterialTheme.shapes.large,
+                    )
                 }
             }
             when {

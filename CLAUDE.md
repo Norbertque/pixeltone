@@ -196,9 +196,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   the only other copy is `~/.config/pixeltone/android-release.p12` with its password file and
   `android-signing.properties` (local `assembleRelease` reads it). Without this key installed
   copies can never update again (Android checks the signature). Never commit or print it.
-- `ui/theme/Color.kt` is generated from the Windows default seed (#7E57C2, tonal spot, 2025
-  spec) with @material/material-color-utilities 0.4.0; regenerate it the same way if the
-  seed changes. The launcher icon is the Windows SVG's gradient and bars as vector drawables.
+- Look: Pixeltone's own design, the Windows app's, built anew in Compose. Colours come from the
+  playing cover like on Windows (`ui/theme/Scheme.kt`: `com.materialkolor:material-color-utilities`,
+  tonal spot, 2025 spec, as `ui/src/lib/theme/scheme.ts`; lilac #7E57C2 when nothing plays);
+  Google Sans Flex (OFL, `res/font`, licence in `assets/licenses/`) on the Windows type scale
+  (`Type.kt`; headings in its rounded cut); the wavy seek bar and cookie shape in `ui/Design.kt`;
+  Home / Search / Library navigation with Today's mix (`library/Home.kt`, Windows' rule). The
+  launcher icon is the Windows SVG's gradient and bars as vector drawables.
 
 ## Releases and updates
 
@@ -219,7 +223,8 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   "Converted". 0 dB software gain must stay a no-op.
 - **Clean room:** never copy code, icons or other assets from PixelPlayer for Android
   (proprietary since 2026-05-12). Matching the look is fine for the Windows app; Pixeltone
-  for Android (`android/`) has a look of its own (ADR 0001).
+  for Android (`android/`) takes its look from Pixeltone on Windows, never from PixelPlayer's
+  screens (ADR 0001).
 - **Vocabulary:** use `GLOSSARY.md`'s terms in UI, code and docs alike (e.g. "track", never
   "song"); where existing code or UI still differs, the glossary wins.
 - **Browser support:** the UI only runs in WebView2 (evergreen Chromium) or a current

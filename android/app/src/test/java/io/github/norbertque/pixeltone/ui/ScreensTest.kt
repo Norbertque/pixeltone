@@ -53,6 +53,9 @@ import io.github.norbertque.pixeltone.lyrics.parseLrc
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsContent
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsState
 import io.github.norbertque.pixeltone.widget.PlayerWidget
+import io.github.norbertque.pixeltone.ui.home.HomeContent
+import io.github.norbertque.pixeltone.ui.home.HomeData
+import io.github.norbertque.pixeltone.ui.search.SearchContent
 import io.github.norbertque.pixeltone.widget.WidgetState
 import android.widget.FrameLayout
 import androidx.compose.ui.viewinterop.AndroidView
@@ -105,8 +108,11 @@ class ScreensTest {
         shuffle = false,
     )
 
+    // The clock runs by hand: some screens animate for as long as they show (the seek bar's wave).
     private fun shot(name: String, dark: Boolean = false, content: @Composable () -> Unit) {
+        compose.mainClock.autoAdvance = false
         compose.setContent { PixeltoneTheme(dark = dark, content = content) }
+        compose.mainClock.advanceTimeBy(1_000)
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
     }
 
@@ -387,6 +393,29 @@ class ScreensTest {
             )
         }
     }
+
+    private val homeData by lazy {
+        HomeData(
+            tracks = 1863,
+            albums = 170,
+            artists = 60,
+            durationMs = 509_000_000,
+            mix = index.tracks.take(12),
+            monthMs = 27_360_000,
+            recentlyPlayed = index.albums.take(4),
+            topArtists = index.artists.take(4).mapIndexed { i, a -> a to 24 - i * 3 },
+            recentlyAdded = index.albums.takeLast(4),
+        )
+    }
+
+    @Test
+    fun home() = shot("home") { HomeContent(homeData, hour = 9, {}, {}, {}, {}, {}, {}, {}) }
+
+    @Test
+    fun homeDark() = shot("home-dark", dark = true) { HomeContent(homeData, hour = 20, {}, {}, {}, {}, {}, {}, {}) }
+
+    @Test
+    fun searchResults() = shot("search") { SearchContent("ry", index.search("ry"), {}, {}, {}, { _, _ -> }) }
 
     @Test
     fun miniPlayer() = shot("mini-player") {

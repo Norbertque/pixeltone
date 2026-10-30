@@ -20,6 +20,8 @@ data class Track(
     /** The file's folder; tells apart albums of the same name that have no album artist. */
     val folder: String,
     val fileName: String = "",
+    /** When the file came onto the phone (epoch seconds; MediaStore's DATE_ADDED). */
+    val addedAt: Long = 0,
 ) {
     /** The file, as folder and name: what playlists and favourites remember (MediaStore ids can change). */
     val fileKey: String get() = folder.trimEnd('/') + "/" + fileName
