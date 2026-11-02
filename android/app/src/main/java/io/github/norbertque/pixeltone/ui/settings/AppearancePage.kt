@@ -23,6 +23,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import java.util.Locale
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Colorize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -118,8 +129,99 @@ private fun Swatches(look: Appearance, onPick: (Int) -> Unit) {
                     if (chosen) Icon(Icons.Default.Check, null, tint = if (Color(seed).luminance() > 0.5f) Color.Black else Color.White)
                 }
             }
+            // Any other colour, as Windows' colour picker gives: the circle shows it once chosen.
+            val custom = SEED_PRESETS.none { it.second == look.seed }
+            val customLabel = stringResource(R.string.custom_colour)
+            var choosing by remember { mutableStateOf(false) }
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (custom) Brush.linearGradient(listOf(Color(look.seed), Color(look.seed))) else RAINBOW)
+                    .selectable(selected = custom, role = Role.RadioButton) { choosing = true }
+                    .semantics { contentDescription = customLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (custom) Icons.Default.Check else Icons.Default.Colorize,
+                    null,
+                    tint = if (!custom || Color(look.seed).luminance() > 0.5f) Color.Black else Color.White,
+                )
+            }
+            if (choosing) {
+                CustomColourDialog(
+                    initial = look.seed,
+                    onPick = { seed ->
+                        choosing = false
+                        onPick(seed)
+                    },
+                    onDismiss = { choosing = false },
+                )
+            }
         }
     }
+}
+
+private val RAINBOW = Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red))
+
+/** "#7E57C2" ↔ a colour; null when what's typed isn't one. */
+internal fun parseHexColour(text: String): Int? =
+    Regex("^#?([0-9a-fA-F]{6})$").find(text.trim())?.groupValues?.get(1)?.toLong(16)?.let { (0xFF000000 or it).toInt() }
+
+internal fun hexOf(colour: Int): String = String.format(Locale.ROOT, "#%06X", colour and 0xFFFFFF)
+
+/** A colour of one's own: its hue and how colourful it is, or typed as hex. */
+@Composable
+private fun CustomColourDialog(initial: Int, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val start = remember(initial) { FloatArray(3).also { android.graphics.Color.colorToHSV(initial, it) } }
+    var hue by remember { mutableFloatStateOf(start[0]) }
+    var saturation by remember { mutableFloatStateOf(start[1]) }
+    var value by remember { mutableFloatStateOf(start[2].coerceAtLeast(0.4f)) }
+    val colour = android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value))
+    var typed by remember { mutableStateOf(hexOf(initial)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.custom_colour)) },
+        text = {
+            Column {
+                Box(Modifier.fillMaxWidth().height(56.dp).clip(MaterialTheme.shapes.large).background(Color(colour)))
+                Text(stringResource(R.string.hue), Modifier.padding(top = 16.dp), style = MaterialTheme.typography.labelLarge)
+                Slider(
+                    value = hue,
+                    onValueChange = {
+                        hue = it
+                        typed = hexOf(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
+                    },
+                    valueRange = 0f..360f,
+                )
+                Text(stringResource(R.string.colourfulness), style = MaterialTheme.typography.labelLarge)
+                Slider(
+                    value = saturation,
+                    onValueChange = {
+                        saturation = it
+                        typed = hexOf(android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value)))
+                    },
+                )
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { text ->
+                        typed = text
+                        parseHexColour(text)?.let { parsed ->
+                            val hsv = FloatArray(3).also { android.graphics.Color.colorToHSV(parsed, it) }
+                            hue = hsv[0]
+                            saturation = hsv[1]
+                            value = hsv[2]
+                        }
+                    },
+                    label = { Text(stringResource(R.string.hex)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onPick(colour) }) { Text(stringResource(R.string.use_colour)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 /** The palette styles side by side, each with three of the colours it gives (as on Windows). */

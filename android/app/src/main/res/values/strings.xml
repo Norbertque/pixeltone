@@ -334,6 +334,11 @@
     <string name="fallback_colour_text">Used when nothing is playing or a track has no artwork.</string>
     <string name="seed_colour">Seed colour</string>
     <string name="seed_colour_text">The colour every palette is built from.</string>
+    <string name="custom_colour">Custom colour</string>
+    <string name="hue">Hue</string>
+    <string name="colourfulness">Colourfulness</string>
+    <string name="hex">Hex</string>
+    <string name="use_colour">Use</string>
     <string name="palette_style">Palette style</string>
     <string name="palette_style_text">How colourful the palette made from it is.</string>
     <string name="style_tonal_spot">Tonal spot</string>
