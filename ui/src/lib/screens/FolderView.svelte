@@ -61,7 +61,7 @@
           <span class="icon"><Icon name="folder" fill /></span>
           <span class="text">
             <span class="title-small name">{f.name}</span>
-            <span class="body-small sub">{f.trackCount.toLocaleString()} song{f.trackCount === 1 ? '' : 's'}</span>
+            <span class="body-small sub">{f.trackCount.toLocaleString()} track{f.trackCount === 1 ? '' : 's'}</span>
           </span>
           <Icon name="chevron_right" />
         </button>

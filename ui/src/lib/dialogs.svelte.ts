@@ -15,13 +15,13 @@ export interface PromptRequest {
 
 export interface PickRequest {
   trackIds: number[];
-  /** What the confirmation calls them: a song or album title, or "12 songs". */
+  /** What the confirmation calls them: a track or album title, or "12 tracks". */
   label: string;
 }
 
 export interface TagRequest {
   paths: string[];
-  /** A song title, or "12 songs". */
+  /** A track title, or "12 tracks". */
   label: string;
 }
 
@@ -46,7 +46,7 @@ class Dialogs {
 
   editTags(rows: readonly TrackRow[]): void {
     if (!rows.length) return;
-    const label = rows.length === 1 ? rows[0]!.title : `${rows.length} songs`;
+    const label = rows.length === 1 ? rows[0]!.title : `${rows.length} tracks`;
     this.tags = { paths: rows.map((r) => r.path), label };
   }
 }

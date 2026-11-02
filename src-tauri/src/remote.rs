@@ -414,7 +414,7 @@ pub fn library_changed(app: &AppHandle) {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RemoteDevice {
+pub struct PairedPhoneView {
     pub id: String,
     pub name: String,
     pub paired_at: u64,
@@ -433,7 +433,7 @@ pub struct RemoteStatus {
     /// The pairing code on show, and for how many more seconds.
     pub code: Option<String>,
     pub code_seconds: u32,
-    pub devices: Vec<RemoteDevice>,
+    pub phones: Vec<PairedPhoneView>,
 }
 
 fn status(app: &AppHandle, state: &AppState) -> RemoteStatus {
@@ -452,16 +452,16 @@ fn status(app: &AppHandle, state: &AppState) -> RemoteStatus {
             .and_then(|s| pp_remote::lan::lan_address().map(|ip| format!("{ip}:{}", s.port()))),
         code,
         code_seconds,
-        devices: server
+        phones: server
             .map(|s| {
                 s.pairing()
-                    .devices()
+                    .phones()
                     .into_iter()
-                    .map(|d| RemoteDevice {
-                        id: d.id,
-                        name: d.name,
-                        paired_at: d.paired_at,
-                        last_seen: d.last_seen,
+                    .map(|p| PairedPhoneView {
+                        id: p.id,
+                        name: p.name,
+                        paired_at: p.paired_at,
+                        last_seen: p.last_seen,
                     })
                     .collect()
             })

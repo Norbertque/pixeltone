@@ -93,7 +93,7 @@ fn the_artist_with_our_album_wins_over_a_better_known_namesake() {
 
 #[test]
 fn songs_verify_artists_known_only_from_compilations() {
-    // The album is a compilation ("Various Artists"); one of the songs is theirs.
+    // The album is a compilation ("Various Artists"); one of the tracks is theirs.
     let (base, seen) = server(
         r#"{"data":[{"title":"Misatocore, Vol. 2","artist":{"id":9,"name":"Various Artists","picture_xl":"http://x/va.jpg"}}]}"#,
         r#"{"data":[{"title":"Loser","artist":{"id":7,"name":"Loser64","picture_xl":"http://x/pic.jpg"}}]}"#,

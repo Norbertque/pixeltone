@@ -16,7 +16,7 @@
     <span class="text">
       <span class="name title-small">{artist.name}</span>
       <span class="sub body-small">
-        {artist.albumCount} album{artist.albumCount === 1 ? '' : 's'} · {artist.trackCount} song{artist.trackCount === 1
+        {artist.albumCount} album{artist.albumCount === 1 ? '' : 's'} · {artist.trackCount} track{artist.trackCount === 1
           ? ''
           : 's'}
       </span>

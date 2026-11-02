@@ -24,7 +24,7 @@ export const NAV_ITEMS = [
   { id: 'library', icon: 'library_music', label: 'Library' },
 ] as const satisfies readonly { id: Section; icon: string; label: string }[];
 
-export type LibraryTab = 'songs' | 'albums' | 'artists' | 'genres' | 'folders' | 'playlists';
+export type LibraryTab = 'tracks' | 'albums' | 'artists' | 'genres' | 'folders' | 'playlists';
 /** What Now Playing shows beside the controls. */
 export type SidePanel = 'queue' | 'lyrics';
 
@@ -80,7 +80,7 @@ class Router {
   /** The panel shown inside Now Playing, if any. */
   panel = $state<SidePanel | null>(null);
   /** Remembered while browsing away and back. */
-  libraryTab = $state<LibraryTab>('songs');
+  libraryTab = $state<LibraryTab>('tracks');
   readonly screen = $derived<Screen>(this.route.screen);
   readonly section = $derived<Section>(sectionOf(this.route));
   #history: Route[] = [];

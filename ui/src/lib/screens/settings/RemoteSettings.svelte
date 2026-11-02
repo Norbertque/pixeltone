@@ -104,11 +104,11 @@
         </div>
       {/if}
 
-      {#if status.devices.length}
+      {#if status.phones.length}
         <div class="row column">
           <span class="title-medium">Paired phones</span>
-          <ul class="devices">
-            {#each status.devices as d (d.id)}
+          <ul class="phones">
+            {#each status.phones as d (d.id)}
               <li>
                 <Icon name="smartphone" />
                 <span class="device-text">
@@ -184,14 +184,14 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.08em;
   }
-  .devices {
+  .phones {
     display: grid;
     gap: 4px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
-  .devices li {
+  .phones li {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;

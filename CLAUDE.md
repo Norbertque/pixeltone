@@ -112,7 +112,7 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `docs/remote-protocol.md`; keep it in step with `protocol.rs`.
 - `src-tauri/src/remote.rs` lends the engine and the volume rules (same as `volume.ts`);
   engine events reach phones through `forward()`. Off unless `preferences.remote_enabled`.
-- A phone's tracks are `QueueItem { remote: true }` with an `http://` path on the phone's
+- Phone tracks are `QueueItem { phone_track: true }` with an `http://` path on the phone's
   own address: only `Decoder::open_http` opens those (FFmpeg limited to http/tcp); local
   paths always go through `file:`. They stay out of history and the saved queue.
 - Jams (ADR 0002, protocol doc "Jam"): the rules in `pp-remote/src/jam.rs`, the server in

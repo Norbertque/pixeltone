@@ -38,7 +38,7 @@ impl Art {
     /// A key for a picture at `url` (the same picture gets the same key).
     pub fn key_for(&self, url: &str) -> String {
         let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-        // The query (tokens, cache busters) changes per session; the path names the song.
+        // The query (tokens, cache busters) changes per session; the path names the track.
         for b in url.split('?').next().unwrap_or(url).bytes() {
             h ^= u64::from(b);
             h = h.wrapping_mul(0x0100_0000_01b3);

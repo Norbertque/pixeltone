@@ -34,7 +34,7 @@
     <span class="overline label-large">Genre</span>
     <h1 class="display-medium rounded emphasized" tabindex="-1" data-screen-heading>{detail.genre.name}</h1>
     <p class="meta body-medium">
-      {detail.albums.length} album{detail.albums.length === 1 ? '' : 's'} · {detail.genre.trackCount} songs
+      {detail.albums.length} album{detail.albums.length === 1 ? '' : 's'} · {detail.genre.trackCount} tracks
     </p>
     <div class="actions">
       <Button variant="filled" size="md" icon="play_arrow" onclick={() => playAll(detail!.tracks)}>Play</Button>
@@ -56,9 +56,9 @@
     {/each}
   </div>
 
-  <h2 class="section title-large rounded emphasized">Songs</h2>
-  <div class="songs">
-    <VirtualList count={detail.tracks.length} rowHeight={60} label="Songs">
+  <h2 class="section title-large rounded emphasized">Tracks</h2>
+  <div class="tracks">
+    <VirtualList count={detail.tracks.length} rowHeight={60} label="Tracks">
       {#snippet row(i)}
         <TrackItem track={detail!.tracks[i]} onplay={() => playRows(detail!.tracks, i)} />
       {/snippet}
@@ -106,7 +106,7 @@
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 20px;
   }
-  .songs {
+  .tracks {
     padding-bottom: 32px;
   }
 </style>

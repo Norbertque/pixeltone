@@ -48,8 +48,8 @@
       <span class="body-medium">
         AI playlists use your own key from console.anthropic.com, billed to your account. It is kept in Windows
         Credential Manager, never in the app's files. Each playlist sends the titles, artists, albums, years and
-        genres of {status.sentSongs.toLocaleString()} songs to Anthropic{status.sentSongs < status.songs
-          ? ` (a sample of your ${status.songs.toLocaleString()})`
+        genres of {status.sentTracks.toLocaleString()} tracks to Anthropic{status.sentTracks < status.tracks
+          ? ` (a sample of your ${status.tracks.toLocaleString()})`
           : ''}: about ${status.estimateUsd < 0.01 ? '0.01' : status.estimateUsd.toFixed(2)} each.
       </span>
     </div>

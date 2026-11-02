@@ -91,7 +91,7 @@
         <span class="title-medium">ReplayGain</span>
         <span class="body-medium">
           Evens out loudness using the ReplayGain tags in your files: per track, or per album to keep the differences
-          between an album's songs. Untagged files play as they are. While it applies the music is no longer
+          between an album's tracks. Untagged files play as they are. While it applies the music is no longer
           bit-perfect.
         </span>
       </div>
@@ -128,7 +128,7 @@
       <div class="row-text">
         <span class="title-medium">Crossfade</span>
         <span class="body-medium">
-          Blends the end of each song into the next. Shared mode only: exclusive mode always plays gaplessly.
+          Blends the end of each track into the next. Shared mode only: exclusive mode always plays gaplessly.
           {#if output.exclusive}<strong>Exclusive mode is on, so this doesn't apply now.</strong>{/if}
         </span>
       </div>

@@ -1,4 +1,4 @@
-/** The tag editor's form logic: values shared by the selected songs, and what to write. */
+/** The tag editor's form logic: values shared by the selected tracks, and what to write. */
 import type { TagFields } from './api';
 
 export type FieldKey = keyof TagFields;
@@ -8,7 +8,7 @@ export interface FieldSpec {
   label: string;
   /** Digits only (year, track, disc). */
   numeric?: boolean;
-  /** Only offered when one song is edited: the same title for ten songs is a mistake. */
+  /** Only offered when one track is edited: the same title for ten tracks is a mistake. */
   single?: boolean;
 }
 
@@ -24,7 +24,7 @@ export const FIELDS: readonly FieldSpec[] = [
 ];
 
 export type FormValues = Record<FieldKey, string>;
-/** Per field: the value every song has, or null where they differ. */
+/** Per field: the value every track has, or null where they differ. */
 export type Shared = Record<FieldKey, string | null>;
 
 const KEYS = FIELDS.map((f) => f.key);
@@ -46,7 +46,7 @@ export function initialForm(s: Shared): FormValues {
 
 /**
  * The change to write: shared fields whose value changed, and fields that differed between
- * the songs once something was typed into them. Everything else stays as it is (null).
+ * the tracks once something was typed into them. Everything else stays as it is (null).
  */
 export function changeFrom(s: Shared, form: FormValues, offered: readonly FieldKey[]): TagFields {
   const out: TagFields = {

@@ -1,4 +1,4 @@
-//! LRCLIB (lrclib.net): a free, open lyrics database with synced LRC for many songs.
+//! LRCLIB (lrclib.net): a free, open lyrics database with synced LRC for many tracks.
 
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ pub struct Lrclib {
     base: String,
 }
 
-/// "A feat. B" → "A": LRCLIB lists songs under their main artist.
+/// "A feat. B" → "A": LRCLIB lists tracks under their main artist.
 fn main_artist(artist: &str) -> &str {
     let lower = artist.to_lowercase();
     let cut = [" feat.", " feat ", " ft.", " ft ", " featuring ", ";"]

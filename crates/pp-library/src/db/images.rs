@@ -51,7 +51,7 @@ impl Db {
     }
 
     /// Up to `n` album titles (their own albums before compilations, larger first) and
-    /// `n` song titles by the artist `norm`: what an online lookup checks a match against.
+    /// `n` track titles by the artist `norm`: what an online lookup checks a match against.
     pub fn artist_titles(
         &self,
         norm: &str,

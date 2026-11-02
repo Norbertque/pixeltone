@@ -69,7 +69,7 @@
           'error',
         );
       } else {
-        toasts.show(report.written === 1 ? 'Tags saved' : `Tags of ${report.written} songs saved`);
+        toasts.show(report.written === 1 ? 'Tags saved' : `Tags of ${report.written} tracks saved`);
       }
       dialogs.tags = null;
     } catch (e) {
@@ -122,7 +122,7 @@
           {/each}
         </div>
         <p class="note body-small">
-          {req.paths.length > 1 ? 'Changes apply to every selected song. ' : ''}Written into the files themselves; the
+          {req.paths.length > 1 ? 'Changes apply to every selected track. ' : ''}Written into the files themselves; the
           library updates right after.
         </p>
       {/if}

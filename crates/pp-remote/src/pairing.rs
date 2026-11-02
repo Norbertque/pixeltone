@@ -2,7 +2,7 @@
 //!
 //! A code is single-use, expires after a few minutes and stops working after a few wrong
 //! guesses, so it can't be brute-forced. Tokens are random 256-bit values; only their
-//! SHA-256 is stored, so the devices file can't be used to impersonate a phone.
+//! SHA-256 is stored, so the paired phones file can't be used to impersonate a phone.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -21,7 +21,7 @@ pub const MAX_FAILURES: u32 = 5;
 /// A phone allowed to use the remote.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PairedDevice {
+pub struct PairedPhone {
     /// Chosen by the phone (stable per installation).
     pub id: String,
     pub name: String,
@@ -53,7 +53,7 @@ struct ActiveCode {
 pub struct Pairing {
     path: PathBuf,
     code: Mutex<Option<ActiveCode>>,
-    devices: Mutex<Vec<PairedDevice>>,
+    phones: Mutex<Vec<PairedPhone>>,
 }
 
 fn now() -> u64 {
@@ -83,17 +83,17 @@ pub(crate) fn same(a: &str, b: &str) -> bool {
 }
 
 impl Pairing {
-    /// Loads the paired devices from `path` (created when the first phone pairs).
+    /// Loads the paired phones from `path` (created when the first phone pairs).
     pub fn open(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
-        let devices = std::fs::read(&path)
+        let phones = std::fs::read(&path)
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
             .unwrap_or_default();
         Self {
             path,
             code: Mutex::new(None),
-            devices: Mutex::new(devices),
+            phones: Mutex::new(phones),
         }
     }
 
@@ -129,12 +129,7 @@ impl Pairing {
     }
 
     /// Pairs a phone with the code it was shown; returns its new token.
-    pub fn pair(
-        &self,
-        code: &str,
-        device_id: &str,
-        device_name: &str,
-    ) -> Result<String, PairError> {
+    pub fn pair(&self, code: &str, phone_id: &str, phone_name: &str) -> Result<String, PairError> {
         {
             let mut active = self.code.lock();
             let Some(current) = active.as_mut() else {
@@ -156,44 +151,44 @@ impl Pairing {
             *active = None;
         }
         let token = URL_SAFE_NO_PAD.encode(random::<32>());
-        let device = PairedDevice {
-            id: clip(device_id, 64),
-            name: clip(device_name, 64),
+        let phone = PairedPhone {
+            id: clip(phone_id, 64),
+            name: clip(phone_name, 64),
             token_hash: hash_token(&token),
             paired_at: now(),
             last_seen: now(),
         };
-        let mut devices = self.devices.lock();
-        devices.retain(|d| d.id != device.id);
-        devices.push(device);
-        save(&self.path, &devices).map_err(PairError::Store)?;
+        let mut phones = self.phones.lock();
+        phones.retain(|p| p.id != phone.id);
+        phones.push(phone);
+        save(&self.path, &phones).map_err(PairError::Store)?;
         Ok(token)
     }
 
-    /// The device a token belongs to; notes when it was last seen.
-    pub fn authorize(&self, token: &str) -> Option<PairedDevice> {
+    /// The paired phone a token belongs to; notes when it was last seen.
+    pub fn authorize(&self, token: &str) -> Option<PairedPhone> {
         let hash = hash_token(token);
-        let mut devices = self.devices.lock();
-        let device = devices.iter_mut().find(|d| same(&d.token_hash, &hash))?;
+        let mut phones = self.phones.lock();
+        let phone = phones.iter_mut().find(|p| same(&p.token_hash, &hash))?;
         // Saved at most hourly: this runs on every request.
         let seen = now();
-        let stale = seen.saturating_sub(device.last_seen) > 3600;
-        device.last_seen = seen;
-        let found = device.clone();
+        let stale = seen.saturating_sub(phone.last_seen) > 3600;
+        phone.last_seen = seen;
+        let found = phone.clone();
         if stale {
-            let _ = save(&self.path, &devices);
+            let _ = save(&self.path, &phones);
         }
         Some(found)
     }
 
-    pub fn devices(&self) -> Vec<PairedDevice> {
-        self.devices.lock().clone()
+    pub fn phones(&self) -> Vec<PairedPhone> {
+        self.phones.lock().clone()
     }
 
-    pub fn forget(&self, device_id: &str) -> Result<(), String> {
-        let mut devices = self.devices.lock();
-        devices.retain(|d| d.id != device_id);
-        save(&self.path, &devices)
+    pub fn forget(&self, phone_id: &str) -> Result<(), String> {
+        let mut phones = self.phones.lock();
+        phones.retain(|p| p.id != phone_id);
+        save(&self.path, &phones)
     }
 }
 
@@ -203,12 +198,12 @@ fn clip(s: &str, max: usize) -> String {
     s.chars().take(max).collect()
 }
 
-fn save(path: &Path, devices: &[PairedDevice]) -> Result<(), String> {
+fn save(path: &Path, phones: &[PairedPhone]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
     let tmp = path.with_extension("json.tmp");
-    let json = serde_json::to_vec_pretty(devices).map_err(|e| e.to_string())?;
+    let json = serde_json::to_vec_pretty(phones).map_err(|e| e.to_string())?;
     std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
@@ -220,7 +215,7 @@ mod tests {
     #[test]
     fn a_code_pairs_once_and_the_token_authorizes() {
         let dir = tempfile::tempdir().unwrap();
-        let p = Pairing::open(dir.path().join("devices.json"));
+        let p = Pairing::open(dir.path().join("paired-phones.json"));
         assert_eq!(p.pair("123456", "a", "Phone"), Err(PairError::Closed));
 
         let code = p.new_code();
@@ -234,15 +229,15 @@ mod tests {
             "single use"
         );
 
-        let device = p.authorize(&token).unwrap();
-        assert_eq!(device.name, "Pixel 8");
+        let phone = p.authorize(&token).unwrap();
+        assert_eq!(phone.name, "Pixel 8");
         assert!(p.authorize("nope").is_none());
 
         // The token itself is never stored.
-        let stored = std::fs::read_to_string(dir.path().join("devices.json")).unwrap();
+        let stored = std::fs::read_to_string(dir.path().join("paired-phones.json")).unwrap();
         assert!(!stored.contains(&token));
         assert!(
-            Pairing::open(dir.path().join("devices.json"))
+            Pairing::open(dir.path().join("paired-phones.json"))
                 .authorize(&token)
                 .is_some()
         );
@@ -254,7 +249,7 @@ mod tests {
     #[test]
     fn wrong_guesses_close_the_code() {
         let dir = tempfile::tempdir().unwrap();
-        let p = Pairing::open(dir.path().join("devices.json"));
+        let p = Pairing::open(dir.path().join("paired-phones.json"));
         let code = p.new_code();
         let wrong = if code == "000000" { "000001" } else { "000000" };
         for _ in 1..MAX_FAILURES {
@@ -271,11 +266,11 @@ mod tests {
     #[test]
     fn pairing_again_replaces_the_old_token() {
         let dir = tempfile::tempdir().unwrap();
-        let p = Pairing::open(dir.path().join("devices.json"));
+        let p = Pairing::open(dir.path().join("paired-phones.json"));
         let first = p.pair(&p.new_code(), "phone", "Phone").unwrap();
         let second = p.pair(&p.new_code(), "phone", "Phone").unwrap();
         assert!(p.authorize(&first).is_none());
         assert!(p.authorize(&second).is_some());
-        assert_eq!(p.devices().len(), 1);
+        assert_eq!(p.phones().len(), 1);
     }
 }

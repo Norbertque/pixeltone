@@ -370,7 +370,7 @@ fn playlist_name(name: &str) -> Result<String> {
 
 /// A track in brief, for describing the library to an AI.
 #[derive(Clone, Debug, PartialEq)]
-pub struct SongSummary {
+pub struct TrackSummary {
     pub id: u32,
     pub title: String,
     pub artist: String,
@@ -382,8 +382,8 @@ pub struct SongSummary {
 
 impl Library {
     /// Every track in brief, by artist and album.
-    pub fn song_summaries(&self) -> Result<Vec<SongSummary>> {
-        Ok(self.db.lock().song_summaries()?)
+    pub fn track_summaries(&self) -> Result<Vec<TrackSummary>> {
+        Ok(self.db.lock().track_summaries()?)
     }
 }
 
@@ -413,7 +413,7 @@ impl Library {
             .set_artist_image(key, hash.as_deref(), scan::now_secs())?)
     }
 
-    /// Album and song titles by the artist `key` (up to `n` of each), to check an online
+    /// Album and track titles by the artist `key` (up to `n` of each), to check an online
     /// match against: see `Db::artist_titles`.
     pub fn artist_titles(&self, key: &str, n: u32) -> Result<(Vec<String>, Vec<String>)> {
         Ok(self.db.lock().artist_titles(key, n)?)

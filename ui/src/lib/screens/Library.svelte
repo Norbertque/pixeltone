@@ -21,7 +21,7 @@
   import FolderView from './FolderView.svelte';
 
   const TABS = [
-    { id: 'songs', label: 'Songs', icon: 'music_note' },
+    { id: 'tracks', label: 'Tracks', icon: 'music_note' },
     { id: 'albums', label: 'Albums', icon: 'album' },
     { id: 'artists', label: 'Artists', icon: 'artist' },
     { id: 'genres', label: 'Genres', icon: 'category' },
@@ -53,7 +53,7 @@
 
   // A pager per sort order. When the library or user data changes, the pagers reload in
   // place: rows stay on screen until their new versions arrive (no flash on a heart toggle).
-  const songs = $derived.by(() => {
+  const tracks = $derived.by(() => {
     const sort = trackSort;
     const count = untrack(() => o?.trackCount ?? 0);
     return new PagedRows(count, (offset, limit) => api.libraryTracks(sort, offset, limit));
@@ -69,7 +69,7 @@
     void library.version;
     const counts = [o?.trackCount ?? 0, o?.albumCount ?? 0, o?.artistCount ?? 0] as const;
     untrack(() => {
-      songs.refresh(counts[0]);
+      tracks.refresh(counts[0]);
       albums.refresh(counts[1]);
       artists.refresh(counts[2]);
     });
@@ -103,7 +103,7 @@
 
   const subtitle = $derived(
     o && o.trackCount > 0
-      ? `${o.trackCount.toLocaleString()} songs · ${o.albumCount.toLocaleString()} albums · ${formatDuration(o.durationMs)}`
+      ? `${o.trackCount.toLocaleString()} tracks · ${o.albumCount.toLocaleString()} albums · ${formatDuration(o.durationMs)}`
       : undefined,
   );
 </script>
@@ -158,13 +158,13 @@
         icon="hourglass_top"
         title={library.scanning ? 'Reading your music…' : 'No music found'}
         body={library.scanning
-          ? 'Your songs will appear here in a moment.'
+          ? 'Your tracks will appear here in a moment.'
           : 'None of the library folders contain music files Pixeltone can play.'}
       />
     {/if}
-  {:else if tab === 'songs'}
+  {:else if tab === 'tracks'}
     <div class="toolbar">
-      <span class="label-large count">{o.trackCount.toLocaleString()} songs</span>
+      <span class="label-large count">{o.trackCount.toLocaleString()} tracks</span>
       <label class="sort label-large">
         Sort
         <select bind:value={trackSort} class="body-medium">
@@ -173,13 +173,13 @@
       </label>
     </div>
     <VirtualList
-      count={songs.count}
+      count={tracks.count}
       rowHeight={60}
-      label="Songs"
-      onrange={(s, e) => songs.ensure(s, e)}
+      label="Tracks"
+      onrange={(s, e) => tracks.ensure(s, e)}
     >
       {#snippet row(i)}
-        <TrackItem track={songs.rows[i]} onplay={() => api.playLibrary(trackSort, i, null)} />
+        <TrackItem track={tracks.rows[i]} onplay={() => api.playLibrary(trackSort, i, null)} />
       {/snippet}
     </VirtualList>
   {:else if tab === 'albums'}

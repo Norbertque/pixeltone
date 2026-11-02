@@ -32,8 +32,10 @@ pub struct QueueItem {
     pub duration_ms: Option<f64>,
     /// Library track id, when the item came from the library.
     pub track_id: Option<u32>,
-    /// `path` is an `http://` address a paired phone serves (remote control), not a file.
-    pub remote: bool,
+    /// A phone track: `path` is an `http://` address the paired phone serves, not a file.
+    /// (Saved queues from before 2026-11 call it `remote`.)
+    #[serde(alias = "remote")]
+    pub phone_track: bool,
     /// The guest who added it, in a jam.
     pub added_by: Option<String>,
     /// That guest's id in the jam: only they may change it.
@@ -375,6 +377,16 @@ impl XorShift {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_queues_from_before_phone_tracks_were_named_still_load() {
+        let old: QueueItem =
+            serde_json::from_str(r#"{"path":"http://phone/1","remote":true}"#).unwrap();
+        assert!(old.phone_track);
+        let new: QueueItem =
+            serde_json::from_str(r#"{"path":"x.flac","phoneTrack":false}"#).unwrap();
+        assert!(!new.phone_track);
+    }
 
     fn items(names: &[&str]) -> Vec<QueueItem> {
         names

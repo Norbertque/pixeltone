@@ -62,7 +62,7 @@
         </h1>
         <p class="artist title-large">{album.artist || 'Unknown artist'}</p>
         <p class="meta body-medium">
-          {[album.year, `${album.trackCount} song${album.trackCount === 1 ? '' : 's'}`, formatDuration(album.durationMs), formats]
+          {[album.year, `${album.trackCount} track${album.trackCount === 1 ? '' : 's'}`, formatDuration(album.durationMs), formats]
             .filter(Boolean)
             .join(' · ')}
         </p>
@@ -80,7 +80,7 @@
       </div>
     </header>
 
-    <section class="tracks" aria-label="Songs">
+    <section class="tracks" aria-label="Tracks">
       {#each discs as [disc, rows] (disc)}
         {#if discs.length > 1}
           <h2 class="disc title-small">Disc {disc}</h2>

@@ -70,7 +70,7 @@
         <li class="folder">
           <Icon name="folder" />
           <span class="path body-large" title={f.path}>{f.path}</span>
-          <span class="count body-small">{f.trackCount.toLocaleString()} songs</span>
+          <span class="count body-small">{f.trackCount.toLocaleString()} tracks</span>
           <IconButton icon="delete" label="Remove {f.path}" onclick={() => remove(f.id, f.path)} />
         </li>
       {/each}

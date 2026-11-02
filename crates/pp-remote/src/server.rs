@@ -28,7 +28,7 @@ use crate::art::{self, Art};
 use crate::discovery::Advertisement;
 use crate::jam::{GuestPermissions, Jam, Join};
 use crate::lan;
-use crate::pairing::{PairError, PairedDevice, Pairing, random};
+use crate::pairing::{PairError, PairedPhone, Pairing, random};
 use crate::protocol::{
     Command, GuestView, JamView, JoinRequest, JoinResponse, JoinWaiting, LibraryAlbum,
     LibraryAlbumDetail, LibraryResults, LoadRequest, MAX_LOAD, Message, PROTOCOL, PairRequest,
@@ -172,7 +172,7 @@ impl RemoteServer {
         let (events, _) = broadcast::channel(256);
         let shared = Shared {
             host,
-            pairing: Arc::new(Pairing::open(config.data_dir.join("remote-devices.json"))),
+            pairing: Arc::new(Pairing::open(paired_phones_file(&config.data_dir))),
             info: Arc::new(info),
             port,
             events,
@@ -606,7 +606,18 @@ fn bearer(parts: &Parts) -> Option<&str> {
 }
 
 /// A request from a paired phone (`Authorization: Bearer <token>`).
-struct Paired(PairedDevice);
+/// Where the paired phones are kept. Before 2026-11 the file was `remote-devices.json`: it's
+/// renamed on first start, so phones paired then stay paired.
+fn paired_phones_file(data_dir: &std::path::Path) -> std::path::PathBuf {
+    let file = data_dir.join("paired-phones.json");
+    let old = data_dir.join("remote-devices.json");
+    if !file.exists() && old.exists() {
+        let _ = std::fs::rename(&old, &file);
+    }
+    file
+}
+
+struct Paired(PairedPhone);
 
 impl FromRequestParts<Shared> for Paired {
     type Rejection = StatusCode;
@@ -626,7 +637,7 @@ impl FromRequestParts<Shared> for Paired {
 
 /// Who's asking: a paired phone (the owner's), or a guest of the jam that runs.
 enum Caller {
-    Owner(PairedDevice),
+    Owner(PairedPhone),
     Guest(GuestView),
 }
 
@@ -852,7 +863,7 @@ async fn upload(
         album: about.album.filter(|t| !t.trim().is_empty()),
         duration_ms: about.duration_ms.filter(|d| *d > 0.0),
         track_id: None,
-        remote: false,
+        phone_track: false,
         added_by: guest.as_ref().map(|g| g.name.clone()),
         guest_id: guest.map(|g| g.guest_id),
     };
@@ -1259,7 +1270,7 @@ fn load(s: &Shared, peer: IpAddr, request: LoadRequest) -> Result<(), String> {
             album: item.album,
             duration_ms: item.duration_ms.filter(|d| *d > 0.0),
             track_id: None,
-            remote: true,
+            phone_track: true,
             added_by: None,
             guest_id: None,
         });
@@ -1280,4 +1291,21 @@ fn load(s: &Shared, peer: IpAddr, request: LoadRequest) -> Result<(), String> {
         engine.play();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::paired_phones_file;
+
+    #[test]
+    fn phones_paired_before_the_rename_stay_paired() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("remote-devices.json"), b"[]").unwrap();
+        let file = paired_phones_file(dir.path());
+        assert_eq!(file, dir.path().join("paired-phones.json"));
+        assert_eq!(std::fs::read(&file).unwrap(), b"[]");
+        assert!(!dir.path().join("remote-devices.json").exists());
+        // From then on the new file is the one.
+        assert_eq!(paired_phones_file(dir.path()), file);
+    }
 }

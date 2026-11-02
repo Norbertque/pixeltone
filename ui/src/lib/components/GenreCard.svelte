@@ -37,7 +37,7 @@
   onclick={() => router.go({ screen: 'genre', id: genre.id })}
 >
   <span class="name title-large rounded emphasized">{genre.name}</span>
-  <span class="count label-medium">{genre.trackCount} songs</span>
+  <span class="count label-medium">{genre.trackCount} tracks</span>
 </button>
 
 <style>

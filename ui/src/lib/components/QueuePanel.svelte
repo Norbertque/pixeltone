@@ -118,7 +118,7 @@
   <header class="head">
     <div class="titles">
       <h2 id="queue-title" class="title-large rounded emphasized">Queue</h2>
-      <span class="count body-medium">{count.toLocaleString()} song{count === 1 ? '' : 's'}</span>
+      <span class="count body-medium">{count.toLocaleString()} track{count === 1 ? '' : 's'}</span>
     </div>
     <Button variant={jam.running ? 'tonal' : 'text'} icon="groups" onclick={() => (jam.dialogOpen = true)}>Jam</Button>
     <IconButton
@@ -134,7 +134,7 @@
   </header>
   <div class="body scroller" bind:this={scrollEl}>
     {#if count === 0}
-      <EmptyState icon="queue_music" title="Nothing queued" body="Play something, or use “Add to queue” on any song." />
+      <EmptyState icon="queue_music" title="Nothing queued" body="Play something, or use “Add to queue” on any track." />
     {:else}
       <ReorderList
         {count}
@@ -143,7 +143,7 @@
         {row}
         {ghost}
         keyOf={(i) => pager.rows[i]?.id}
-        describe={(i) => `${pager.rows[i]?.title ?? 'Song'} moved to position ${i + 1} of ${count}`}
+        describe={(i) => `${pager.rows[i]?.title ?? 'Track'} moved to position ${i + 1} of ${count}`}
         onmove={move}
         onrange={(s, e) => pager.ensure(s, e)}
       />

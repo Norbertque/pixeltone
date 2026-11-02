@@ -19,11 +19,11 @@ sample rate and bit depth.
   can undo; queue and position survive a restart; media keys and the Windows media flyout;
   click-free fades on pause and seek; follows device changes (see the keyboard shortcuts
   with `?`).
-- **Lyrics:** synced lyrics that follow the song (click a line to jump there), from an
-  `.lrc` file next to the song, the file's tags or LRCLIB; edit and sync them yourself.
+- **Lyrics:** synced lyrics that follow the track (click a line to jump there), from an
+  `.lrc` file next to the track, the file's tags or LRCLIB; edit and sync them yourself.
 - **Playlists & favourites:** playlists with drag-to-reorder and M3U/M3U8 import/export, a
   heart for favourites, play history with listening stats and a daily mix on Home.
-- **Tags & pictures:** edit tags of a song, an album or a whole artist (written into the
+- **Tags & pictures:** edit tags of a track, an album or a whole artist (written into the
   files); artist pictures from Deezer.
 - **Desktop:** a mini player that stays on top, a tray icon with playback controls, and
   optionally keep playing in the tray when the window is closed.
@@ -41,14 +41,14 @@ here, and [`docs/hardware-checklist.md`](docs/hardware-checklist.md) for testing
 Everything works offline. Two lookups use the internet, and both can be turned off in
 **Settings → Online**; AI playlists are a third, opt-in feature:
 
-- **Lyrics (LRCLIB):** for songs without lyrics of their own, the title, artist, album and
+- **Lyrics (LRCLIB):** for tracks without lyrics of their own, the title, artist, album and
   length are sent to [lrclib.net](https://lrclib.net). Answers (and "not found") are cached.
 - **Artist pictures (Deezer):** artists in your library are looked up on
-  [Deezer](https://www.deezer.com) by name together with a few of their album and song
+  [Deezer](https://www.deezer.com) by name together with a few of their album and track
   titles, so a namesake isn't taken for them; pictures are kept in the app's cache.
   Turning it off removes them.
 - **AI playlists (optional, your own Anthropic API key):** describe a playlist and Claude
-  picks it from your library. The titles, artists, albums, years and genres of your songs
+  picks it from your library. The titles, artists, albums, years and genres of your tracks
   are sent to Anthropic with each request, billed to your key; the key is kept in Windows
   Credential Manager. Nothing is sent until you add a key in **Settings → AI playlists**.
 

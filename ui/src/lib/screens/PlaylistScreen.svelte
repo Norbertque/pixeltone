@@ -81,7 +81,7 @@
       <span class="overline label-large">Playlist</span>
       <h1 class="display-small rounded emphasized" tabindex="-1" data-screen-heading>{p.name}</h1>
       <p class="meta body-medium">
-        {p.trackCount.toLocaleString()} song{p.trackCount === 1 ? '' : 's'}{p.durationMs > 0 ? ` · ${formatDuration(p.durationMs)}` : ''}
+        {p.trackCount.toLocaleString()} track{p.trackCount === 1 ? '' : 's'}{p.durationMs > 0 ? ` · ${formatDuration(p.durationMs)}` : ''}
       </p>
       <div class="actions">
         <Button variant="filled" size="md" icon="play_arrow" disabled={!p.trackCount} onclick={() => api.playPlaylist(id, 0, false)}>Play</Button>
@@ -98,20 +98,20 @@
   </header>
 
   {#if detail.tracks.length}
-    <section class="tracks" aria-label="Songs">
+    <section class="tracks" aria-label="Tracks">
       <ReorderList
         count={detail.tracks.length}
         rowHeight={ROW}
-        label="Songs in {p.name}"
+        label="Tracks in {p.name}"
         {row}
         {ghost}
         keyOf={(i) => detail?.tracks[i]?.path}
-        describe={(i) => `${detail?.tracks[i]?.title ?? 'Song'} moved to position ${i + 1}`}
+        describe={(i) => `${detail?.tracks[i]?.title ?? 'Track'} moved to position ${i + 1}`}
         onmove={move}
       />
     </section>
   {:else}
-    <EmptyState icon="queue_music" title="This playlist is empty" body="Use “Add to playlist…” on any song or album." />
+    <EmptyState icon="queue_music" title="This playlist is empty" body="Use “Add to playlist…” on any track or album." />
   {/if}
 {:else if missing}
   <EmptyState icon="queue_music" title="Playlist not found" body="It may have been deleted." />

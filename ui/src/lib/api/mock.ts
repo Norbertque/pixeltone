@@ -111,7 +111,7 @@ let settings: AppSettings = {
 const settingsListeners = new Set<(s: AppSettings) => void>();
 let mockAiKey = false;
 let remoteCode: { code: string; until: number } | null = null;
-let remoteDevices = [
+let pairedPhones = [
   { id: 'pixel-8', name: 'Pixel 8 Pro', pairedAt: Date.now() / 1000 - 86_400 * 3, lastSeen: Date.now() / 1000 - 600 },
 ];
 
@@ -125,7 +125,7 @@ function mockRemote() {
     address: enabled ? '192.168.1.20:47821' : null,
     code: left > 0 ? remoteCode!.code : null,
     codeSeconds: left,
-    devices: enabled ? remoteDevices : [],
+    phones: enabled ? pairedPhones : [],
   };
 }
 
@@ -487,7 +487,7 @@ export const mockBackend: Backend = {
     return mockRemote();
   },
   async remoteForget(id) {
-    remoteDevices = remoteDevices.filter((d) => d.id !== id);
+    pairedPhones = pairedPhones.filter((d) => d.id !== id);
     return mockRemote();
   },
   jamState: async () => jam && structuredClone(jam),
@@ -533,7 +533,7 @@ export const mockBackend: Backend = {
   onJam: (cb) => subscribe(jamListeners, cb),
   checkForUpdate: async () => null,
   installUpdate: async () => {},
-  aiStatus: async () => ({ hasKey: mockAiKey, songs: 1863, sentSongs: 1863, estimateUsd: 0.21 }),
+  aiStatus: async () => ({ hasKey: mockAiKey, tracks: 1863, sentTracks: 1863, estimateUsd: 0.21 }),
   async aiSetKey(key) {
     if (!key.trim()) throw new Error("That doesn't look like an API key.");
     mockAiKey = true;
@@ -541,14 +541,14 @@ export const mockBackend: Backend = {
   async aiRemoveKey() {
     mockAiKey = false;
   },
-  async aiPlaylist(prompt, songs) {
+  async aiPlaylist(prompt, tracks) {
     if (!mockAiKey) throw new Error('Add your Anthropic API key in Settings → AI playlists first.');
     await new Promise((r) => setTimeout(r, 1500)); // Claude takes a while
-    const ids = mockLibrary.tracks('title', 0, 2000).filter((_, i) => i % 37 === 0).slice(0, songs).map((t) => t.id);
+    const ids = mockLibrary.tracks('title', 0, 2000).filter((_, i) => i % 37 === 0).slice(0, tracks).map((t) => t.id);
     const name = 'Night Drive';
     const playlistId = mockUserData.createPlaylist(name, ids);
     userDataChanged();
-    return { playlistId, name, description: `Picked for “${prompt}”.`, songs: ids.length };
+    return { playlistId, name, description: `Picked for “${prompt}”.`, tracks: ids.length };
   },
   async openMiniPlayer() {
     window.open(`${location.pathname}#mini`, 'pp-mini', 'popup,width=420,height=128');

@@ -2,8 +2,8 @@
 //!
 //! A name alone isn't enough: many artists share one ("Sally"), and the best-known of them is
 //! rarely the one in someone's library. So an artist is only accepted when Deezer lists an
-//! album (or else a song) of theirs with a title the library has too. What's sent: the
-//! artist's name with up to three album and three song titles.
+//! album (or else a track) of theirs with a title the library has too. What's sent: the
+//! artist's name with up to three album and three track titles.
 
 use std::time::{Duration, Instant};
 
@@ -41,7 +41,7 @@ pub struct Candidate {
     pub picture_xl: Option<String>,
 }
 
-/// An album or a song in Deezer's search results, with its artist.
+/// An album or a track in Deezer's search results, with its artist.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Hit {
@@ -69,7 +69,7 @@ struct ApiError {
 pub struct Clues {
     /// Album titles, largest first.
     pub albums: Vec<String>,
-    /// Song titles.
+    /// Track titles.
     pub tracks: Vec<String>,
 }
 

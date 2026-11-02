@@ -39,7 +39,7 @@ export async function renamePlaylist(p: Pick<PlaylistRow, 'id' | 'name'>): Promi
 }
 
 export async function deletePlaylist(p: Pick<PlaylistRow, 'id' | 'name'>, after?: () => void): Promise<void> {
-  const ok = await api.confirm(`Delete “${p.name}”? The songs stay in your library.`, 'Delete playlist');
+  const ok = await api.confirm(`Delete “${p.name}”? The tracks stay in your library.`, 'Delete playlist');
   if (!ok) return;
   await attempt(async () => {
     await api.playlistDelete(p.id);

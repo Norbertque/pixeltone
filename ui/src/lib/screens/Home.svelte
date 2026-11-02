@@ -31,7 +31,7 @@
 <ScreenHeader
   title={greeting}
   subtitle={hasMusic && o
-    ? `${o.trackCount.toLocaleString()} songs · ${o.albumCount.toLocaleString()} albums · ${o.artistCount.toLocaleString()} artists · ${formatDuration(o.durationMs)}`
+    ? `${o.trackCount.toLocaleString()} tracks · ${o.albumCount.toLocaleString()} albums · ${o.artistCount.toLocaleString()} artists · ${formatDuration(o.durationMs)}`
     : 'Welcome to Pixeltone'}
 >
   {#snippet actions()}
@@ -77,7 +77,7 @@
             <span class="overline label-large">Made for you</span>
             <span class="headline-small rounded emphasized">Today's mix</span>
             <span class="body-medium muted">
-              {feed.dailyMix.length} songs from the artists you play most, favourites you haven't heard in a while, and a
+              {feed.dailyMix.length} tracks from the artists you play most, favourites you haven't heard in a while, and a
               few you rarely play. New every day.
             </span>
           </span>
@@ -90,7 +90,7 @@
       <span class="mix-text">
         <span class="title-medium">Listening stats</span>
         <span class="body-medium muted">
-          {monthMs > 0 ? `${formatListening(monthMs)} with your top artists this month` : 'Your top songs, artists and hours'}
+          {monthMs > 0 ? `${formatListening(monthMs)} with your top artists this month` : 'Your top tracks, artists and hours'}
         </span>
       </span>
       <Icon name="chevron_right" />

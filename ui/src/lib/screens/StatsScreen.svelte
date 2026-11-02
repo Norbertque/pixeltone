@@ -53,7 +53,7 @@
   <EmptyState
     icon="insights"
     title="Nothing counted yet"
-    body="A song counts once you've heard half of it (or four minutes). Play some music and come back."
+    body="A track counts once you've heard half of it (or four minutes). Play some music and come back."
   />
 {:else if stats}
   <div class={['content', { loading }]}>
@@ -67,7 +67,7 @@
         <span class="tile-value display-small">{stats.plays.toLocaleString()}</span>
       </div>
       <div class="tile">
-        <span class="tile-label label-large">Different songs</span>
+        <span class="tile-label label-large">Different tracks</span>
         <span class="tile-value display-small">{stats.distinctTracks.toLocaleString()}</span>
       </div>
     </section>
@@ -90,7 +90,7 @@
 
     {#if topTracks.length}
       <section class="card">
-        <h2 class="title-large rounded emphasized">Top songs</h2>
+        <h2 class="title-large rounded emphasized">Top tracks</h2>
         <ol class="top-tracks">
           {#each topTracks as t, i (t.track.path)}
             <li>

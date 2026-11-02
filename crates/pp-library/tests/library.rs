@@ -567,7 +567,7 @@ fn artist_pictures_found_online_replace_album_covers() {
             .any(|(_, key)| key == "björk")
     );
 
-    // What a lookup checks Kestrel against: their own album, and their songs.
+    // What a lookup checks Kestrel against: their own album, and their tracks.
     let (albums, tracks) = lib.artist_titles("kestrel", 3).unwrap();
     assert_eq!(albums, ["Double"]);
     assert_eq!(tracks.len(), 3);
@@ -587,9 +587,9 @@ fn songs_in_brief_carry_their_genres() {
     let lib = open(&fx.data);
     lib.add_folder(&fx.music).unwrap();
     scan(&lib);
-    let songs = lib.song_summaries().unwrap();
-    assert_eq!(songs.len(), lib.overview().unwrap().track_count as usize);
-    let neon = songs.iter().find(|s| s.title == "Neon Tidepool").unwrap();
+    let tracks = lib.track_summaries().unwrap();
+    assert_eq!(tracks.len(), lib.overview().unwrap().track_count as usize);
+    let neon = tracks.iter().find(|s| s.title == "Neon Tidepool").unwrap();
     assert_eq!(neon.album, "Pixel Dreams");
     assert_eq!(neon.year, Some(2024));
     assert!(

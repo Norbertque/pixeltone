@@ -1,7 +1,7 @@
-//! AI playlists with the user's own Anthropic API key: Claude picks songs from the library
+//! AI playlists with the user's own Anthropic API key: Claude picks tracks from the library
 //! for a request, and the result is saved as an ordinary playlist.
 
-use pp_ai::{Catalog, Claude, Song};
+use pp_ai::{Catalog, CatalogTrack, Claude};
 use pp_library::{Library, playlist_input};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
@@ -14,10 +14,10 @@ use crate::secret;
 #[serde(rename_all = "camelCase")]
 pub struct AiStatus {
     pub has_key: bool,
-    /// Songs in the library.
-    pub songs: u32,
-    /// Songs sent with a request (big libraries are sampled).
-    pub sent_songs: u32,
+    /// Tracks in the library.
+    pub tracks: u32,
+    /// Tracks sent with a request (big libraries are sampled).
+    pub sent_tracks: u32,
     /// Rough price of one request, US dollars.
     pub estimate_usd: f64,
 }
@@ -28,14 +28,14 @@ pub struct AiPlaylistResult {
     pub playlist_id: u32,
     pub name: String,
     pub description: String,
-    pub songs: u32,
+    pub tracks: u32,
 }
 
 fn catalog(library: &Library) -> pp_library::Result<(Catalog, usize)> {
-    let songs: Vec<Song> = library
-        .song_summaries()?
+    let tracks: Vec<CatalogTrack> = library
+        .track_summaries()?
         .into_iter()
-        .map(|s| Song {
+        .map(|s| CatalogTrack {
             id: s.id,
             title: s.title,
             artist: s.artist,
@@ -44,18 +44,18 @@ fn catalog(library: &Library) -> pp_library::Result<(Catalog, usize)> {
             genres: s.genres,
         })
         .collect();
-    Ok((Catalog::new(&songs), songs.len()))
+    Ok((Catalog::new(&tracks), tracks.len()))
 }
 
 #[tauri::command]
 pub async fn ai_status(state: State<'_, AppState>) -> Result<AiStatus, String> {
     let has_key = secret::api_key()?.is_some();
     blocking(state.library.clone(), move |l| {
-        let (catalog, songs) = catalog(l)?;
+        let (catalog, tracks) = catalog(l)?;
         Ok(AiStatus {
             has_key,
-            songs: songs as u32,
-            sent_songs: catalog.len() as u32,
+            tracks: tracks as u32,
+            sent_tracks: catalog.len() as u32,
             estimate_usd: catalog.estimate_usd(),
         })
     })
@@ -82,7 +82,7 @@ pub async fn ai_playlist(
     app: AppHandle,
     state: State<'_, AppState>,
     prompt: String,
-    songs: u32,
+    tracks: u32,
 ) -> Result<AiPlaylistResult, String> {
     let key =
         secret::api_key()?.ok_or("Add your Anthropic API key in Settings → AI playlists first.")?;
@@ -96,10 +96,10 @@ pub async fn ai_playlist(
             return Err("Your library is empty: add a music folder first.".to_string());
         }
         let made = Claude::new(pp_ai::API, &key)
-            .playlist(&catalog, &prompt, songs)
+            .playlist(&catalog, &prompt, tracks)
             .map_err(|e| e.to_string())?;
         if made.track_ids.is_empty() {
-            return Err("No songs in your library fit that request.".to_string());
+            return Err("No tracks in your library fit that request.".to_string());
         }
         let rows = library
             .tracks_by_id(&made.track_ids)
@@ -117,7 +117,7 @@ pub async fn ai_playlist(
             playlist_id,
             name,
             description: made.description,
-            songs: items.len() as u32,
+            tracks: items.len() as u32,
         })
     })
     .await

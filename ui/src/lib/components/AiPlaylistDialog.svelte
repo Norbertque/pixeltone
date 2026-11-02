@@ -10,12 +10,12 @@
   import SegmentedButtons from './SegmentedButtons.svelte';
 
   const SIZES = [10, 25, 50, 100].map((n) => ({ value: n, label: String(n) }));
-  const IDEAS = ['Upbeat songs for a morning run', 'Calm late-night listening', 'Loud and fast, no ballads', 'A tour of my oldest albums'];
+  const IDEAS = ['Upbeat tracks for a morning run', 'Calm late-night listening', 'Loud and fast, no ballads', 'A tour of my oldest albums'];
 
   let dialog: HTMLDialogElement | undefined = $state();
   let field: HTMLTextAreaElement | undefined = $state();
   let prompt = $state('');
-  let songs = $state(25);
+  let tracks = $state(25);
   let status = $state<AiStatus | null>(null);
   let busy = $state(false);
   let error = $state<string | null>(null);
@@ -44,10 +44,10 @@
     busy = true;
     error = null;
     try {
-      const made = await api.aiPlaylist(prompt.trim(), songs);
+      const made = await api.aiPlaylist(prompt.trim(), tracks);
       dialogs.ai = false;
       prompt = '';
-      toasts.show(`“${made.name}”: ${made.songs} songs. ${made.description}`);
+      toasts.show(`“${made.name}”: ${made.tracks} tracks. ${made.description}`);
       await router.go({ screen: 'playlist', id: made.playlistId });
     } catch (e) {
       error = String(e);
@@ -113,8 +113,8 @@
         {/each}
       </div>
       <div class="size">
-        <span class="label-large">Songs</span>
-        <SegmentedButtons label="Number of songs" options={SIZES} value={songs} onchange={(v) => (songs = v)} />
+        <span class="label-large">Tracks</span>
+        <SegmentedButtons label="Number of tracks" options={SIZES} value={tracks} onchange={(v) => (tracks = v)} />
       </div>
 
       {#if error}
@@ -123,7 +123,7 @@
 
       <p class="note body-small">
         {#if status}
-          Claude picks from {status.sentSongs.toLocaleString()} of your songs: their titles, artists, albums,
+          Claude picks from {status.sentTracks.toLocaleString()} of your tracks: their titles, artists, albums,
           years and genres are sent to Anthropic. Billed to your key, {cost(status.estimateUsd)} per playlist.
         {:else}
           Checking…
@@ -133,7 +133,7 @@
       <div class="actions">
         <Button variant="text" onclick={() => (dialogs.ai = false)} disabled={busy}>Cancel</Button>
         <Button variant="filled" type="submit" icon={busy ? undefined : 'auto_awesome'} disabled={busy || !prompt.trim() || !status}>
-          {busy ? 'Picking songs…' : 'Create'}
+          {busy ? 'Picking tracks…' : 'Create'}
         </Button>
       </div>
     {/if}

@@ -23,14 +23,14 @@
   let { onclose }: Props = $props();
 
   const SOURCES: Record<Lyrics['source'], string> = {
-    file: 'From an .lrc file next to the song',
+    file: 'From an .lrc file next to the track',
     saved: 'Saved in Pixeltone',
-    embedded: "From the song's tags",
+    embedded: "From the track's tags",
     online: 'From LRCLIB',
   };
   /** Lines light up slightly early, as singers breathe in. */
   const LEAD_MS = 150;
-  /** After the user scrolls, following the song pauses this long. */
+  /** After the user scrolls, following the track pauses this long. */
   const HANDS_OFF_MS = 4000;
 
   let lyrics = $state<Lyrics | null>(null);
@@ -79,7 +79,7 @@
     );
   });
 
-  // Follow the song through synced lyrics.
+  // Follow the track through synced lyrics.
   $effect(() => {
     const l = lyrics;
     if (!l?.synced || editing) return;
@@ -96,7 +96,7 @@
     return () => cancelAnimationFrame(frame);
   });
 
-  // Scrolling by hand (wheel, scrollbar, keys) pauses following the song for a moment.
+  // Scrolling by hand (wheel, scrollbar, keys) pauses following the track for a moment.
   $effect(() => {
     const el = listEl;
     if (!el) return;
@@ -216,7 +216,7 @@
       <p class="source label-medium">{SOURCES[lyrics.source]}</p>
     </div>
   {:else}
-    <EmptyState icon="lyrics" title="No lyrics found" body="Nothing in the song's folder or tags, or online. You can write them yourself.">
+    <EmptyState icon="lyrics" title="No lyrics found" body="Nothing in the track's folder or tags, or online. You can write them yourself.">
       {#snippet action()}
         <Button variant="tonal" icon="edit" onclick={edit}>Write lyrics</Button>
       {/snippet}

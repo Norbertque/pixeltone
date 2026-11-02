@@ -26,7 +26,7 @@
     <div class="row-text">
       <span class="title-medium">Find lyrics online</span>
       <span class="body-medium">
-        When a song has no lyrics of its own, ask LRCLIB (lrclib.net), a free lyrics database. Only the song's
+        When a track has no lyrics of its own, ask LRCLIB (lrclib.net), a free lyrics database. Only the track's
         title, artist, album and length are sent; results are kept on this PC.
       </span>
     </div>
@@ -38,7 +38,7 @@
       <span class="title-medium">Artist pictures</span>
       <span class="body-medium">
         Show pictures of the artists in your library, from Deezer (deezer.com). An artist's name is sent with a
-        few of their album and song titles, so a namesake isn't mistaken for them; the pictures are kept on this
+        few of their album and track titles, so a namesake isn't mistaken for them; the pictures are kept on this
         PC. Turning this off removes them again.
       </span>
     </div>

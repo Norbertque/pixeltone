@@ -514,7 +514,7 @@ impl Db {
         )
     }
 
-    /// The day's mix: about half from the artists played most lately (songs not heard in
+    /// The day's mix: about half from the artists played most lately (tracks not heard in
     /// the last two days), a quarter favourites not heard this week, the rest anything from
     /// the library. The same `seed` gives the same mix.
     pub fn daily_mix(&self, seed: u64, now: i64, limit: usize) -> rusqlite::Result<Vec<TrackRow>> {
@@ -585,7 +585,7 @@ impl Db {
     }
 
     /// Every track as (id, title, artist, album, year, genres), by artist and album.
-    pub fn song_summaries(&self) -> rusqlite::Result<Vec<crate::SongSummary>> {
+    pub fn track_summaries(&self) -> rusqlite::Result<Vec<crate::TrackSummary>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT t.id, t.title, t.artist, a.title, t.year, \
              COALESCE((SELECT group_concat(g.name, '; ') FROM track_genres tg \
@@ -594,7 +594,7 @@ impl Db {
              ORDER BY t.artist COLLATE NOCASE, a.title COLLATE NOCASE, t.disc_no, t.track_no",
         )?;
         stmt.query_map([], |r| {
-            Ok(crate::SongSummary {
+            Ok(crate::TrackSummary {
                 id: r.get(0)?,
                 title: r.get(1)?,
                 artist: r.get(2)?,

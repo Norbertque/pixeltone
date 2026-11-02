@@ -84,8 +84,8 @@ fn query(path: PathBuf) -> LyricsQuery {
 #[test]
 fn local_sources_in_order() {
     let dir = tempfile::tempdir().unwrap();
-    let song = dir.path().join("song.flac");
-    flac(&song, Some("Embedded line one\nline two"));
+    let track = dir.path().join("track.flac");
+    flac(&track, Some("Embedded line one\nline two"));
     let svc = LyricsService::with_endpoint(
         dir.path().join("saved"),
         dir.path().join("cache"),
@@ -93,13 +93,13 @@ fn local_sources_in_order() {
     );
     svc.set_online(false);
 
-    let l = svc.local(&query(song.clone())).expect("embedded");
+    let l = svc.local(&query(track.clone())).expect("embedded");
     assert_eq!(l.source, LyricsSource::Embedded);
     assert!(!l.synced);
     assert_eq!(l.lines[0].text, "Embedded line one");
 
-    std::fs::write(song.with_extension("lrc"), "[00:01.00]From the file").unwrap();
-    let l = svc.local(&query(song.clone())).unwrap();
+    std::fs::write(track.with_extension("lrc"), "[00:01.00]From the file").unwrap();
+    let l = svc.local(&query(track.clone())).unwrap();
     assert_eq!(l.source, LyricsSource::File);
     assert!(l.synced);
     assert_eq!(l.lines[0].time_ms, Some(1000));
@@ -108,8 +108,8 @@ fn local_sources_in_order() {
 #[test]
 fn online_lyrics_are_cached_and_misses_remembered() {
     let dir = tempfile::tempdir().unwrap();
-    let song = dir.path().join("song.flac");
-    flac(&song, None);
+    let track = dir.path().join("track.flac");
+    flac(&track, None);
     let (addr, seen) = server(
         Some(
             r#"{"duration":200.0,"instrumental":false,"plainLyrics":"Hello","syncedLyrics":"[00:02.50]Hello"}"#,
@@ -118,7 +118,7 @@ fn online_lyrics_are_cached_and_misses_remembered() {
     );
     let svc =
         LyricsService::with_endpoint(dir.path().join("saved"), dir.path().join("cache"), &addr);
-    let l = svc.find(&query(song.clone())).expect("from LRCLIB");
+    let l = svc.find(&query(track.clone())).expect("from LRCLIB");
     assert_eq!(l.source, LyricsSource::Online);
     assert!(l.synced);
     assert_eq!(l.lines[0].time_ms, Some(2500));
@@ -128,7 +128,7 @@ fn online_lyrics_are_cached_and_misses_remembered() {
         first.contains("album_name=Pixel") && first.contains("duration=200"),
         "{first}"
     );
-    svc.find(&query(song.clone())).unwrap();
+    svc.find(&query(track.clone())).unwrap();
     assert_eq!(
         seen.lock().unwrap().len(),
         1,
@@ -139,30 +139,30 @@ fn online_lyrics_are_cached_and_misses_remembered() {
     let (addr, seen) = server(None, "[]");
     let svc =
         LyricsService::with_endpoint(dir.path().join("saved2"), dir.path().join("cache2"), &addr);
-    assert!(svc.find(&query(song.clone())).is_none());
+    assert!(svc.find(&query(track.clone())).is_none());
     assert_eq!(seen.lock().unwrap().len(), 2, "get, then search");
-    assert!(svc.find(&query(song.clone())).is_none());
+    assert!(svc.find(&query(track.clone())).is_none());
     assert_eq!(seen.lock().unwrap().len(), 2);
 
     // Offline mode never asks.
     let svc = LyricsService::with_endpoint(dir.path().join("s3"), dir.path().join("c3"), &addr);
     svc.set_online(false);
-    assert!(svc.find(&query(song)).is_none());
+    assert!(svc.find(&query(track)).is_none());
     assert_eq!(seen.lock().unwrap().len(), 2);
 }
 
 #[test]
 fn search_fallback_and_instrumentals() {
     let dir = tempfile::tempdir().unwrap();
-    let song = dir.path().join("song.flac");
-    flac(&song, None);
+    let track = dir.path().join("track.flac");
+    flac(&track, None);
     let (addr, _) = server(
         None,
         r#"[{"duration":250.0,"syncedLyrics":"[00:01.00]wrong"},{"duration":201.0,"instrumental":true}]"#,
     );
     let svc =
         LyricsService::with_endpoint(dir.path().join("saved"), dir.path().join("cache"), &addr);
-    let l = svc.find(&query(song)).unwrap();
+    let l = svc.find(&query(track)).unwrap();
     assert!(l.instrumental);
     assert!(l.lines.is_empty());
 }
@@ -172,22 +172,22 @@ fn saving_writes_next_to_the_file_or_inside_the_app() {
     let dir = tempfile::tempdir().unwrap();
     let music = dir.path().join("music");
     std::fs::create_dir_all(&music).unwrap();
-    let song = music.join("song.flac");
-    flac(&song, None);
+    let track = music.join("track.flac");
+    flac(&track, None);
     let svc = LyricsService::with_endpoint(
         dir.path().join("saved"),
         dir.path().join("cache"),
         "http://127.0.0.1:9",
     );
     svc.set_online(false);
-    assert!(svc.save(&query(song.clone()), "  \n").is_err());
+    assert!(svc.save(&query(track.clone()), "  \n").is_err());
 
     let l = svc
-        .save(&query(song.clone()), "[00:03.00]Mine\r\n[00:04.00]Too")
+        .save(&query(track.clone()), "[00:03.00]Mine\r\n[00:04.00]Too")
         .unwrap();
     assert_eq!(l.source, LyricsSource::File);
     assert_eq!(
-        std::fs::read_to_string(song.with_extension("lrc")).unwrap(),
+        std::fs::read_to_string(track.with_extension("lrc")).unwrap(),
         "[00:03.00]Mine\n[00:04.00]Too"
     );
 

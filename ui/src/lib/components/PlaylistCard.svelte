@@ -45,7 +45,7 @@
       <span class="favourites"><Icon name="favorite" fill size={56} /></span>
     {/if}
     <span class="title title-small">{name}</span>
-    <span class="sub body-small">{count.toLocaleString()} song{count === 1 ? '' : 's'}</span>
+    <span class="sub body-small">{count.toLocaleString()} track{count === 1 ? '' : 's'}</span>
   </button>
   {#if count > 0}
     <button class="play" onclick={play} aria-label="Play {name}" title="Play">

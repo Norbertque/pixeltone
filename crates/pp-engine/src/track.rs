@@ -122,9 +122,9 @@ pub fn read_meta(item: &QueueItem) -> Result<(TrackMeta, Option<CoverArt>), Stri
     Ok(describe(&mut decoder, item))
 }
 
-/// A local file, or a file a paired phone serves (remote control).
+/// A local file, or a phone track (a file the paired phone serves).
 fn open(item: &QueueItem) -> Result<Decoder, String> {
-    if item.remote {
+    if item.phone_track {
         Decoder::open_http(&item.path.to_string_lossy())
     } else {
         Decoder::open(&item.path)

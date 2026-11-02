@@ -64,7 +64,7 @@
           <Mosaic covers={p.covers} size="48px" />
           <span class="text">
             <span class="title-medium">{p.name}</span>
-            <span class="body-small muted">{p.trackCount} song{p.trackCount === 1 ? '' : 's'}</span>
+            <span class="body-small muted">{p.trackCount} track{p.trackCount === 1 ? '' : 's'}</span>
           </span>
         </button>
       {/each}

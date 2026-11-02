@@ -12,7 +12,7 @@ describe('menus', () => {
 
   it('confirms what was queued', () => {
     expect(queuedMessage(['Song'], true)).toBe('“Song” will play next');
-    expect(queuedMessage(['a', 'b', 'c'], false)).toBe('Added 3 songs to the queue');
+    expect(queuedMessage(['a', 'b', 'c'], false)).toBe('Added 3 tracks to the queue');
     expect(queuedMessage(['a', 'b'], true, 'Album')).toBe('“Album” will play next');
   });
 });

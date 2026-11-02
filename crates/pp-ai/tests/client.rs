@@ -5,7 +5,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use pp_ai::{AiError, Catalog, Claude, Song};
+use pp_ai::{AiError, Catalog, CatalogTrack, Claude};
 
 struct Seen {
     headers: Vec<String>,
@@ -69,8 +69,8 @@ fn answer(text: &str, stop: &str) -> String {
 }
 
 fn library() -> Catalog {
-    let songs: Vec<Song> = (1..=4)
-        .map(|id| Song {
+    let tracks: Vec<CatalogTrack> = (1..=4)
+        .map(|id| CatalogTrack {
             id,
             title: format!("Song {id}"),
             artist: "Artist".into(),
@@ -79,7 +79,7 @@ fn library() -> Catalog {
             genres: String::new(),
         })
         .collect();
-    Catalog::new(&songs)
+    Catalog::new(&tracks)
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn a_playlist_comes_back_with_only_songs_from_the_library() {
     let body: serde_json::Value = serde_json::from_str(&seen[0].body).unwrap();
     assert_eq!(
         body["messages"][0]["content"],
-        "Request: calm night drive\nNumber of songs: 25"
+        "Request: calm night drive\nNumber of tracks: 25"
     );
 }
 

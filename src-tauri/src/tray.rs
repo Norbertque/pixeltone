@@ -1,4 +1,4 @@
-//! The notification-area icon (playback controls, the current song as its tooltip) and the
+//! The notification-area icon (playback controls, the current track as its tooltip) and the
 //! mini player: a small always-on-top window that stands in for the main one.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,7 +66,7 @@ impl Tray {
         Ok(Self { icon, toggle })
     }
 
-    /// Follows the player: the song as the tooltip, Play or Pause in the menu.
+    /// Follows the player: the track as the tooltip, Play or Pause in the menu.
     pub fn update(&self, snapshot: &PlayerSnapshot) {
         let tooltip = match &snapshot.track {
             Some(t) => match t.artist.as_deref().filter(|a| !a.is_empty()) {

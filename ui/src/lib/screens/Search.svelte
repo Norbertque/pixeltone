@@ -44,7 +44,7 @@
   <!-- svelte-ignore a11y_autofocus -->
   <input
     type="search"
-    placeholder="Songs, albums, artists"
+    placeholder="Tracks, albums, artists"
     bind:value={query}
     class="body-large"
     aria-label="Search your library"
@@ -59,7 +59,7 @@
   <EmptyState
     icon="manage_search"
     title="Nothing to search yet"
-    body="Add a music folder and every song, album and artist becomes searchable."
+    body="Add a music folder and every track, album and artist becomes searchable."
   >
     {#snippet action()}
       <Button variant="tonal" icon="create_new_folder" onclick={addMusicFolder}>Add music folder</Button>
@@ -91,7 +91,7 @@
     {/if}
     {#if results.tracks.length > 0}
       <section>
-        <h2 class="title-large rounded emphasized">Songs</h2>
+        <h2 class="title-large rounded emphasized">Tracks</h2>
         {#each results.tracks as t, i (t.id)}
           <div class="row"><TrackItem track={t} onplay={() => playRows(results!.tracks, i)} /></div>
         {/each}

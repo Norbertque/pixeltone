@@ -39,7 +39,7 @@
       <span class="overline label-large">Artist</span>
       <h1 class="display-small rounded emphasized" tabindex="-1" data-screen-heading>{artist.name}</h1>
       <p class="meta body-medium">
-        {artist.albumCount} album{artist.albumCount === 1 ? '' : 's'} · {artist.trackCount} song{artist.trackCount === 1
+        {artist.albumCount} album{artist.albumCount === 1 ? '' : 's'} · {artist.trackCount} track{artist.trackCount === 1
           ? ''
           : 's'}
       </p>
@@ -66,9 +66,9 @@
     </div>
   {/if}
 
-  <h2 class="section title-large rounded emphasized">Songs</h2>
-  <div class="songs">
-    <VirtualList count={detail.tracks.length} rowHeight={60} label="Songs">
+  <h2 class="section title-large rounded emphasized">Tracks</h2>
+  <div class="tracks">
+    <VirtualList count={detail.tracks.length} rowHeight={60} label="Tracks">
       {#snippet row(i)}
         <TrackItem track={detail!.tracks[i]} onplay={() => playRows(detail!.tracks, i)} />
       {/snippet}
@@ -118,7 +118,7 @@
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 20px;
   }
-  .songs {
+  .tracks {
     padding-bottom: 32px;
   }
 </style>

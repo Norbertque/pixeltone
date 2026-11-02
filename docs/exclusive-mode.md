@@ -80,7 +80,7 @@ whichever control is in charge:
 - Different format (e.g. 44.1 → 96 kHz): the stream drains, the device is reopened in the new
   format and 150 ms of silence lets the DAC's clock lock before the music starts.
 - The next track's file is opened early, but which track it is gets decided about 0.4 s
-  before it starts, so *Play next* or a reorder just before the end of a song still counts.
+  before it starts, so *Play next* or a reorder just before the end of a track still counts.
 
 ## Transport fades
 

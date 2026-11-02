@@ -25,7 +25,7 @@
     <h1 class="display-small rounded emphasized" tabindex="-1" data-screen-heading>Favourites</h1>
     {#if tracks}
       <p class="meta body-medium">
-        {tracks.length.toLocaleString()} song{tracks.length === 1 ? '' : 's'}{total > 0 ? ` · ${formatDuration(total)}` : ''}
+        {tracks.length.toLocaleString()} track{tracks.length === 1 ? '' : 's'}{total > 0 ? ` · ${formatDuration(total)}` : ''}
       </p>
     {/if}
     <div class="actions">
@@ -36,10 +36,10 @@
 </header>
 
 {#if tracks && tracks.length === 0}
-  <EmptyState icon="favorite" title="No favourites yet" body="Tap the heart in Now Playing, or right-click any song." />
+  <EmptyState icon="favorite" title="No favourites yet" body="Tap the heart in Now Playing, or right-click any track." />
 {:else if tracks}
   <div class="tracks">
-    <VirtualList count={tracks.length} rowHeight={60} label="Favourite songs">
+    <VirtualList count={tracks.length} rowHeight={60} label="Favourite tracks">
       {#snippet row(i)}
         <TrackItem track={tracks![i]} onplay={() => playRows(tracks!, i)} />
       {/snippet}

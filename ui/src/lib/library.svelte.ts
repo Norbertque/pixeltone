@@ -65,12 +65,12 @@ export function shuffleRows(rows: readonly TrackRow[]): void {
 }
 
 /**
- * What the confirmation says after "Play next" / "Add to queue": the song, the collection
+ * What the confirmation says after "Play next" / "Add to queue": the track, the collection
  * (`label`, e.g. an album) or a count.
  */
 export function queuedMessage(titles: readonly string[], next: boolean, label?: string): string {
   const what =
-    label !== undefined ? `“${label}”` : titles.length === 1 ? `“${titles[0]}”` : `${titles.length.toLocaleString()} songs`;
+    label !== undefined ? `“${label}”` : titles.length === 1 ? `“${titles[0]}”` : `${titles.length.toLocaleString()} tracks`;
   return next ? `${what} will play next` : `Added ${what} to the queue`;
 }
 

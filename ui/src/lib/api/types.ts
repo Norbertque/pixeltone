@@ -107,7 +107,7 @@ export interface Preferences {
   remoteEnabled: boolean;
 }
 /** Remote control (src-tauri/src/remote.rs). */
-export interface RemoteDevice {
+export interface PairedPhone {
   id: string;
   name: string;
   /** Unix seconds. */
@@ -124,7 +124,7 @@ export interface RemoteStatus {
   /** The pairing code on show, and for how many more seconds. */
   code: string | null;
   codeSeconds: number;
-  devices: RemoteDevice[];
+  phones: PairedPhone[];
 }
 /** A jam (crates/pp-remote, `JamView`): a shared queue that guests join with its QR code. */
 export interface GuestPermissions {
@@ -180,10 +180,10 @@ export interface HardwareVolumeInfo {
 /** AI playlists (src-tauri/src/ai.rs). */
 export interface AiStatus {
   hasKey: boolean;
-  /** Songs in the library. */
-  songs: number;
-  /** Songs sent with a request (big libraries are sampled). */
-  sentSongs: number;
+  /** Tracks in the library. */
+  tracks: number;
+  /** Tracks sent with a request (big libraries are sampled). */
+  sentTracks: number;
   /** Rough price of one request, US dollars. */
   estimateUsd: number;
 }
@@ -191,7 +191,7 @@ export interface AiPlaylistResult {
   playlistId: number;
   name: string;
   description: string;
-  songs: number;
+  tracks: number;
 }
 
 /** What writing tags did (src-tauri/src/tags.rs). */
@@ -371,8 +371,8 @@ export interface Backend {
   aiStatus(): Promise<AiStatus>;
   aiSetKey(key: string): Promise<void>;
   aiRemoveKey(): Promise<void>;
-  /** Asks Claude for a playlist of up to `songs` songs and saves it. */
-  aiPlaylist(prompt: string, songs: number): Promise<AiPlaylistResult>;
+  /** Asks Claude for a playlist of up to `tracks` tracks and saves it. */
+  aiPlaylist(prompt: string, tracks: number): Promise<AiPlaylistResult>;
 
   // Tag editor
   /** The editable fields of each file, in order. */

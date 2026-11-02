@@ -20,7 +20,7 @@ function fields(over: Partial<TagFields>): TagFields {
 const ALL = FIELDS.map((f) => f.key);
 
 describe('tag editor', () => {
-  it('shows what the songs share and leaves the rest blank', () => {
+  it('shows what the tracks share and leaves the rest blank', () => {
     const s = shared([fields({ title: 'A', trackNo: '1' }), fields({ title: 'B', trackNo: '2' })]);
     expect(s.title).toBeNull();
     expect(s.trackNo).toBeNull();

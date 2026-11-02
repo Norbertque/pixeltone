@@ -14,6 +14,6 @@ mod server;
 mod space;
 mod tls;
 
-pub use pairing::{PairedDevice, Pairing};
+pub use pairing::{PairedPhone, Pairing};
 pub use protocol::{PROTOCOL, RemoteVolume, ServerInfo};
 pub use server::{Host, JAM_PAGE, RemoteConfig, RemoteServer};
