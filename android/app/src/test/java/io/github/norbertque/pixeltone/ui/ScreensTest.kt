@@ -347,7 +347,12 @@ class ScreensTest {
 
     @Test
     fun soundSettings() = shot("settings-sound") {
-        val sound = Sound(eq = EqSettings(enabled = true).withPreset("Rock").withBand(4, -3f), replayGain = ReplayGainMode.Album, replayGainPreampDb = 2.5f)
+        val sound = Sound(
+            eq = EqSettings(enabled = true).withPreset("Rock").withBand(4, -3f),
+            replayGain = ReplayGainMode.Album,
+            replayGainPreampDb = 2.5f,
+            crossfadeMs = 4_500,
+        )
         SoundContent(sound, onChange = {}, usbExclusive = false, onBack = {})
     }
 

@@ -48,6 +48,7 @@ import io.github.norbertque.pixeltone.playback.EQ_CUSTOM
 import io.github.norbertque.pixeltone.playback.EQ_MAX_DB
 import io.github.norbertque.pixeltone.playback.EQ_PRESETS
 import io.github.norbertque.pixeltone.playback.EqSettings
+import io.github.norbertque.pixeltone.playback.MAX_CROSSFADE_MS
 import io.github.norbertque.pixeltone.playback.MAX_PREAMP_DB
 import io.github.norbertque.pixeltone.playback.ReplayGainMode
 import io.github.norbertque.pixeltone.playback.Sound
@@ -105,6 +106,28 @@ fun SoundContent(sound: Sound, onChange: ((Sound) -> Sound) -> Unit, usbExclusiv
                 ) { db -> onChange { it.copy(replayGainPreampDb = round(db * 2) / 2) } }
             }
         }
+        item {
+            val seconds = sound.crossfadeMs / 1000f
+            SliderRow(
+                stringResource(R.string.crossfade),
+                text = stringResource(R.string.crossfade_text),
+                value = seconds,
+                range = 0f..MAX_CROSSFADE_MS / 1000f,
+                steps = 0,
+                shown = if (sound.crossfadeMs == 0) {
+                    stringResource(R.string.off)
+                } else {
+                    stringResource(R.string.seconds_value, String.format(Locale.ROOT, "%.1f", seconds).removeSuffix(".0"))
+                },
+            ) { s -> onChange { it.copy(crossfadeMs = (round(s * 2) / 2 * 1000).toInt()) } }
+        }
+        if (sound.crossfadeMs > 0) {
+            item {
+                SwitchRow(stringResource(R.string.crossfade_albums), stringResource(R.string.crossfade_albums_text), sound.crossfadeAlbums) { on ->
+                    onChange { it.copy(crossfadeAlbums = on) }
+                }
+            }
+        }
     }
 }
 
@@ -115,6 +138,7 @@ internal fun formatSignedDb(db: Float): String = formatBandDb(db) + " dB"
 @Composable
 internal fun SliderRow(
     title: String,
+    text: String? = null,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     steps: Int,
@@ -126,6 +150,7 @@ internal fun SliderRow(
             Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             Text(shown, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         }
+        if (text != null) Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(value = value, onValueChange = onChange, valueRange = range, steps = steps)
     }
 }

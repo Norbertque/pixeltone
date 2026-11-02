@@ -151,10 +151,7 @@ class Equalizer(val sampleRate: Int, val channels: Int) {
  * its processors where the new format begins.
  */
 @OptIn(UnstableApi::class)
-class SoundProcessor(
-    private val sound: () -> Sound,
-    private val onTrackTags: (ReplayGainTags) -> Unit = {},
-) : BaseAudioProcessor() {
+class SoundProcessor(private val sound: () -> Sound) : BaseAudioProcessor() {
     /** The tags of the track the coming configuration is for. */
     @Volatile
     var nextTags = ReplayGainTags()
@@ -173,7 +170,6 @@ class SoundProcessor(
 
     override fun onFlush() {
         tags = nextTags
-        onTrackTags(tags)
         val eq = equalizer
         if (eq != null && (eq.sampleRate != inputAudioFormat.sampleRate || eq.channels != inputAudioFormat.channelCount)) {
             equalizer = null

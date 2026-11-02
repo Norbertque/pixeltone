@@ -42,11 +42,16 @@ data class TrackFormat(val codec: String, val bits: Int? = null, val sampleRateH
         ).joinToString(" • ")
 }
 
+/** The audio format [tracks] play; null when there's none (or it's a PC's). */
+fun audioFormatOf(tracks: Tracks): Format? {
+    val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected } ?: return null
+    return (0 until group.length).firstOrNull(group::isTrackSelected)?.let(group::getTrackFormat)
+}
+
 /** The format of the audio [tracks] play now; null when there's none (or it's a PC's). */
 @OptIn(UnstableApi::class) // Format's PCM encodings
 fun trackFormatOf(tracks: Tracks): TrackFormat? {
-    val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.isSelected } ?: return null
-    val format = (0 until group.length).firstOrNull(group::isTrackSelected)?.let(group::getTrackFormat) ?: return null
+    val format = audioFormatOf(tracks) ?: return null
     val mime = format.sampleMimeType ?: return null
     return TrackFormat(
         codec = CODECS[mime] ?: mime.substringAfter('/').uppercase(),

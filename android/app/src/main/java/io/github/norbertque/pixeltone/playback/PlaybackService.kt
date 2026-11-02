@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
@@ -13,11 +14,13 @@ import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
@@ -50,6 +53,7 @@ import io.github.norbertque.pixeltone.usbaudio.UsbAudioSession
 import io.github.norbertque.pixeltone.widget.PlayerWidget
 import io.github.norbertque.pixeltone.widget.WidgetState
 import java.io.File
+import kotlin.random.Random
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -108,6 +112,13 @@ class PlaybackService : MediaSessionService() {
             val restarted = reason == Player.DISCONTINUITY_REASON_SEEK && old.mediaItemIndex == new.mediaItemIndex &&
                 new.positionMs < 1_500 && old.positionMs > 10_000
             if (restarted) counter.onTrack(trackOf(new.mediaItem), local.isPlaying, again = true)
+        }
+    }
+
+    /** Now Playing's ReplayGain follows the tags of the session's track. */
+    private val soundTags = object : Player.Listener {
+        override fun onTracksChanged(tracks: Tracks) {
+            app.sound.playingTags.value = replayGainTagsOf(audioFormatOf(tracks)?.metadata)
         }
     }
 
@@ -172,7 +183,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         store = QueueStore(File(filesDir, "queue.json"))
-        local = buildPlayer(usb = null)
+        local = buildPlayer(usb = null).also { attach(it, usb = null) }
         pc = PcPlayer(mainLooper, app.remote, app.library) { items, start, positionMs ->
             app.remote.connection.session.value?.let { handOver(it.pc, HandOver(items, start, positionMs)) }
         }
@@ -202,6 +213,7 @@ class PlaybackService : MediaSessionService() {
         pc.addListener(stopAfterPcTrack)
         pc.addListener(widget)
         scope.launch { restore() }
+        scope.launch { watchCrossfade() }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
@@ -216,6 +228,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        endFade()
+        spare?.release()
+        spare = null
         save()
         counter.flush()
         app.remote.host = null
@@ -261,7 +276,10 @@ class PlaybackService : MediaSessionService() {
 
     /* ------------------------------ Phone output ------------------------------ */
 
-    /** The phone's player, into Android's output or straight into a USB DAC. */
+    /**
+     * A phone player, into Android's output or straight into a USB DAC. It plays for the session
+     * once [attach]ed; until then it's on its own (a crossfade's other player).
+     */
     private fun buildPlayer(usb: UsbAudioSession?): ExoPlayer {
         val renderers = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
@@ -274,7 +292,7 @@ class PlaybackService : MediaSessionService() {
                     // no sound processing on this path.
                     UsbAudioSink(usb, app.usb::onSinkFormatChanged, app.usb::onSessionDead)
                 } else {
-                    val processor = SoundProcessor(sound = { app.sound.sound.value }, onTrackTags = { app.sound.playingTags.value = it })
+                    val processor = SoundProcessor { app.sound.sound.value }
                     val sink = DefaultAudioSink.Builder(context)
                         .setEnableFloatOutput(enableFloatOutput)
                         .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
@@ -284,22 +302,36 @@ class PlaybackService : MediaSessionService() {
                 }
         }
         return ExoPlayer.Builder(this, renderers)
-            .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
-                true, // handle audio focus: pause for calls and other players (never ducks on a DAC)
-            )
-            // Pause when headphones come out; a DAC played into directly isn't one of Android's
-            // outputs (its unplugging pauses through the USB controller instead).
-            .setHandleAudioBecomingNoisy(usb == null && app.playbackSettings.pauseOnUnplug.value)
+            .setAudioAttributes(MUSIC, false)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-            .also {
-                it.addListener(saver)
-                it.addListener(counting)
-                it.addListener(stopAfterLocalTrack)
-                it.addListener(widget)
-                it.pauseAtEndOfMediaItems = app.sleep.state.value == Sleep.EndOfTrack
-            }
+    }
+
+    /** [player] plays for the session: it's the one saved, counted, shown, and it handles audio focus. */
+    private fun attach(player: ExoPlayer, usb: UsbAudioSession?) {
+        // Audio focus: pause for calls and other players (never ducks on a DAC).
+        player.setAudioAttributes(MUSIC, true)
+        // Pause when headphones come out; a DAC played into directly isn't one of Android's
+        // outputs (its unplugging pauses through the USB controller instead).
+        player.setHandleAudioBecomingNoisy(usb == null && app.playbackSettings.pauseOnUnplug.value)
+        player.pauseAtEndOfMediaItems = app.sleep.state.value == Sleep.EndOfTrack
+        player.addListener(saver)
+        player.addListener(counting)
+        player.addListener(stopAfterLocalTrack)
+        player.addListener(widget)
+        player.addListener(soundTags)
+        soundTags.onTracksChanged(player.currentTracks)
+    }
+
+    /** [player] no longer plays for the session (it's being replaced, or fades out on its own). */
+    private fun detach(player: ExoPlayer) {
+        player.removeListener(saver)
+        player.removeListener(counting)
+        player.removeListener(stopAfterLocalTrack)
+        player.removeListener(widget)
+        player.removeListener(soundTags)
+        player.setAudioAttributes(MUSIC, false)
+        player.setHandleAudioBecomingNoisy(false)
     }
 
     /** The phone's player as the session shows it: on a DAC, the volume keys turn the DAC's volume. */
@@ -329,8 +361,11 @@ class PlaybackService : MediaSessionService() {
 
     /** A new phone player for the output, taking over the queue, position and modes. */
     private fun switchOutput(usb: UsbAudioSession?) {
+        endFade()
+        spare?.release()
+        spare = null
         val old = local
-        val next = buildPlayer(usb)
+        val next = buildPlayer(usb).also { attach(it, usb) }
         if (old.mediaItemCount > 0) {
             next.setMediaItems(List(old.mediaItemCount) { old.getMediaItemAt(it) }, old.currentMediaItemIndex, old.currentPosition)
         }
@@ -343,11 +378,123 @@ class PlaybackService : MediaSessionService() {
         session?.let { if (it.player !== pc) it.player = localForSession() }
         updateWidget()
         updateHeart()
-        old.removeListener(saver)
-        old.removeListener(counting)
-        old.removeListener(stopAfterLocalTrack)
-        old.removeListener(widget)
+        detach(old)
         old.release()
+    }
+
+    /* -------------------------------- Crossfade -------------------------------- */
+
+    /** The phone's other player: the next track waits on it, paused, before a crossfade. */
+    private var spare: ExoPlayer? = null
+
+    /** The player of the track fading out during a crossfade, and the fade. */
+    private var fading: ExoPlayer? = null
+    private var fade: Job? = null
+
+    /** A few times a second: should the track that plays fade into the next one ([crossfadeStep])? */
+    private suspend fun watchCrossfade() {
+        while (true) {
+            delay(if (local.isPlaying) 100 else 500)
+            // On a DAC tracks stay gapless and bit-perfect; a PC crossfades by itself.
+            if (fade?.isActive == true || usbInUse != null || session?.player === pc) continue
+            val player = local
+            val next = player.nextMediaItemIndex
+            val step = crossfadeStep(
+                sound = app.sound.sound.value,
+                playing = player.isPlaying,
+                positionMs = player.currentPosition,
+                durationMs = player.duration.takeIf { it != C.TIME_UNSET } ?: 0,
+                hasNext = next != C.INDEX_UNSET,
+                repeatsOne = player.repeatMode == Player.REPEAT_MODE_ONE,
+                stopsAtEnd = app.sleep.state.value == Sleep.EndOfTrack,
+                currentAlbum = player.currentMediaItem?.mediaMetadata?.albumTitle?.toString(),
+                nextAlbum = if (next == C.INDEX_UNSET) null else player.getMediaItemAt(next).mediaMetadata.albumTitle?.toString(),
+            )
+            when (step) {
+                CrossfadeStep.None -> Unit
+                CrossfadeStep.Prepare -> readySpare(player, next)
+                is CrossfadeStep.Start -> crossfade(player, next, step.fadeMs)
+            }
+        }
+    }
+
+    /** The other player with [from]'s queue, modes and shuffle order, paused at the start of track [next]. */
+    private fun readySpare(from: ExoPlayer, next: Int): ExoPlayer {
+        val spare = spare ?: buildPlayer(usb = null).also { spare = it }
+        val same = spare.mediaItemCount == from.mediaItemCount && spare.currentMediaItemIndex == next &&
+            (0 until from.mediaItemCount).all { spare.getMediaItemAt(it).mediaId == from.getMediaItemAt(it).mediaId }
+        if (!same) {
+            spare.setMediaItems(List(from.mediaItemCount) { from.getMediaItemAt(it) }, next, 0)
+            spare.repeatMode = from.repeatMode
+            spare.shuffleModeEnabled = from.shuffleModeEnabled
+            if (from.shuffleModeEnabled) spare.setShuffleOrder(shuffleOrderOf(from))
+            spare.volume = 0f
+            spare.playWhenReady = false
+            spare.prepare()
+        }
+        return spare
+    }
+
+    /** [player]'s own shuffled order, so the other player goes on through the queue the same way. */
+    private fun shuffleOrderOf(player: ExoPlayer): ShuffleOrder {
+        val timeline = player.currentTimeline
+        val order = ArrayList<Int>(timeline.windowCount)
+        var i = timeline.getFirstWindowIndex(true)
+        while (i != C.INDEX_UNSET && order.size < timeline.windowCount) {
+            order += i
+            i = timeline.getNextWindowIndex(i, Player.REPEAT_MODE_OFF, true)
+        }
+        return ShuffleOrder.DefaultShuffleOrder(order.toIntArray(), Random.nextLong())
+    }
+
+    /**
+     * Track [next] starts on the other player and the two blend over [fadeMs], at equal power.
+     * The session goes on with the next track at once (notification, history, saved queue); the
+     * track that ends fades out on its own player and stops at its end.
+     */
+    private fun crossfade(outgoing: ExoPlayer, next: Int, fadeMs: Long) {
+        val incoming = readySpare(outgoing, next)
+        spare = null
+        detach(outgoing)
+        outgoing.pauseAtEndOfMediaItems = true
+        attach(incoming, usb = null)
+        counter.onTrack(trackOf(incoming.currentMediaItem), playing = true)
+        incoming.volume = 0f
+        incoming.play()
+        local = incoming
+        session?.player = localForSession()
+        updateWidget()
+        updateHeart()
+        saveSoon()
+        fading = outgoing
+        fade = scope.launch {
+            val start = SystemClock.elapsedRealtime()
+            while (true) {
+                val fraction = (SystemClock.elapsedRealtime() - start).toFloat() / fadeMs
+                // A pause, a skip, or the outgoing track's end finishes the blend at once.
+                if (fraction >= 1f || !incoming.playWhenReady || incoming.currentMediaItemIndex != next || !outgoing.playWhenReady) break
+                val (out, inc) = crossfadeVolumes(fraction)
+                outgoing.volume = out
+                incoming.volume = inc
+                delay(FADE_STEP_MS)
+            }
+            fade = null
+            endFade()
+        }
+    }
+
+    /** The track that faded out stops; its player waits for the next crossfade. */
+    private fun endFade() {
+        fade?.cancel()
+        fade = null
+        val outgoing = fading ?: return
+        fading = null
+        outgoing.stop()
+        outgoing.clearMediaItems()
+        outgoing.volume = 1f
+        outgoing.pauseAtEndOfMediaItems = false
+        local.volume = 1f
+        if (spare == null) spare = outgoing else outgoing.release()
     }
 
     /* ----------------------------- Phone and PC ----------------------------- */
@@ -561,6 +708,11 @@ class PlaybackService : MediaSessionService() {
 }
 
 private const val WIDGET_COVER_PX = 256
+
+/** How often a crossfade's volumes move. */
+private const val FADE_STEP_MS = 30L
+
+private val MUSIC = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build()
 
 /** The heart's command: the track that plays goes in or out of favourites. */
 private val FAVOURITE = SessionCommand("io.github.norbertque.pixeltone.FAVOURITE", Bundle.EMPTY)

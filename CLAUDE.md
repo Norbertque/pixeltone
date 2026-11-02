@@ -174,6 +174,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   the file's tags, then LRCLIB). A long press on any track row opens its menu
   (`LocalTrackMenu`). The sleep timer (`SleepTimer`) and the home-screen widget (`PlayerWidget`,
   RemoteViews) are carried out by `PlaybackService`.
+- Sound (Settings → Sound), as on Windows and only on Android's output (a DAC stays
+  bit-perfect): the equaliser and ReplayGain are one Media3 audio processor
+  (`playback/SoundProcessing.kt`) behind `SoundSink`, which hands it each track's tags with the
+  track's format, so a gain starts at the track's first sample; crossfade
+  (`playback/Crossfade.kt` decides, `PlaybackService` carries out) readies the next track on a
+  second ExoPlayer, blends the two at equal power and gives the session the new one
+  (`attach`/`detach` move listeners and audio focus).
 - USB output (`docs/android-usb.md`): the `:usbaudio` module is the UAC driver (Kotlin
   descriptor parsing and format negotiation, C++ isochronous stream over libusb, NDK
   28.2.13676358 + CMake 3.22.1 from `~/.local/opt/android-sdk`); `app/.../usb/` holds the

@@ -303,6 +303,11 @@
     <string name="replay_gain_track">Track</string>
     <string name="replay_gain_album">Album</string>
     <string name="preamp">Pre-amp</string>
+    <string name="crossfade">Crossfade</string>
+    <string name="crossfade_text">Blends the end of each track into the next. On a USB DAC tracks always follow gaplessly, bit-perfect.</string>
+    <string name="seconds_value">%1$s s</string>
+    <string name="crossfade_albums">Crossfade within albums</string>
+    <string name="crossfade_albums_text">Off keeps albums gapless, as they were made, and crossfades only between them.</string>
     <string name="library_summary">Short files, folders, reading the library again</string>
     <string name="lyrics_summary">Finding them online</string>
     <string name="usb_summary">Bit-perfect playback straight to a USB DAC</string>
