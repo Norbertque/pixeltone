@@ -3,6 +3,7 @@ package io.github.norbertque.pixeltone.playback
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.scale
@@ -17,14 +18,19 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.session.CacheBitmapLoader
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import io.github.norbertque.pixeltone.MainActivity
 import io.github.norbertque.pixeltone.PixeltoneApp
 import io.github.norbertque.pixeltone.library.PlayCounter
+import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.Track
 import io.github.norbertque.pixeltone.library.mayReadAudio
 import io.github.norbertque.pixeltone.library.trackUri
@@ -111,6 +117,7 @@ class PlaybackService : MediaSessionService() {
             if (events.containsAny(Player.EVENT_MEDIA_METADATA_CHANGED, Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_MEDIA_ITEM_TRANSITION)) {
                 updateWidget()
             }
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) updateHeart()
         }
     }
 
@@ -129,6 +136,26 @@ class PlaybackService : MediaSessionService() {
             },
             ContextCompat.getMainExecutor(this),
         )
+    }
+
+    /**
+     * The heart in the notification and on the lock screen, for the phone's track that plays
+     * (none for a PC's): filled while it's a favourite, and a press turns that over.
+     */
+    private fun updateHeart() {
+        val session = session ?: return
+        val track = if (session.player === pc) null else trackOf(local.currentMediaItem)
+        val buttons = track?.let {
+            val favourite = app.lists.lists.value.isFavourite(it)
+            listOf(
+                CommandButton.Builder(if (favourite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                    .setDisplayName(getString(if (favourite) R.string.unfavourite else R.string.favourite))
+                    .setSessionCommand(FAVOURITE)
+                    .setSlots(CommandButton.SLOT_FORWARD_SECONDARY)
+                    .build(),
+            )
+        }
+        session.setMediaButtonPreferences(buttons.orEmpty())
     }
 
     private fun trackOf(item: MediaItem?): Track? =
@@ -169,6 +196,8 @@ class PlaybackService : MediaSessionService() {
         scope.launch { app.usb.state.collect(::followUsb) }
         scope.launch { app.sleep.state.collectLatest(::sleep) }
         scope.launch { app.playbackSettings.pauseOnUnplug.collect { local.setHandleAudioBecomingNoisy(usbInUse == null && it) } }
+        scope.launch { app.lists.lists.collect { updateHeart() } }
+        scope.launch { app.library.index.collect { updateHeart() } }
         pc.addListener(stopAfterPcTrack)
         pc.addListener(widget)
         scope.launch { restore() }
@@ -305,6 +334,7 @@ class PlaybackService : MediaSessionService() {
         usbInUse = usb
         session?.let { if (it.player !== pc) it.player = localForSession() }
         updateWidget()
+        updateHeart()
         old.removeListener(saver)
         old.removeListener(counting)
         old.removeListener(stopAfterLocalTrack)
@@ -321,9 +351,11 @@ class PlaybackService : MediaSessionService() {
             local.pause()
             session.player = pc
             updateWidget()
+            updateHeart()
         } else if (remote == null && session.player === pc) {
             session.player = localForSession()
             updateWidget()
+            updateHeart()
             app.remote.files.stop()
             pendingHandOver = null
         }
@@ -469,6 +501,24 @@ class PlaybackService : MediaSessionService() {
     }
 
     private inner class SessionCallback : MediaSession.Callback {
+        // Controllers (the notification, the lock screen) may press the heart.
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
+            MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(FAVOURITE).build())
+                .build()
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction != FAVOURITE.customAction) return super.onCustomCommand(session, controller, customCommand, args)
+            val track = if (session.player === pc) null else trackOf(local.currentMediaItem)
+            track?.let { app.lists.setFavourite(it, !app.lists.lists.value.isFavourite(it)) }
+            return Futures.immediateFuture(SessionResult(if (track != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
+        }
+
         // Items from a controller arrive without their file address: it follows from the track id.
         override fun onAddMediaItems(
             mediaSession: MediaSession,
@@ -503,6 +553,9 @@ class PlaybackService : MediaSessionService() {
 }
 
 private const val WIDGET_COVER_PX = 256
+
+/** The heart's command: the track that plays goes in or out of favourites. */
+private val FAVOURITE = SessionCommand("io.github.norbertque.pixeltone.FAVOURITE", Bundle.EMPTY)
 
 /** At most [px] on its longer side. */
 private fun Bitmap.fitWithin(px: Int): Bitmap {
