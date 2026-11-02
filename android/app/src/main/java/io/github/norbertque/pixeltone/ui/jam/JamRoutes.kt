@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import io.github.norbertque.pixeltone.ui.remote.rememberLocalNetworkAccess
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +41,24 @@ fun GuestJamScreen(app: PixeltoneApp) {
         null -> Unit
         is GuestStep.Invited -> {
             BackHandler(onBack = control::dismiss)
-            JoinContent(s.invite.pcName, control.name, s.busy, s.error, control::join, control::dismiss)
+            // Reaching the PC needs the Wi-Fi's devices: asked for on the way in (the join goes on either way).
+            var joining by rememberSaveable { mutableStateOf<String?>(null) }
+            val access = rememberLocalNetworkAccess { joining?.let(control::join) }
+            JoinContent(
+                s.invite.pcName,
+                control.name,
+                s.busy,
+                s.error,
+                onJoin = { name ->
+                    if (access.allowed) {
+                        control.join(name)
+                    } else {
+                        joining = name
+                        access.ask()
+                    }
+                },
+                onCancel = control::dismiss,
+            )
         }
         is GuestStep.Waiting -> {
             BackHandler(onBack = control::dismiss)

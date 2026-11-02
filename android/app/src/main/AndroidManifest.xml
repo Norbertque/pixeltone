@@ -12,6 +12,9 @@
     <!-- The in-app updater: the update feed on GitHub, and installing the new APK. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Pixeltone on a PC, and jams: finding and reaching PCs on the same Wi-Fi (Android 17's
+         local network protection blocks that without it). -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application
         android:name=".PixeltoneApp"

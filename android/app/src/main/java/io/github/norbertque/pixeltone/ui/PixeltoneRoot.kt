@@ -1,11 +1,6 @@
 package io.github.norbertque.pixeltone.ui
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.LocalActivity
@@ -230,7 +225,10 @@ private fun Navigation() {
     val player = app.player
     val remote = app.remote
     val playback by player.state.collectAsStateWithLifecycle()
-    val onPc by remote.connection.session.collectAsStateWithLifecycle()
+    val pcSession by remote.connection.session.collectAsStateWithLifecycle()
+    // A PC has the playback once it has answered; until then the phone plays on.
+    val onPc = pcSession?.takeIf { it.reached }
+    val connectingTo = pcSession?.takeIf { !it.reached }?.pc?.name
     val usb by app.usb.state.collectAsStateWithLifecycle()
     val lists by app.lists.lists.collectAsStateWithLifecycle()
     val index by app.library.index.collectAsStateWithLifecycle()
@@ -278,7 +276,7 @@ private fun Navigation() {
                                 playback.isPlaying,
                                 onToggle = player::toggle,
                                 onOpen = { nav.navigate(NOW_PLAYING) { launchSingleTop = true } },
-                                playingOn = onPc?.pc?.name,
+                                playingOn = onPc?.pc?.name ?: connectingTo?.let { stringResource(R.string.connecting_to, it) },
                                 onNext = player::next,
                                 onPrevious = player::previous,
                             )
@@ -630,13 +628,4 @@ internal fun AccessScreen(onAllowed: () -> Unit) {
     }
 }
 
-private fun Context.openAppSettings() {
-    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
-}
 
-private tailrec fun Context.findActivity(): Activity? =
-    when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
-    }

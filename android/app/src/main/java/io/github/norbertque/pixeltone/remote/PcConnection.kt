@@ -42,6 +42,8 @@ import okio.BufferedSink
 data class RemoteSession(
     val pc: PairedPc,
     val connected: Boolean = false,
+    /** The PC answered in this session: it has the playback from then on, through drops too. */
+    val reached: Boolean = false,
     val state: PcState? = null,
     val volume: PcVolume? = null,
     /** The jam that runs on the PC, as its owner sees it. */
@@ -86,6 +88,8 @@ class PcConnection(
     private val context: Context,
     private val paired: PairedPcs,
     private val guest: Boolean = false,
+    /** How long a PC has to answer for the first time before it counts as not there. */
+    private val firstConnectMs: Long = FIRST_CONNECT_MS,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -329,14 +333,35 @@ class PcConnection(
 
     /* ------------------------------- Session ------------------------------- */
 
-    /** Starts following and driving this PC (replacing any other session). */
+    /**
+     * Starts following and driving this PC (replacing any other session). A PC that doesn't
+     * answer within [firstConnectMs] isn't there (off, or on another network): the session ends
+     * and [errors] says so.
+     */
     @Synchronized
     fun begin(pc: PairedPc) {
         closeSocket()
         positionMs = 0.0
         positionAt = SystemClock.elapsedRealtime()
         currentSession.value = RemoteSession(pc = pc)
-        open(pc, ++generation, attempt = 0)
+        val gen = ++generation
+        open(pc, gen, attempt = 0)
+        if (!guest) {
+            scope.launch {
+                delay(firstConnectMs)
+                synchronized(this@PcConnection) {
+                    if (!current(gen) || currentSession.value?.reached != false) return@launch
+                }
+                reports.tryEmit(
+                    if (mayUseLocalNetwork(context)) {
+                        "${pc.name} can't be reached. Is it on, with Pixeltone running, on this Wi-Fi?"
+                    } else {
+                        "Pixeltone may not reach devices on your Wi-Fi. Allow it under Nearby devices in Android's settings."
+                    },
+                )
+                end()
+            }
+        }
     }
 
     /** Ends the session: the phone stops following the PC. */
@@ -384,6 +409,8 @@ class PcConnection(
 
     private fun open(pc: PairedPc, gen: Int, attempt: Int) {
         val client = PcTls.pinned(base, pc.fingerprint).newBuilder()
+            // On the same Wi-Fi a PC answers at once; waiting longer only holds up the next try.
+            .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(15, TimeUnit.SECONDS)
             .build()
@@ -393,7 +420,7 @@ class PcConnection(
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     if (!current(gen)) return
-                    currentSession.update { it?.copy(connected = true) }
+                    currentSession.update { it?.copy(connected = true, reached = true) }
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {
@@ -534,6 +561,8 @@ class PcConnection(
         const val CERT_FAILURE = -1
         const val UPLOAD_CHUNK = 64 * 1024
         val RECONNECT_DELAYS_MS = longArrayOf(500, 1_000, 2_000, 4_000, 8_000)
+
+        const val FIRST_CONNECT_MS = 12_000L
         val JSON = "application/json".toMediaType()
     }
 }

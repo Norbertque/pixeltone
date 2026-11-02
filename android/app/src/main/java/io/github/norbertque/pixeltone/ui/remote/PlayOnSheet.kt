@@ -28,6 +28,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,9 +74,13 @@ fun PlayOnSheet(remote: RemoteControl, onDismiss: () -> Unit) {
     val found by remote.discovery.found.collectAsStateWithLifecycle()
     val paired by remote.paired.pcs.collectAsStateWithLifecycle()
     val session by remote.connection.session.collectAsStateWithLifecycle()
-    DisposableEffect(Unit) {
-        remote.discovery.start()
-        onDispose { remote.discovery.stop() }
+    val access = rememberLocalNetworkAccess()
+    // Finding PCs needs the Wi-Fi's devices: ask as the sheet opens.
+    LaunchedEffect(Unit) { if (!access.allowed) access.ask() }
+    DisposableEffect(access.allowed) {
+        val looking = access.allowed
+        if (looking) remote.discovery.start()
+        onDispose { if (looking) remote.discovery.stop() }
     }
     var pairing by remember { mutableStateOf<PairTarget?>(null) }
     var byAddress by remember { mutableStateOf(false) }
@@ -83,6 +90,8 @@ fun PlayOnSheet(remote: RemoteControl, onDismiss: () -> Unit) {
             choices = pcChoices(found, paired),
             activeId = session?.pc?.id,
             connected = session?.connected == true,
+            localNetwork = access.allowed,
+            onAllowLocalNetwork = access.ask,
             onPhone = {
                 remote.playHere()
                 onDismiss()
@@ -155,6 +164,9 @@ fun PlayOnContent(
     onPc: (PcChoice) -> Unit,
     onForget: (PairedPc) -> Unit,
     onAddress: () -> Unit,
+    /** Pixeltone may use the Wi-Fi's devices; without that it can't find or reach PCs. */
+    localNetwork: Boolean = true,
+    onAllowLocalNetwork: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
         Text(
@@ -162,6 +174,17 @@ fun PlayOnContent(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
         )
+        if (!localNetwork) {
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(stringResource(R.string.local_network_needed), style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onAllowLocalNetwork, modifier = Modifier.padding(top = 4.dp)) { Text(stringResource(R.string.allow)) }
+                }
+            }
+        }
         Device(Icons.Default.Smartphone, stringResource(R.string.this_phone), null, selected = activeId == null, onClick = onPhone)
         for (choice in choices) {
             val selected = activeId != null && choice.paired?.id == activeId

@@ -178,6 +178,9 @@ class PlaybackService : MediaSessionService() {
     /** The phone's queue, waiting for the PC to be connected to go over. */
     private var pendingHandOver: HandOver? = null
 
+    /** Playback moves from the phone to a PC: what the phone plays when the PC answers goes over. */
+    private var movingFromPhone = false
+
     private class HandOver(val items: List<MediaItem>, val start: Int, val positionMs: Long)
 
     override fun onCreate() {
@@ -499,30 +502,53 @@ class PlaybackService : MediaSessionService() {
 
     /* ----------------------------- Phone and PC ----------------------------- */
 
-    /** The session runs whichever player has the playback: the PC's while a session with one is on. */
+    /**
+     * The session runs whichever player has the playback: the PC's once it has answered. Until
+     * then (and when it never does) the phone goes on as it was.
+     */
     private fun follow(remote: RemoteSession?) {
         val session = session ?: return
-        if (remote != null && session.player !== pc) {
+        val onPc = remote?.reached == true
+        if (onPc && session.player !== pc) {
+            if (movingFromPhone) {
+                movingFromPhone = false
+                pendingHandOver = phoneQueue()
+            }
             local.pause()
             session.player = pc
             updateWidget()
             updateHeart()
-        } else if (remote == null && session.player === pc) {
+        } else if (!onPc && session.player === pc) {
             session.player = localForSession()
             updateWidget()
             updateHeart()
+        }
+        if (remote == null) {
             app.remote.files.stop()
             pendingHandOver = null
+            movingFromPhone = false
         }
         if (remote?.connected == true) {
             pendingHandOver?.let { if (handOver(remote.pc, it)) pendingHandOver = null }
         }
     }
 
-    /** Moves playback to [target]: the phone's queue and position go over, and the phone pauses. */
+    /** The phone's queue and where it is, to go over to a PC; null when it's empty. */
+    private fun phoneQueue(): HandOver? =
+        if (local.mediaItemCount > 0) {
+            HandOver(List(local.mediaItemCount) { local.getMediaItemAt(it) }, local.currentMediaItemIndex, local.currentPosition)
+        } else {
+            null
+        }
+
+    /**
+     * Moves playback to [target]: once it answers, the phone's queue and position go over and
+     * the phone pauses; until then the phone plays on.
+     */
     private fun moveTo(target: PairedPc) {
         val connection = app.remote.connection
-        val current = connection.session.value
+        val current = connection.session.value?.takeIf { it.reached }
+        movingFromPhone = current == null
         pendingHandOver = when {
             // From one PC to another: whatever played goes on there, if it was the phone's.
             current != null -> {
@@ -537,14 +563,8 @@ class PlaybackService : MediaSessionService() {
                     HandOver(tracks.map { it.toMediaItem() }, tracks.indexOfFirst { it.id == playing }.coerceAtLeast(0), connection.positionNow())
                 }
             }
-            local.mediaItemCount > 0 -> HandOver(
-                List(local.mediaItemCount) { local.getMediaItemAt(it) },
-                local.currentMediaItemIndex,
-                local.currentPosition,
-            )
             else -> null
         }
-        local.pause()
         app.remote.files.start()
         connection.begin(target)
     }

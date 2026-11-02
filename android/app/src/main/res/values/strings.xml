@@ -165,6 +165,9 @@
     <string name="tab_playlists">Playlists</string>
     <string name="tab_genres">Genres</string>
     <string name="tab_folders">Folders</string>
+    <string name="connecting_to">Connecting to %1$s…</string>
+    <string name="local_network_needed">Pixeltone may not reach devices on your Wi-Fi yet. It needs to, to find your PCs and play on them.</string>
+    <string name="allow">Allow</string>
     <string name="show_in_folder">Show in folder</string>
     <string name="queued_next">Plays next: %1$s</string>
     <string name="queued">Added to the queue: %1$s</string>

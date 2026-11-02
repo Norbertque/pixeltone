@@ -1,5 +1,11 @@
 package io.github.norbertque.pixeltone.ui
 
+import android.provider.Settings
+import android.net.Uri
+import android.content.Intent
+import android.content.ContextWrapper
+import android.content.Context
+import android.app.Activity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -77,3 +83,16 @@ fun formatDuration(ms: Long): String {
         String.format(Locale.ROOT, "%d:%02d", m, s)
     }
 }
+
+/** Android's page about Pixeltone, where its permissions can be given. */
+fun Context.openAppSettings() {
+    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+}
+
+/** The activity a composable's context belongs to. */
+tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
