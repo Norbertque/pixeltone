@@ -161,6 +161,11 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   `PcConnectionDevServerTest` and `PcPlayerDevServerTest` run against
   `cargo run -p pp-remote --example dev_server` with `PIXELTONE_DEV_SERVER=port:code` (a
   pairing uses up the code; the server prints the next one).
+- Android 17's local network protection blocks LAN devices for apps targeting it: Pixeltone
+  declares `ACCESS_LOCAL_NETWORK` and asks for it when Play on opens and before joining a jam
+  (`ui/remote/LocalNetworkAccess.kt`); without it discovery finds nothing and connections time
+  out. The phone keeps playing until a PC has answered (`RemoteSession.reached`), and a PC that
+  hasn't within 12 s ends the session with a message (`PcConnection.begin`).
 - Jams (`jam/JamControl.kt`, `ui/jam/`): a guest's own `PcConnection(guest = true)` in
   `RemoteControl.guestConnection` (never stored as a paired PC), joined from a jam link
   (`remote/JamLink.kt`; `MainActivity` takes the https page link and `pixeltone://jam?…`).
