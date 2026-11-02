@@ -1,6 +1,7 @@
 package io.github.norbertque.pixeltone.remote
 
 import android.content.Context
+import android.net.nsd.DiscoveryRequest
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -85,7 +86,13 @@ class PcDiscovery(context: Context) {
         }
         listener = discovery
         runCatching {
-            manager.discoverServices(RemoteProtocol.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discovery)
+            if (Build.VERSION.SDK_INT >= 37) {
+                // Pixeltone asks for local network access itself (Play on): never Android's device picker.
+                val request = DiscoveryRequest.Builder(RemoteProtocol.SERVICE_TYPE).setFlags(DiscoveryRequest.FLAG_NO_PICKER).build()
+                manager.discoverServices(request, Runnable::run, discovery)
+            } else {
+                manager.discoverServices(RemoteProtocol.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discovery)
+            }
         }.onFailure { listener = null }
     }
 
