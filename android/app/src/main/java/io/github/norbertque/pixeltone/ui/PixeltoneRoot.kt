@@ -80,6 +80,7 @@ import io.github.norbertque.pixeltone.ui.library.MixScreen
 import io.github.norbertque.pixeltone.ui.library.ListAction
 import io.github.norbertque.pixeltone.ui.library.ListMenu
 import io.github.norbertque.pixeltone.ui.library.LocalAddToPlaylist
+import io.github.norbertque.pixeltone.ui.library.LocalArtistPictures
 import io.github.norbertque.pixeltone.ui.library.LocalListMenu
 import io.github.norbertque.pixeltone.ui.library.TrackList
 import io.github.norbertque.pixeltone.ui.library.LocalTrackMenu
@@ -204,6 +205,7 @@ private fun Root() {
             LaunchedEffect(Unit) {
                 app.library.start()
                 app.player.connect()
+                app.artistPictures.start()
             }
             Navigation()
         } else {
@@ -233,6 +235,7 @@ private fun Navigation() {
     val lists by app.lists.lists.collectAsStateWithLifecycle()
     val index by app.library.index.collectAsStateWithLifecycle()
     val mixes by app.mixes.collectAsStateWithLifecycle()
+    val artistPictures by app.artistPictures.pictures.collectAsStateWithLifecycle()
     val queueInPanel by app.playbackSettings.queueInPanel.collectAsStateWithLifecycle()
     val sound by app.sound.sound.collectAsStateWithLifecycle()
     val playingTags by app.sound.playingTags.collectAsStateWithLifecycle()
@@ -264,6 +267,7 @@ private fun Navigation() {
         LocalTrackMenu provides { menuFor = it },
         LocalAddToPlaylist provides { adding = it },
         LocalListMenu provides { listMenuFor = it },
+        LocalArtistPictures provides artistPictures,
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(messages) },

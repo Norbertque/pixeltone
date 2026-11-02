@@ -22,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -81,8 +80,7 @@ fun ArtistContent(
                 item {
                     // Their picture round, their name big, as on Windows.
                     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        val cover = artist.albums.firstOrNull()?.coverId ?: artist.tracks.firstOrNull()?.albumId ?: -1
-                        Cover(cover, Modifier.size(200.dp), CircleShape)
+                        ArtistImage(artist, Modifier.size(200.dp))
                         Text(
                             artist.name,
                             Modifier.padding(top = 20.dp),

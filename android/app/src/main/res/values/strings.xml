@@ -362,6 +362,8 @@
     <string name="read_library_again">Read the library again</string>
     <string name="read_library_again_text">Picks up music Android hasn’t told Pixeltone about yet.</string>
     <string name="read_library_again_done">Reading it again…</string>
+    <string name="artist_pictures">Artist pictures</string>
+    <string name="artist_pictures_text">Show pictures of the artists in your library, from Deezer (deezer.com). An artist’s name is sent with a few of their album and track titles, so a namesake isn’t mistaken for them; what’s found is kept on this phone. Turning this off removes them again.</string>
     <string name="artist_separators">Artist separators</string>
     <string name="artist_separators_text">Split “A feat. B” or “A; B” into separate artists. “&amp;” and “,” are off by default so band names stay whole.</string>
     <string name="add_separator">Add…</string>

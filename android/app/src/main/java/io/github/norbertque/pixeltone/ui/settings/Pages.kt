@@ -88,6 +88,7 @@ fun LibrarySettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
     val shortest by settings.shortestMs.collectAsStateWithLifecycle()
     val hidden by settings.hiddenFolders.collectAsStateWithLifecycle()
     val separators by settings.artistSeparators.collectAsStateWithLifecycle()
+    val pictures by app.artistPictures.enabled.collectAsStateWithLifecycle()
     val folders = remember(all) { libraryFolders(all.orEmpty()) }
     LibrarySettingsContent(
         shortestMs = shortest,
@@ -99,6 +100,8 @@ fun LibrarySettingsScreen(app: PixeltoneApp, onBack: () -> Unit) {
         onBack = onBack,
         separators = separators,
         onSeparators = settings::setArtistSeparators,
+        artistPictures = pictures,
+        onArtistPictures = app.artistPictures::setEnabled,
     )
 }
 
@@ -113,6 +116,8 @@ fun LibrarySettingsContent(
     onBack: () -> Unit,
     separators: List<String> = DEFAULT_ARTIST_SEPARATORS,
     onSeparators: (List<String>) -> Unit = {},
+    artistPictures: Boolean = true,
+    onArtistPictures: (Boolean) -> Unit = {},
 ) {
     var refreshed by remember { mutableStateOf(false) }
     SettingsScaffold(stringResource(R.string.library), onBack) {
@@ -135,6 +140,7 @@ fun LibrarySettingsContent(
                 },
             )
         }
+        item { SwitchRow(stringResource(R.string.artist_pictures), stringResource(R.string.artist_pictures_text), artistPictures, onArtistPictures) }
         item { SectionTitle(stringResource(R.string.artist_separators)) }
         item { Separators(separators, onSeparators) }
         if (folders.isNotEmpty()) {

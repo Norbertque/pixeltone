@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import io.github.norbertque.pixeltone.jam.JamControl
 import io.github.norbertque.pixeltone.library.AlbumCoverFetcher
 import io.github.norbertque.pixeltone.library.AlbumCoverKeyer
+import io.github.norbertque.pixeltone.library.ArtistPictures
 import io.github.norbertque.pixeltone.library.History
 import io.github.norbertque.pixeltone.library.LibrarySettings
 import io.github.norbertque.pixeltone.library.MediaStoreLibrary
@@ -40,6 +41,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this, librarySettings) }
     val playbackSettings: PlaybackSettings by lazy { PlaybackSettings(this) }
     val sound: SoundSettings by lazy { SoundSettings(this) }
+    val artistPictures: ArtistPictures by lazy { ArtistPictures(this, library.index) }
     val player: PlayerConnection by lazy { PlayerConnection(this) }
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }

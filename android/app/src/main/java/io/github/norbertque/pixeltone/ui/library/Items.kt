@@ -17,6 +17,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import io.github.norbertque.pixeltone.library.ArtistPicture
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
@@ -136,13 +138,23 @@ fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) 
     }
 }
 
+/** The artists' pictures found online, by [Artist.key]; empty where there are none. */
+val LocalArtistPictures = compositionLocalOf<Map<String, ArtistPicture>> { emptyMap() }
+
+/** An artist in a circle: their picture from Deezer when there is one, else one of their covers. */
+@Composable
+fun ArtistImage(artist: Artist, modifier: Modifier) {
+    val picture = LocalArtistPictures.current[artist.key]?.url
+    val cover = artist.albums.firstOrNull()?.coverId ?: artist.tracks.firstOrNull()?.albumId ?: -1
+    Cover(picture ?: AlbumCover(cover).takeIf { cover >= 0 }, modifier, CircleShape)
+}
+
 @Composable
 fun ArtistRow(artist: Artist, onClick: () -> Unit) {
-    val cover = artist.albums.firstOrNull()?.coverId ?: artist.tracks.firstOrNull()?.albumId ?: -1
     ListItem(
         headlineContent = { Text(artist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = { Text(counts(artist.albums.size, artist.tracks.size)) },
-        leadingContent = { Cover(cover, Modifier.size(48.dp), CircleShape) },
+        leadingContent = { ArtistImage(artist, Modifier.size(48.dp)) },
         modifier = Modifier.clickable(onClick = onClick),
     )
 }

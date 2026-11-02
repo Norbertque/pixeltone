@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -65,7 +64,7 @@ import io.github.norbertque.pixeltone.library.recentlyPlayedAlbums
 import io.github.norbertque.pixeltone.library.topArtists
 import io.github.norbertque.pixeltone.ui.Loading
 import io.github.norbertque.pixeltone.ui.library.AlbumCard
-import io.github.norbertque.pixeltone.ui.library.Cover
+import io.github.norbertque.pixeltone.ui.library.ArtistImage
 import io.github.norbertque.pixeltone.ui.library.Mosaic
 import io.github.norbertque.pixeltone.ui.library.rememberGenreColors
 import io.github.norbertque.pixeltone.ui.stats.listeningTime
@@ -380,8 +379,7 @@ private fun ArtistRow(artists: List<Pair<Artist, Int>>, onArtist: (String) -> Un
                 Modifier.width(128.dp).clip(MaterialTheme.shapes.large).clickable { onArtist(artist.key) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                val cover = artist.albums.firstOrNull()?.coverId ?: artist.tracks.firstOrNull()?.albumId ?: -1
-                Cover(cover, Modifier.size(128.dp), CircleShape)
+                ArtistImage(artist, Modifier.size(128.dp))
                 Text(
                     artist.name,
                     Modifier.padding(top = 8.dp),
