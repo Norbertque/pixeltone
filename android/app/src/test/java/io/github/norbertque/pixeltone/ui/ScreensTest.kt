@@ -75,6 +75,10 @@ import io.github.norbertque.pixeltone.ui.settings.LibrarySettingsContent
 import io.github.norbertque.pixeltone.ui.settings.PcsContent
 import io.github.norbertque.pixeltone.ui.settings.PlaybackContent
 import io.github.norbertque.pixeltone.ui.settings.SettingsHome
+import io.github.norbertque.pixeltone.ui.settings.SoundContent
+import io.github.norbertque.pixeltone.playback.EqSettings
+import io.github.norbertque.pixeltone.playback.ReplayGainMode
+import io.github.norbertque.pixeltone.playback.Sound
 import io.github.norbertque.pixeltone.ui.settings.UsbSettingsContent
 import io.github.norbertque.pixeltone.ui.theme.Appearance
 import io.github.norbertque.pixeltone.ui.theme.ColorSource
@@ -340,6 +344,12 @@ class ScreensTest {
 
     @Test
     fun settings() = shot("settings") { SettingsHome(onPage = {}, onBack = {}) }
+
+    @Test
+    fun soundSettings() = shot("settings-sound") {
+        val sound = Sound(eq = EqSettings(enabled = true).withPreset("Rock").withBand(4, -3f), replayGain = ReplayGainMode.Album, replayGainPreampDb = 2.5f)
+        SoundContent(sound, onChange = {}, usbExclusive = false, onBack = {})
+    }
 
     @Test
     fun appearance() = shot("settings-appearance") { AppearanceContent(Appearance(), onChange = {}, onBack = {}) }

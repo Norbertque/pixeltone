@@ -14,6 +14,7 @@ import io.github.norbertque.pixeltone.library.mixesOf
 import io.github.norbertque.pixeltone.library.UserLists
 import io.github.norbertque.pixeltone.lyrics.LyricsFinder
 import io.github.norbertque.pixeltone.playback.PlaybackSettings
+import io.github.norbertque.pixeltone.playback.SoundSettings
 import io.github.norbertque.pixeltone.playback.PlayerConnection
 import io.github.norbertque.pixeltone.playback.SleepTimer
 import io.github.norbertque.pixeltone.remote.PcCoverFetcher
@@ -38,6 +39,7 @@ class PixeltoneApp : Application(), ImageLoaderFactory {
     val librarySettings: LibrarySettings by lazy { LibrarySettings(this) }
     val library: MediaStoreLibrary by lazy { MediaStoreLibrary(this, librarySettings) }
     val playbackSettings: PlaybackSettings by lazy { PlaybackSettings(this) }
+    val sound: SoundSettings by lazy { SoundSettings(this) }
     val player: PlayerConnection by lazy { PlayerConnection(this) }
     val remote: RemoteControl by lazy { RemoteControl(this) }
     val jam: JamControl by lazy { JamControl(this, remote) }

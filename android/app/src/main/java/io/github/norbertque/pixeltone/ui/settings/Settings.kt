@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Lyrics
@@ -55,6 +56,7 @@ import io.github.norbertque.pixeltone.ui.theme.Emphasized
 enum class SettingsPage(@StringRes val title: Int, @StringRes val summary: Int, val icon: ImageVector) {
     Appearance(R.string.appearance, R.string.appearance_summary, Icons.Default.Palette),
     Playback(R.string.playback, R.string.playback_summary, Icons.Default.PlayCircle),
+    Sound(R.string.sound, R.string.sound_summary, Icons.Default.GraphicEq),
     Library(R.string.library, R.string.library_summary, Icons.Default.LibraryMusic),
     Lyrics(R.string.lyrics, R.string.lyrics_summary, Icons.Default.Lyrics),
     Usb(R.string.usb_title, R.string.usb_summary, Icons.Default.Usb),

@@ -97,6 +97,7 @@ import io.github.norbertque.pixeltone.ui.library.LibraryScreen
 import io.github.norbertque.pixeltone.ui.player.MiniPlayer
 import io.github.norbertque.pixeltone.ui.player.NowPlayingPanel
 import io.github.norbertque.pixeltone.ui.player.NowPlayingScreen
+import io.github.norbertque.pixeltone.playback.soundEffects
 import io.github.norbertque.pixeltone.ui.player.SleepSheet
 import io.github.norbertque.pixeltone.ui.remote.PlayOnSheet
 import io.github.norbertque.pixeltone.ui.lyrics.LyricsBody
@@ -109,6 +110,7 @@ import io.github.norbertque.pixeltone.ui.settings.PcsScreen
 import io.github.norbertque.pixeltone.ui.settings.PlaybackScreen
 import io.github.norbertque.pixeltone.ui.settings.SettingsHome
 import io.github.norbertque.pixeltone.ui.settings.SettingsPage
+import io.github.norbertque.pixeltone.ui.settings.SoundScreen
 import io.github.norbertque.pixeltone.ui.settings.UpdatesScreen
 import io.github.norbertque.pixeltone.ui.settings.UsbSettingsScreen
 import io.github.norbertque.pixeltone.ui.home.HomeScreen
@@ -234,6 +236,8 @@ private fun Navigation() {
     val index by app.library.index.collectAsStateWithLifecycle()
     val mixes by app.mixes.collectAsStateWithLifecycle()
     val queueInPanel by app.playbackSettings.queueInPanel.collectAsStateWithLifecycle()
+    val sound by app.sound.sound.collectAsStateWithLifecycle()
+    val playingTags by app.sound.playingTags.collectAsStateWithLifecycle()
     var choosing by rememberSaveable { mutableStateOf(false) }
     /** The track whose menu is open; tracks waiting for a playlist; a new playlist's tracks. */
     var menuFor by remember { mutableStateOf<Track?>(null) }
@@ -377,6 +381,7 @@ private fun Navigation() {
                     when (SettingsPage.entries.firstOrNull { it.name == entry.arguments?.getString("page") }) {
                         SettingsPage.Appearance -> AppearanceScreen(app, back)
                         SettingsPage.Playback -> PlaybackScreen(app, back)
+                        SettingsPage.Sound -> SoundScreen(app, back)
                         SettingsPage.Library -> LibrarySettingsScreen(app, back)
                         SettingsPage.Lyrics -> LyricsSettingsScreen(app, back)
                         SettingsPage.Usb -> UsbSettingsScreen(app, back)
@@ -421,6 +426,8 @@ private fun Navigation() {
                         onSleep = { sleeping = true },
                         queueEditable = onPc == null,
                         firstPanel = if (queueInPanel) NowPlayingPanel.Queue else NowPlayingPanel.Lyrics,
+                        // The sound processing works on Android's output only: never on a DAC or a PC.
+                        effects = if (onPc == null && usbBadge(usb) == null) soundEffects(sound, playingTags) else null,
                         onPanel = { app.playbackSettings.setQueueInPanel(it == NowPlayingPanel.Queue) },
                         lyrics = {
                             val now = rememberLyricsNow(app)

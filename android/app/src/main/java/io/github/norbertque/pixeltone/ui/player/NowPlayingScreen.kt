@@ -122,6 +122,7 @@ fun NowPlayingScreen(
     lyrics: @Composable () -> Unit = {},
     firstPanel: NowPlayingPanel = NowPlayingPanel.Lyrics,
     onPanel: (NowPlayingPanel) -> Unit = {},
+    effects: String? = null,
 ) {
     val state by player.state.collectAsStateWithLifecycle()
     val position by player.positionMs.collectAsStateWithLifecycle(initialValue = 0L)
@@ -130,6 +131,7 @@ fun NowPlayingScreen(
         favourite, onFavourite, onAddToPlaylist, sleepText(sleep), onSleep, queueEditable, lyrics,
         firstPanel = firstPanel,
         onPanel = onPanel,
+        effects = effects,
     )
 }
 
@@ -178,6 +180,8 @@ fun NowPlayingContent(
     firstPanel: NowPlayingPanel = NowPlayingPanel.Lyrics,
     /** A tab of the panel was picked, to come up there next time. */
     onPanel: (NowPlayingPanel) -> Unit = {},
+    /** What the sound processing does to the track ("EQ • ReplayGain −6.5 dB"), shown under its format. */
+    effects: String? = null,
 ) {
     val scope = rememberCoroutineScope()
     val sheet = rememberStandardBottomSheetState(
@@ -315,7 +319,13 @@ fun NowPlayingContent(
                             outputBadge != null -> Output(outputBadge)
                         }
                     }
-                    SeekBar(positionMs, state.durationMs, state.isPlaying, controls::seekTo, state.format?.label)
+                    SeekBar(
+                        positionMs,
+                        state.durationMs,
+                        state.isPlaying,
+                        controls::seekTo,
+                        listOfNotNull(state.format?.label, effects).joinToString("\n").ifEmpty { null },
+                    )
                     // What a toggle now does, shown for a moment under the controls.
                     var hint by remember { mutableStateOf<Hint?>(null) }
                     LaunchedEffect(hint) {
@@ -480,7 +490,7 @@ private fun SeekBar(positionMs: Long, durationMs: Long, playing: Boolean, onSeek
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(formatDuration(durationMs), style = MaterialTheme.typography.labelLarge)

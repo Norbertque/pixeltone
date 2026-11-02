@@ -17,6 +17,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
@@ -269,10 +270,17 @@ class PlaybackService : MediaSessionService() {
                 enableAudioOutputPlaybackParams: Boolean,
             ): AudioSink? =
                 if (usb != null) {
-                    // It takes float directly, so decoders hand over 24-bit sources whole.
+                    // It takes float directly, so decoders hand over 24-bit sources whole. Bit-perfect:
+                    // no sound processing on this path.
                     UsbAudioSink(usb, app.usb::onSinkFormatChanged, app.usb::onSessionDead)
                 } else {
-                    super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
+                    val processor = SoundProcessor(sound = { app.sound.sound.value }, onTrackTags = { app.sound.playingTags.value = it })
+                    val sink = DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                        .setAudioProcessorChain(DefaultAudioSink.DefaultAudioProcessorChain(processor))
+                        .build()
+                    SoundSink(sink, processor)
                 }
         }
         return ExoPlayer.Builder(this, renderers)
