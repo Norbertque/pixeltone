@@ -189,10 +189,13 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   bit-perfect policy is the Windows one; libusb stays a separate `.so` (LGPL-2.1). Only a real
   DAC can test the native side (checklist in the doc).
 - The page a jam's QR code opens is `site/jam/index.html`, published by
-  `.github/workflows/pages.yml` at `https://norbertque.github.io/pixeltone/jam/`. Without
-  Android having verified that link for the app (that needs `assetlinks.json` at the domain's
-  root, i.e. a `norbertque.github.io` repository), the browser shows the page and its
-  "Open in Pixeltone" button sends `intent://jam?…;scheme=pixeltone`.
+  `.github/workflows/pages.yml` at `https://norbertque.github.io/pixeltone/jam/`. Android
+  opens that link in the app itself (verified App Links) thanks to `.well-known/assetlinks.json`
+  in the public `Norbertque/norbertque.github.io` repository (the domain's root; checkout in
+  `~/projects/norbertque.github.io`), which names the release certificate's SHA-256 (read from a
+  published APK with `apksigner verify --print-certs`). Where a phone hasn't verified the link,
+  the browser shows the page and its "Open in Pixeltone" button sends
+  `intent://jam?…;scheme=pixeltone`.
 - Releases: `.github/workflows/android.yml` runs only for `android/**` (the Windows CI ignores
   those paths, so neither needs `[skip ci]` for the other). On `main` it builds a signed
   release APK numbered by its run (versionCode = run number, versionName `0.1.<run>`) and
