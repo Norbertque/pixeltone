@@ -1,7 +1,9 @@
 package io.github.norbertque.pixeltone
 
+import android.app.SearchManager
 import android.content.Intent
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,8 +15,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // Not again when the activity is recreated (rotation): the link was handled.
-        if (savedInstanceState == null) openLink(intent)
+        // Not again when the activity is recreated (rotation): the intent was handled.
+        if (savedInstanceState == null) {
+            openLink(intent)
+            playAsked(intent)
+        }
         setContent {
             // The theme takes its colours from what plays: PixeltoneRoot sets it up.
             PixeltoneRoot()
@@ -24,6 +29,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         openLink(intent)
+        playAsked(intent)
+    }
+
+    /** "Play … on Pixeltone", said to the assistant. */
+    private fun playAsked(intent: Intent?) {
+        if (intent?.action != MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
+        (application as PixeltoneApp).player.playAsked(intent.getStringExtra(SearchManager.QUERY).orEmpty(), intent.extras)
     }
 
     /** A jam's QR code or link (the page, or the page's "Open in Pixeltone" button). */

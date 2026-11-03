@@ -23,16 +23,22 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.ShuffleOrder
 import androidx.media3.session.CacheBitmapLoader
 import androidx.media3.session.CommandButton
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.MediaConstants
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.LibraryParams
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import io.github.norbertque.pixeltone.MainActivity
 import io.github.norbertque.pixeltone.PixeltoneApp
+import io.github.norbertque.pixeltone.library.ALBUM_COVERS
 import io.github.norbertque.pixeltone.library.PlayCounter
 import io.github.norbertque.pixeltone.R
 import io.github.norbertque.pixeltone.library.Track
@@ -62,10 +68,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Plays the queue in the background. Media3 shows the media notification and the lock screen
@@ -78,9 +87,12 @@ import kotlinx.coroutines.withContext
  * With exclusive USB output on and a DAC ready, the phone's player is rebuilt to play into the
  * DAC directly ([UsbAudioSink], bit-perfect) and back to Android's output when the DAC goes;
  * the queue and position move with it.
+ *
+ * Cars (Android Auto, Android Automotive) look through the library here ([CarLibrary]), search
+ * it, and play from it, by touch or by voice.
  */
 @OptIn(UnstableApi::class)
-class PlaybackService : MediaSessionService() {
+class PlaybackService : MediaLibraryService() {
     private val scope = MainScope()
     // Outlives the service, so the last save still reaches the disk; one write at a time.
     private val writes = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
@@ -172,7 +184,7 @@ class PlaybackService : MediaSessionService() {
 
     private fun trackOf(item: MediaItem?): Track? =
         item?.mediaId?.toLongOrNull()?.let { app.library.index.value?.track(it) }
-    private var session: MediaSession? = null
+    private var session: MediaLibrarySession? = null
     private var pendingSave: Job? = null
 
     /** The phone's queue, waiting for the PC to be connected to go over. */
@@ -196,10 +208,9 @@ class PlaybackService : MediaSessionService() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        session = MediaSession.Builder(this, local)
+        session = MediaLibrarySession.Builder(this, local, SessionCallback())
             .setSessionActivity(openApp)
             .setBitmapLoader(CacheBitmapLoader(AlbumArtBitmapLoader(this, app.remote)))
-            .setCallback(SessionCallback())
             .build()
         app.remote.host = object : RemoteHost {
             override fun playOn(pc: PairedPc) = moveTo(pc)
@@ -219,7 +230,7 @@ class PlaybackService : MediaSessionService() {
         scope.launch { watchCrossfade() }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         save()
@@ -622,6 +633,94 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /* ---------------------------------- Cars ---------------------------------- */
+
+    /** The library's top as cars get it: what they show is rows, unless a tab says covers. */
+    private val carRoot: LibraryParams =
+        LibraryParams.Builder()
+            .setExtras(
+                Bundle().apply {
+                    putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE, MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM)
+                    putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_PLAYABLE, MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_LIST_ITEM)
+                },
+            )
+            .build()
+
+    /** The lists cars opened (the latest [MAX_BROWSED]): they hear when those change. */
+    private val browsed = LinkedHashSet<String>()
+    private var watchingCars = false
+
+    /**
+     * Who may look through the library: Pixeltone itself, Android Auto and cars, and what
+     * Android trusts with media (the system's media controls, Assistant, Bluetooth).
+     */
+    private fun mayBrowse(session: MediaSession, controller: MediaSession.ControllerInfo): Boolean =
+        controller.packageName == packageName || controller.isTrusted ||
+            session.isAutoCompanionController(controller) || session.isAutomotiveController(controller)
+
+    /**
+     * Someone else looks through the library (a car, the system's media controls): it may open
+     * the covers, and what it shows follows the library's changes.
+     */
+    private fun browserConnected(controller: MediaSession.ControllerInfo) {
+        try {
+            grantUriPermission(controller.packageName, ALBUM_COVERS, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        } catch (_: RuntimeException) {
+            // No package of that name (a controller that didn't say who it is): no covers for it.
+        }
+        if (watchingCars) return
+        watchingCars = true
+        scope.launch {
+            combine(app.library.index, app.lists.lists, app.mixes, app.history.listens) { _, _, _, _ -> }
+                .drop(1)
+                .collectLatest {
+                    // A burst of changes (MediaStore scanning, a track that ends) tells them once.
+                    delay(CAR_CHANGES_MS)
+                    notifyCars()
+                }
+        }
+    }
+
+    private fun notifyCars() {
+        val session = session ?: return
+        val car = carLibraryNow() ?: return
+        for (id in browsed.toList()) session.notifyChildrenChanged(id, car.children(id)?.size ?: 0, null)
+    }
+
+    /** The library as cars see it now; null until it has been read. */
+    private fun carLibraryNow(): CarLibrary? {
+        val index = app.library.index.value ?: return null
+        return CarLibrary(this, index, app.lists.lists.value, app.mixes.value, app.history.listens.value, app.librarySettings.albumSort.value)
+    }
+
+    /** The library as cars see it, once it has been read (and today's mixes made); null when the app may not read music. */
+    private fun carLibrary(): ListenableFuture<CarLibrary?> {
+        if (!mayReadAudio()) return Futures.immediateFuture(null)
+        app.library.start()
+        carLibraryNow()?.let { if (app.mixes.value != null) return Futures.immediateFuture(it) }
+        val result = SettableFuture.create<CarLibrary?>()
+        scope.launch {
+            withTimeoutOrNull(LIBRARY_WAIT_MS) { app.library.index.filterNotNull().first() }
+            withTimeoutOrNull(MIXES_WAIT_MS) { app.mixes.filterNotNull().first() }
+            result.set(carLibraryNow())
+        }
+        return result
+    }
+
+    /** [use] on the library as cars see it; an error a car can show when the app may not read music. */
+    private fun <T : Any> withCarLibrary(use: (CarLibrary) -> LibraryResult<T>): ListenableFuture<LibraryResult<T>> =
+        Futures.transform(
+            carLibrary(),
+            { car: CarLibrary? ->
+                if (car != null) {
+                    use(car)
+                } else {
+                    LibraryResult.ofError(SessionError(SessionError.ERROR_PERMISSION_DENIED, getString(R.string.car_no_access)))
+                }
+            },
+            ContextCompat.getMainExecutor(this),
+        )
+
     /* ------------------------------ Saved queue ------------------------------ */
 
     private fun saveSoon() {
@@ -675,12 +774,102 @@ class PlaybackService : MediaSessionService() {
         )
     }
 
-    private inner class SessionCallback : MediaSession.Callback {
-        // Controllers (the notification, the lock screen) may press the heart.
-        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
-            MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon().add(FAVOURITE).build())
+    private inner class SessionCallback : MediaLibrarySession.Callback {
+        // Controllers (the notification, the lock screen, a car) may press the heart; only some see the library.
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            val browses = mayBrowse(session, controller)
+            if (browses && controller.packageName != packageName) browserConnected(controller)
+            val commands = if (browses) {
+                MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+            } else {
+                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+            }
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands.buildUpon().add(FAVOURITE).build())
                 .build()
+        }
+
+        override fun onGetLibraryRoot(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            Futures.immediateFuture(LibraryResult.ofItem(CarLibrary.root(this@PlaybackService), carRoot))
+
+        override fun onGetItem(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            mediaId: String,
+        ): ListenableFuture<LibraryResult<MediaItem>> =
+            withCarLibrary { car ->
+                car.item(mediaId)?.let { LibraryResult.ofItem(it, null) } ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+            }
+
+        override fun onGetChildren(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            parentId: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
+            browsed.remove(parentId)
+            browsed.add(parentId)
+            if (browsed.size > MAX_BROWSED) browsed.remove(browsed.first())
+            return withCarLibrary { car ->
+                car.children(parentId)?.let { LibraryResult.ofItemList(it.page(page, pageSize), params) }
+                    ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+            }
+        }
+
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> =
+            withCarLibrary { car ->
+                session.notifySearchResultChanged(browser, query, car.search(query).size, params)
+                LibraryResult.ofVoid()
+            }
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+            withCarLibrary { car -> LibraryResult.ofItemList(car.search(query).page(page, pageSize), params) }
+
+        // A car plays a track of a list (the whole list, from it), a Shuffle, or what was asked for aloud.
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: List<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val item = mediaItems.singleOrNull()
+            val spoken = item?.let(::spokenRequestOf)
+            val carId = item?.mediaId?.takeIf { it.isNotEmpty() && isCarId(it) }
+            if (spoken == null && carId == null) return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
+            return Futures.transform(
+                carLibrary(),
+                { car ->
+                    val pick = car?.let { if (carId != null) it.pick(carId) else it.spoken(checkNotNull(spoken)) }
+                    if (pick == null) {
+                        val message = if (car == null) getString(R.string.car_no_access) else getString(R.string.car_nothing_found, spoken?.query ?: carId)
+                        mediaSession.sendError(controller, SessionError(SessionError.ERROR_BAD_VALUE, message))
+                        throw IllegalArgumentException(message)
+                    }
+                    mediaSession.player.shuffleModeEnabled = pick.shuffle
+                    MediaSession.MediaItemsWithStartPosition(pick.tracks.map { it.toMediaItem() }, pick.start, 0)
+                },
+                ContextCompat.getMainExecutor(this@PlaybackService),
+            )
+        }
 
         override fun onCustomCommand(
             session: MediaSession,
@@ -694,21 +883,24 @@ class PlaybackService : MediaSessionService() {
             return Futures.immediateFuture(SessionResult(if (track != null) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
         }
 
-        // Items from a controller arrive without their file address: it follows from the track id.
+        // Items from a controller arrive without their file address: it follows from the track id
+        // (or, for a car's, from where the item is in the library).
         override fun onAddMediaItems(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
             mediaItems: List<MediaItem>,
-        ): ListenableFuture<List<MediaItem>> =
-            Futures.immediateFuture(
-                mediaItems.mapNotNull { item ->
-                    if (item.localConfiguration != null) {
-                        item
-                    } else {
-                        item.mediaId.toLongOrNull()?.let { item.buildUpon().setUri(trackUri(it)).build() }
+        ): ListenableFuture<List<MediaItem>> {
+            fun added(car: CarLibrary?): List<MediaItem> =
+                mediaItems.flatMap { item ->
+                    when {
+                        item.localConfiguration != null -> listOf(item)
+                        isCarId(item.mediaId) -> car?.tracks(item.mediaId).orEmpty().map { it.toMediaItem() }
+                        else -> listOfNotNull(item.mediaId.toLongOrNull()?.let { item.buildUpon().setUri(trackUri(it)).build() })
                     }
-                },
-            )
+                }
+            if (mediaItems.none { it.localConfiguration == null && isCarId(it.mediaId) }) return Futures.immediateFuture(added(null))
+            return Futures.transform(carLibrary(), ::added, ContextCompat.getMainExecutor(this@PlaybackService))
+        }
 
         // Play pressed on headphones or in the system's media controls after the app was closed.
         override fun onPlaybackResumption(
@@ -728,6 +920,22 @@ class PlaybackService : MediaSessionService() {
 }
 
 private const val WIDGET_COVER_PX = 256
+
+/** How long a car waits for the library to be read, and then for today's mixes. */
+private const val LIBRARY_WAIT_MS = 20_000L
+private const val MIXES_WAIT_MS = 5_000L
+
+/** Changes to the library reach cars this long after the last of a burst. */
+private const val CAR_CHANGES_MS = 1_000L
+
+/** Cars hear about changes to the lists they opened last, so many of them. */
+private const val MAX_BROWSED = 64
+
+/** Page [page] of [pageSize] items (cars without pages ask for one of every item). */
+private fun <T> List<T>.page(page: Int, pageSize: Int): List<T> {
+    val from = page.toLong() * pageSize
+    return if (page < 0 || pageSize <= 0 || from >= size) emptyList() else subList(from.toInt(), minOf(size.toLong(), from + pageSize).toInt())
+}
 
 /** How often a crossfade's volumes move. */
 private const val FADE_STEP_MS = 30L

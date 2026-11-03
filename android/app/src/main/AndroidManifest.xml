@@ -53,18 +53,37 @@
                     android:host="jam"
                     android:scheme="pixeltone" />
             </intent-filter>
+            <!-- "Play … on Pixeltone", said to the assistant. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
-        <!-- Exported for the system's media controls, Bluetooth and Android Auto. -->
+        <!-- Exported for the system's media controls, Bluetooth, Assistant and Android Auto; only
+             cars and what Android trusts with media look through the library (PlaybackService). -->
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService">
             <intent-filter>
-                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Album covers for cars, opened by the session's grant only. -->
+        <provider
+            android:name=".library.CoverProvider"
+            android:authorities="${applicationId}.covers"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Android Auto: Pixeltone is a media app there. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
 
         <receiver
             android:name=".update.InstallReceiver"

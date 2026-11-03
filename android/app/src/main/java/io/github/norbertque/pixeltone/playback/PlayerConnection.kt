@@ -2,9 +2,11 @@ package io.github.norbertque.pixeltone.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import androidx.annotation.MainThread
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -52,6 +54,17 @@ class PlayerConnection(private val context: Context) : PlayerControls {
             },
             ContextCompat.getMainExecutor(context),
         )
+    }
+
+    /**
+     * What was asked for aloud ("play … on Pixeltone", with the assistant's [extras]): the
+     * playback service finds it in the library, as for a car.
+     */
+    fun playAsked(query: String, extras: Bundle?) = command {
+        val asked = MediaItem.RequestMetadata.Builder().setSearchQuery(query).setExtras(extras).build()
+        setMediaItem(MediaItem.Builder().setRequestMetadata(asked).build())
+        prepare()
+        play()
     }
 
     /** Replaces the queue with [tracks] and plays from [start]. */

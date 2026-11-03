@@ -18,6 +18,7 @@ import coil.fetch.Fetcher
 import coil.key.Keyer
 import coil.request.Options
 import coil.size.Dimension
+import io.github.norbertque.pixeltone.BuildConfig
 import java.io.FileNotFoundException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,15 +26,16 @@ import kotlinx.coroutines.withContext
 /** The cover of a MediaStore album, as an image to load with Coil. */
 data class AlbumCover(val albumId: Long)
 
-/** MediaStore's album art address; the media session hands covers around by it. */
-fun albumArtUri(albumId: Long): Uri = ContentUris.withAppendedId(ALBUM_ART, albumId)
+/**
+ * An album's cover as an address of the app's own ([CoverProvider]): the media session hands
+ * covers around by it, and the cars it lets see them open it.
+ */
+fun albumArtUri(albumId: Long): Uri = ContentUris.withAppendedId(ALBUM_COVERS, albumId)
 
-/** The album in an [albumArtUri], or null for any other address. */
+/** The album in an [albumArtUri] (or MediaStore's album art address), or null for any other address. */
 fun albumIdOf(uri: Uri): Long? =
-    if (uri.authority == ALBUM_ART.authority && uri.path?.startsWith(ALBUM_ART.path + "/") == true) {
-        uri.lastPathSegment?.toLongOrNull()
-    } else {
-        null
+    listOf(ALBUM_COVERS, ALBUM_ART).firstNotNullOfOrNull { base ->
+        if (uri.authority == base.authority && uri.path?.startsWith(base.path + "/") == true) uri.lastPathSegment?.toLongOrNull() else null
     }
 
 /** An album's cover at most [px] wide: MediaStore's thumbnail (Android 10+) or its album art. */
@@ -42,12 +44,15 @@ fun loadAlbumArt(context: Context, albumId: Long, px: Int): Bitmap =
         val albums = MediaStore.Audio.Albums.getContentUri(MediaStore.VOLUME_EXTERNAL)
         context.contentResolver.loadThumbnail(ContentUris.withAppendedId(albums, albumId), Size(px, px), null)
     } else {
-        val uri = albumArtUri(albumId)
+        val uri = ContentUris.withAppendedId(ALBUM_ART, albumId)
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
             ?: throw FileNotFoundException(uri.toString())
     }
 
 private val ALBUM_ART: Uri = "content://media/external/audio/albumart".toUri()
+
+/** Where [CoverProvider] has the albums' covers. */
+internal val ALBUM_COVERS: Uri = "content://${BuildConfig.APPLICATION_ID}.covers/album".toUri()
 
 class AlbumCoverKeyer : Keyer<AlbumCover> {
     override fun key(data: AlbumCover, options: Options): String = "album-cover:${data.albumId}"

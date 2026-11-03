@@ -146,13 +146,20 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
 - Library: MediaStore (`library/MediaStoreLibrary.kt`) → `LibraryIndex`, plain Kotlin and
   unit-tested: albums by (title, album artist), else (title, folder), as on Windows; artists
   by their folded name; search ignores case and accents.
-- Playback: `playback/PlaybackService` is a Media3 `MediaSessionService` (notification, lock
+- Playback: `playback/PlaybackService` is a Media3 `MediaLibraryService` (notification, lock
   screen, headset/Bluetooth buttons, audio focus, pause when headphones are unplugged);
   `PlayerConnection` is the UI's `MediaController`, with the state as flows. A media id is the
   MediaStore track id: items a controller sends arrive without their URI, and
   `onAddMediaItems` puts it back from the id. The queue is saved to `files/queue.json` and
   restored paused, also for playback resumption. Notification covers go through
-  `AlbumArtBitmapLoader` (MediaStore thumbnails).
+  `AlbumArtBitmapLoader` (MediaStore thumbnails). Cover addresses (`albumArtUri`) are the app's
+  own `CoverProvider` (not exported; the session grants cars read access).
+- Android Auto: `playback/CarLibrary.kt` is the library as cars browse it (Home, Playlists,
+  Albums, Artists; ids like `album/<key>/<position>-<track id>`, so a picked track plays its
+  list from it), search, and spoken requests (`onSetMediaItems` gets the assistant's query;
+  `MainActivity` takes `MEDIA_PLAY_FROM_SEARCH` too). Only Pixeltone, Android Auto/Automotive
+  and controllers Android trusts get the library commands (`mayBrowse`). A sideloaded APK only
+  shows up in Android Auto with *Unknown sources* on in its developer settings.
 - Remote control (`remote/`): the client moved over from the fork (ADR 0001) — discovery,
   pairing, pinned TLS, `PcConnection` (WebSocket session). While playback is on a PC,
   `PlaybackService` gives the media session `PcPlayer` (a Media3 `SimpleBasePlayer` mirroring
