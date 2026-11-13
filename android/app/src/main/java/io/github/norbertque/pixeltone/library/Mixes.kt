@@ -32,6 +32,9 @@ data class Mix(
 
 /** Today's mix, and the genres' mixes. */
 data class Mixes(val daily: Mix, val genres: List<Mix>) {
+    /** Today's mix first, then the genres'. */
+    val all: List<Mix> get() = listOf(daily) + genres
+
     fun mix(key: String): Mix? = if (key == daily.key) daily else genres.firstOrNull { it.key == key }
 }
 

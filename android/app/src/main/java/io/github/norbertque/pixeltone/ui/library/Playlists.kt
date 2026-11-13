@@ -61,7 +61,7 @@ fun PlaylistsTab(
 ) {
     val words = fold(query).split(' ').filter(String::isNotEmpty)
     val shown = lists.playlists.filter { p -> words.all { it in fold(p.name) } }
-    val shownMixes = mixes?.let { listOf(it.daily) + it.genres }.orEmpty()
+    val shownMixes = mixes?.all.orEmpty()
         .map { it to mixName(it) }
         .filter { (mix, name) -> mix.tracks.isNotEmpty() && words.all { it in fold(name) } }
     LazyColumn(Modifier.fillMaxSize()) {

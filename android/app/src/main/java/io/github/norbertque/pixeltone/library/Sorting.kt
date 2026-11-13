@@ -32,6 +32,10 @@ fun sortAlbums(albums: List<Album>, sort: AlbumSort, locale: Locale = Locale.get
         AlbumSort.Title -> albums
         AlbumSort.Artist -> albums.sortedWith(compareBy<Album, String?>(byText) { it.artist }.thenBy { it.year ?: Int.MAX_VALUE }.thenBy(byText) { it.title })
         AlbumSort.Year -> albums.sortedWith(compareByDescending<Album, Int?>(nullsFirst()) { it.year }.thenBy(byText) { it.title })
-        AlbumSort.Added -> albums.sortedByDescending { album -> album.tracks.maxOf { it.addedAt } }
+        AlbumSort.Added -> newestFirst(albums)
     }
 }
+
+/** [albums] newest first by when their files came onto the phone, each album's date worked out once. */
+internal fun newestFirst(albums: List<Album>): List<Album> =
+    albums.map { album -> album to album.tracks.maxOf { it.addedAt } }.sortedByDescending { it.second }.map { it.first }

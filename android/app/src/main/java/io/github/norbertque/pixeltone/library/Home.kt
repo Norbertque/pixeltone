@@ -73,4 +73,4 @@ fun topArtists(index: LibraryIndex, listens: List<Listen>, since: Long, limit: I
 
 /** Albums newest first by when their files came onto the phone (Home's "Recently added"). */
 fun recentlyAdded(index: LibraryIndex, limit: Int = 12): List<Album> =
-    index.albums.sortedByDescending { album -> album.tracks.maxOf { it.addedAt } }.take(limit)
+    newestFirst(index.albums).take(limit)

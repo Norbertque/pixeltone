@@ -681,10 +681,13 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
-    private fun notifyCars() {
+    private suspend fun notifyCars() {
         val session = session ?: return
         val car = carLibraryNow() ?: return
-        for (id in browsed.toList()) session.notifyChildrenChanged(id, car.children(id)?.size ?: 0, null)
+        val opened = browsed.toList()
+        // Off the main thread: a list is built whole to know how long it is.
+        val counts = withContext(Dispatchers.Default) { opened.map { car.children(it)?.size ?: 0 } }
+        opened.forEachIndexed { i, id -> session.notifyChildrenChanged(id, counts[i], null) }
     }
 
     /** The library as cars see it now; null until it has been read. */
@@ -853,7 +856,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val item = mediaItems.singleOrNull()
             val spoken = item?.let(::spokenRequestOf)
-            val carId = item?.mediaId?.takeIf { it.isNotEmpty() && isCarId(it) }
+            val carId = item?.mediaId?.takeIf(::isCarId)
             if (spoken == null && carId == null) return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
             return Futures.transform(
                 carLibrary(),

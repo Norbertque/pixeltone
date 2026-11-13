@@ -57,8 +57,8 @@ class CarLibraryTest {
     )
     private val listens = listOf(Listen(listed(31), startedAt = 1_000, heardMs = 120_000))
 
-    private fun car(lists: Lists = this.lists, seed: Int = 1) =
-        CarLibrary(context, index, lists, mixes, listens, random = Random(seed))
+    private fun car(lists: Lists = this.lists) =
+        CarLibrary(context, index, lists, mixes, listens, random = Random(1))
 
     private val MediaItem.title get() = mediaMetadata.title.toString()
     private val MediaItem.group get() = mediaMetadata.extras?.getString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE)
