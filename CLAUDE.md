@@ -158,8 +158,10 @@ headless Debian container; Windows builds come from GitHub Actions (`.github/wor
   Albums, Artists; ids like `album/<key>/<position>-<track id>`, so a picked track plays its
   list from it), search, and spoken requests (`onSetMediaItems` gets the assistant's query;
   `MainActivity` takes `MEDIA_PLAY_FROM_SEARCH` too). Only Pixeltone, Android Auto/Automotive
-  and controllers Android trusts get the library commands (`mayBrowse`). A sideloaded APK only
-  shows up in Android Auto with *Unknown sources* on in its developer settings.
+  and controllers Android trusts get the library commands (`mayBrowse`): a controller names its
+  package itself, so Pixeltone is known by its uid and a car's package is checked against the
+  caller's. A sideloaded APK only shows up in Android Auto with *Unknown sources* on in its
+  developer settings.
 - Remote control (`remote/`): the client moved over from the fork (ADR 0001) — discovery,
   pairing, pinned TLS, `PcConnection` (WebSocket session). While playback is on a PC,
   `PlaybackService` gives the media session `PcPlayer` (a Media3 `SimpleBasePlayer` mirroring

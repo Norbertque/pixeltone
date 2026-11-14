@@ -222,4 +222,36 @@ class CarLibraryTest {
         assertNull(albumIdOf(android.net.Uri.parse("content://elsewhere/album/7")))
         assertNotNull(car().item("favourites"))
     }
+
+    @Test
+    fun `Shuffle all is called that wherever a car meets it`() {
+        val car = car()
+        assertEquals("Shuffle all", car.children("home")!!.first().title)
+        assertEquals("Shuffle all", car.item("all/shuffle")!!.title)
+        assertEquals("Shuffle", car.item("favourites/shuffle")!!.title)
+    }
+
+    @Test
+    fun `a list counts the tracks a car can play`() {
+        val gone = ListedTrack.of(track(99, "Gone", "Nobody", "Nowhere", 1))
+        val car = car(lists = Lists(favourites = listOf(listed(31), gone), playlists = listOf(Playlist(7, "Road trip", listOf(gone, listed(11), gone)))))
+        assertEquals(listOf("1 track", "1 track"), car.children("playlists")!!.map { it.mediaMetadata.subtitle.toString() })
+        assertEquals(listOf("So What"), car.children("favourites")!!.map { it.title })
+        assertEquals(listOf("One More Time"), car.children("playlist/7")!!.map { it.title })
+    }
+
+    @Test
+    fun `an artist named on album covers only plays their albums`() {
+        // The orchestra is the album's artist; its tracks name the soloists.
+        fun concerto(id: Long, soloist: String) =
+            Track(id, "Concerto $id", soloist, "City Orchestra", "Concertos", 4, 200_000, 1, (id - 40).toInt(), 2001, "Music/Concertos/", "$id.flac", addedAt = id, genres = listOf("Classical"))
+        val index = LibraryIndex(tracks + listOf(concerto(41, "First Soloist"), concerto(42, "Second Soloist")), Locale.ENGLISH)
+        val car = CarLibrary(context, index, lists, mixes, listens, random = Random(1))
+        assertTrue(index.artistNamed("City Orchestra")!!.tracks.isEmpty())
+        val asked = car.spoken(SpokenRequest("city orchestra"))!!
+        assertTrue(asked.shuffle)
+        assertEquals(setOf(41L, 42L), asked.tracks.map { it.id }.toSet())
+        val named = SpokenRequest("x", focus = MediaStore.Audio.Artists.ENTRY_CONTENT_TYPE, artist = "City Orchestra")
+        assertEquals(setOf(41L, 42L), car.spoken(named)!!.tracks.map { it.id }.toSet())
+    }
 }

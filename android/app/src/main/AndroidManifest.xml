@@ -16,6 +16,21 @@
          local network protection blocks that without it). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
+    <!-- The cars' apps. Android tells whose a caller's package is only for apps Pixeltone may
+
+         see, and PlaybackService checks that a car is who it says. -->
+
+    <queries>
+
+        <package android:name="com.google.android.projection.gearhead" />
+
+        <package android:name="com.android.car.media" />
+
+        <package android:name="com.android.car.carlauncher" />
+
+    </queries>
+
+
     <application
         android:name=".PixeltoneApp"
         android:enableOnBackInvokedCallback="true"

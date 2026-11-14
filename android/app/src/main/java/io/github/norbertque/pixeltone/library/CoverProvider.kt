@@ -9,6 +9,7 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Album covers at [albumArtUri]s, for the cars the media session lets see them (Android Auto
@@ -41,8 +42,20 @@ class CoverProvider : ContentProvider() {
             } finally {
                 part.delete()
             }
+            forgetOld(folder)
         }
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    /**
+     * Once a day, drops the covers made over a day ago: one asked for again is made anew anyway,
+     * and a car that pages through every album would otherwise leave them all here for good.
+     */
+    private fun forgetOld(folder: File) {
+        val now = System.currentTimeMillis()
+        val last = tidied.get()
+        if (now - last < DAY_MS || !tidied.compareAndSet(last, now)) return
+        folder.listFiles()?.forEach { if (now - it.lastModified() > DAY_MS) it.delete() }
     }
 
     override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
@@ -56,5 +69,8 @@ class CoverProvider : ContentProvider() {
     private companion object {
         const val SIZE_PX = 512
         const val QUALITY = 90
+
+        /** When the old covers were last dropped. */
+        val tidied = AtomicLong()
     }
 }

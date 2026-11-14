@@ -180,34 +180,37 @@ class CarLibrary(
      * today's mix. Artists and genres play shuffled, a track goes on with its album.
      */
     fun spoken(request: SpokenRequest): CarPick? {
+        val artist = request.artist?.let(::Name)
         when (request.focus) {
-            MediaStore.Audio.Media.ENTRY_CONTENT_TYPE -> request.title?.let { title ->
-                library.tracks.firstOrNull { same(it.title, title) && (request.artist == null || byArtist(it, request.artist)) }
+            MediaStore.Audio.Media.ENTRY_CONTENT_TYPE -> request.title?.let(::Name)?.let { title ->
+                library.tracks.firstOrNull { title.matches(it.title) && (artist == null || byArtist(it, artist)) }
             }?.let { return fromTrack(it) }
-            MediaStore.Audio.Albums.ENTRY_CONTENT_TYPE -> request.album?.let { title ->
-                library.albums.firstOrNull { same(it.title, title) && (request.artist == null || it.tracks.any { t -> byArtist(t, request.artist) }) }
+            MediaStore.Audio.Albums.ENTRY_CONTENT_TYPE -> request.album?.let(::Name)?.let { title ->
+                library.albums.firstOrNull { title.matches(it.title) && (artist == null || it.tracks.any { t -> byArtist(t, artist) }) }
             }?.let { return inOrder(it.tracks) }
-            MediaStore.Audio.Artists.ENTRY_CONTENT_TYPE -> request.artist?.let(library::artistNamed)?.let { return shuffled(it.tracks) }
-            MediaStore.Audio.Genres.ENTRY_CONTENT_TYPE -> request.genre?.let { name -> library.genres.firstOrNull { same(it.name, name) } }
+            MediaStore.Audio.Artists.ENTRY_CONTENT_TYPE -> request.artist?.let(library::artistNamed)?.let(::shuffledBy)?.let { return it }
+            MediaStore.Audio.Genres.ENTRY_CONTENT_TYPE -> request.genre?.let(::Name)?.let { name -> library.genres.firstOrNull { name.matches(it.name) } }
                 ?.let { return shuffled(it.tracks) }
-            MediaStore.Audio.Playlists.ENTRY_CONTENT_TYPE -> request.playlist?.let(::named)?.let { return it }
+            MediaStore.Audio.Playlists.ENTRY_CONTENT_TYPE -> request.playlist?.let { named(Name(it)) }?.let { return it }
         }
         val query = request.query.trim()
         if (query.isEmpty()) return inOrder(mixes?.daily?.tracks) ?: shuffled(library.tracks)
-        named(query)?.let { return it }
-        library.albums.firstOrNull { same(it.title, query) }?.let { return inOrder(it.tracks) }
-        library.artists.firstOrNull { same(it.name, query) }?.let { return shuffled(it.tracks) }
-        library.genres.firstOrNull { same(it.name, query) }?.let { return shuffled(it.tracks) }
-        library.tracks.firstOrNull { same(it.title, query) }?.let { return fromTrack(it) }
+        val asked = Name(query)
+        named(asked)?.let { return it }
+        library.albums.firstOrNull { asked.matches(it.title) }?.let { return inOrder(it.tracks) }
+        library.artists.firstOrNull { asked.matches(it.name) }?.let(::shuffledBy)?.let { return it }
+        library.genres.firstOrNull { asked.matches(it.name) }?.let { return shuffled(it.tracks) }
+        library.tracks.firstOrNull { asked.matches(it.title) }?.let { return fromTrack(it) }
         val found = library.search(query)
         inOrder(found.tracks)?.let { return it }
         found.albums.firstOrNull()?.let { return inOrder(it.tracks) }
-        found.artists.firstOrNull()?.let { return shuffled(it.tracks) }
+        found.artists.firstNotNullOfOrNull(::shuffledBy)?.let { return it }
         found.genres.firstOrNull()?.let { return shuffled(it.tracks) }
         // "Get Lucky by Daft Punk"
-        val (title, artist) = query.split(" by ", ignoreCase = true, limit = 2).takeIf { it.size == 2 } ?: return null
+        val (title, by) = query.split(" by ", ignoreCase = true, limit = 2).takeIf { it.size == 2 } ?: return null
         val words = fold(title).split(' ').filter(String::isNotEmpty)
-        return library.tracks.firstOrNull { track -> byArtist(track, artist) && words.all { it in fold(track.title) } }?.let(::fromTrack)
+        val byName = Name(by)
+        return library.tracks.firstOrNull { track -> byArtist(track, byName) && fold(track.title).let { text -> words.all { it in text } } }?.let(::fromTrack)
     }
 
     /* --------------------------------- Lists --------------------------------- */
@@ -251,6 +254,9 @@ class CarLibrary(
     private fun shuffled(tracks: List<Track>?): CarPick? =
         tracks?.takeIf { it.isNotEmpty() }?.let { CarPick(it, random.nextInt(it.size), shuffle = true) }
 
+    /** An artist's tracks, shuffled: their own, or with none (a name on album covers only) their albums'. */
+    private fun shuffledBy(artist: Artist): CarPick? = shuffled(artist.tracks.ifEmpty { artist.albums.flatMap { it.tracks } })
+
     /** [track], and then the rest of its album. */
     private fun fromTrack(track: Track): CarPick {
         val album = albumKey(track)?.let(library::album)?.tracks ?: listOf(track)
@@ -258,14 +264,14 @@ class CarLibrary(
     }
 
     /** Favourites, today's mix, a genre's mix or a playlist called [name]. */
-    private fun named(name: String): CarPick? {
-        if (same(name, text(R.string.favourites)) || same(name, "favorites")) return inOrder(inLibrary(lists.favourites))
-        mixes?.all?.firstOrNull { same(mixName(it), name) }?.let { return inOrder(it.tracks) }
-        return lists.playlists.firstOrNull { same(it.name, name) }?.let { inOrder(inLibrary(it.tracks)) }
+    private fun named(name: Name): CarPick? {
+        if (name.matches(text(R.string.favourites)) || name.matches("favorites")) return inOrder(inLibrary(lists.favourites))
+        mixes?.all?.firstOrNull { name.matches(mixName(it)) }?.let { return inOrder(it.tracks) }
+        return lists.playlists.firstOrNull { name.matches(it.name) }?.let { inOrder(inLibrary(it.tracks)) }
     }
 
-    private fun byArtist(track: Track, artist: String): Boolean =
-        library.artistNames(track.artist).any { same(it, artist) } || same(track.albumArtist, artist)
+    private fun byArtist(track: Track, artist: Name): Boolean =
+        library.artistNames(track.artist).any(artist::matches) || artist.matches(track.albumArtist)
 
     /* --------------------------------- Items --------------------------------- */
 
@@ -274,7 +280,7 @@ class CarLibrary(
         val played = recentlyPlayedAlbums(library, listens)
         val shown = played.mapTo(HashSet()) { it.key }
         return buildList {
-            if (library.tracks.isNotEmpty()) add(shuffleItem(ALL, title = text(R.string.shuffle_all)))
+            if (library.tracks.isNotEmpty()) add(shuffleItem(ALL))
             mixes?.all.orEmpty().filter { it.tracks.isNotEmpty() }.forEach { add(mixItem(it, made)) }
             played.forEach { add(albumItem(it, text(R.string.recently_played))) }
             // An album once: the car tells its items apart by id.
@@ -286,10 +292,10 @@ class CarLibrary(
         folder(id, text(title), artwork = icon(icon), type = type, browsableStyle = browsableStyle, playableStyle = LIST)
 
     private fun favouritesItem(): MediaItem =
-        folder(FAVOURITES, text(R.string.favourites), count(lists.favourites.size), icon(R.drawable.ic_car_favourite), MediaMetadata.MEDIA_TYPE_PLAYLIST)
+        folder(FAVOURITES, text(R.string.favourites), count(inLibrary(lists.favourites).size), icon(R.drawable.ic_car_favourite), MediaMetadata.MEDIA_TYPE_PLAYLIST)
 
     private fun playlistItem(playlist: Playlist, group: String? = null): MediaItem =
-        folder("$PLAYLIST/${playlist.id}", playlist.name, count(playlist.tracks.size), icon(R.drawable.ic_car_playlist), MediaMetadata.MEDIA_TYPE_PLAYLIST, group)
+        folder("$PLAYLIST/${playlist.id}", playlist.name, count(inLibrary(playlist.tracks).size), icon(R.drawable.ic_car_playlist), MediaMetadata.MEDIA_TYPE_PLAYLIST, group)
 
     private fun mixItem(mix: Mix, group: String? = null): MediaItem =
         folder(
@@ -350,8 +356,10 @@ class CarLibrary(
             )
             .build()
 
-    private fun shuffleItem(list: String, group: String? = null, title: String = text(R.string.shuffle)): MediaItem =
-        MediaItem.Builder()
+    /** A list's Shuffle; the whole library's is "Shuffle all" wherever a car meets it. */
+    private fun shuffleItem(list: String, group: String? = null): MediaItem {
+        val title = text(if (list == ALL) R.string.shuffle_all else R.string.shuffle)
+        return MediaItem.Builder()
             .setMediaId("$list/$SHUFFLE")
             .setMediaMetadata(
                 MediaMetadata.Builder()
@@ -364,6 +372,7 @@ class CarLibrary(
                     .build(),
             )
             .build()
+    }
 
     private fun folder(
         id: String,
@@ -440,12 +449,17 @@ class CarLibrary(
     }
 }
 
-/** Names that are the same but for case, accents, spaces and punctuation ("Today's mix" = "today’s mix"). */
-private fun same(a: String?, b: String?): Boolean {
-    if (a == null || b == null) return false
-    val key = { text: String -> fold(text).filter(Char::isLetterOrDigit) }
-    return key(a).let { it.isNotEmpty() && it == key(b) }
+/**
+ * A name that was asked for. Names match it when they are the same but for case, accents, spaces
+ * and punctuation ("Today's mix" = "today’s mix"); what's asked is folded once, not for every name tried.
+ */
+private class Name(name: String) {
+    private val key = nameKey(name)
+
+    fun matches(other: String?): Boolean = key.isNotEmpty() && other != null && nameKey(other) == key
 }
+
+private fun nameKey(name: String): String = fold(name).filter(Char::isLetterOrDigit)
 
 private fun encode(key: String): String = URLEncoder.encode(key, Charsets.UTF_8.name())
 

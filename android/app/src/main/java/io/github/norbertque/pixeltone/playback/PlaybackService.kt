@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Process
 import android.os.SystemClock
 import android.graphics.Bitmap
 import androidx.core.content.ContextCompat
@@ -652,11 +653,18 @@ class PlaybackService : MediaLibraryService() {
 
     /**
      * Who may look through the library: Pixeltone itself, Android Auto and cars, and what
-     * Android trusts with media (the system's media controls, Assistant, Bluetooth).
+     * Android trusts with media (the system's media controls, Assistant, Bluetooth). A
+     * controller names its package itself, so Pixeltone is known by its uid, and a car counts
+     * only when the package it names really is the caller's.
      */
     private fun mayBrowse(session: MediaSession, controller: MediaSession.ControllerInfo): Boolean =
-        controller.packageName == packageName || controller.isTrusted ||
-            session.isAutoCompanionController(controller) || session.isAutomotiveController(controller)
+        isOwn(controller) || controller.isTrusted ||
+            ((session.isAutoCompanionController(controller) || session.isAutomotiveController(controller)) && isWhoItSays(controller))
+
+    private fun isOwn(controller: MediaSession.ControllerInfo): Boolean = controller.uid == Process.myUid()
+
+    private fun isWhoItSays(controller: MediaSession.ControllerInfo): Boolean =
+        packageManager.getPackagesForUid(controller.uid)?.contains(controller.packageName) == true
 
     /**
      * Someone else looks through the library (a car, the system's media controls): it may open
@@ -671,7 +679,7 @@ class PlaybackService : MediaLibraryService() {
         if (watchingCars) return
         watchingCars = true
         scope.launch {
-            combine(app.library.index, app.lists.lists, app.mixes, app.history.listens) { _, _, _, _ -> }
+            combine(app.library.index, app.lists.lists, app.mixes, app.history.listens, app.librarySettings.albumSort) { _, _, _, _, _ -> }
                 .drop(1)
                 .collectLatest {
                     // A burst of changes (MediaStore scanning, a track that ends) tells them once.
@@ -781,7 +789,7 @@ class PlaybackService : MediaLibraryService() {
         // Controllers (the notification, the lock screen, a car) may press the heart; only some see the library.
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val browses = mayBrowse(session, controller)
-            if (browses && controller.packageName != packageName) browserConnected(controller)
+            if (browses && !isOwn(controller)) browserConnected(controller)
             val commands = if (browses) {
                 MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
             } else {
